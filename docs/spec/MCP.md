@@ -25,7 +25,7 @@ Server instructions sent at `initialize`:
 
 - **Names** follow the Scenario Blender plugin's `docs/MCP.md` where the semantics match, verb-first snake case. The "Blender" column in each table says `same`, `similar` (same purpose, Photoshop inputs or a narrower scope) or `new`.
 - **Ids**: `local_id` (a job in the plugin's ledger), `job_id` (Scenario job), `capture_id`, `reference_id`, `quote_id`, `application_id`, `asset_id`, and `layer_id` and `document_id` (Photoshop ids, valid for the current Photoshop session).
-- **`document_id`** is optional on every document tool and defaults to the active document. With **Agents read the active document only** on, any other document returns `DocumentNotAllowed`. So does any job whose ledger records another document as source or target, in `list_local_jobs`, `job_status`, `inspect_result_previews`, `wait_for_job`, `prepare_result_application`, `recover_local_job` and `recover_cloud_job`; jobs made without a document stay visible. `prepare_result_application` also refuses a Library asset the ledger records as a result or upload of another document's job. Images in the Scenario project that the ledger does not tie to another document stay visible (SPEC 6.6).
+- **`document_id`** is optional on every document tool and defaults to the active document. With **Agents read the active document only** on, any other document returns `DocumentNotAllowed`. So does any job whose ledger records another document as a source or as the target (a record from an earlier Photoshop session counts as another document), and `upload_reference` of another document's capture, in `list_local_jobs`, `job_status`, `inspect_result_previews`, `wait_for_job`, `prepare_result_application`, `recover_local_job` and `recover_cloud_job`; jobs made without a document stay visible. `prepare_result_application` also refuses a Library asset the ledger records as a result or upload of another document's job. Images in the Scenario project that the ledger does not tie to another document stay visible (SPEC 6.6).
 - **`null` means omitted.** Every optional input has a default.
 - **Annotations**: read-only tools declare `readOnlyHint: true`. Tools that change the document declare `destructiveHint: true`. The paid tool says so in the first line of its description.
 - **Errors** are one line, `Type: message` (section 8). They never contain credentials, and paths are relative to the plugin's folders and the Output Folder.
@@ -199,15 +199,16 @@ Needs both switches: **Agents may modify the document** and **Agents may run Pho
 
 The plugin checks every descriptor against an allow-list before running anything (SPEC 6.6, `shared/batchplay-allow.json`):
 - Allowed: the events the Scenario Photoshop skills' toolkits send, plus the layer, selection, mask, channel, transform, canvas, adjustment and filter events listed there, each with a live test, plus `get`, whose results lose path values and the document properties that can record paths (SPEC 6.6).
-- Every reference must stay inside the document named by `document_id`:
+- `document_id` must be the active document, otherwise `DocumentNotActive` before anything runs: Photoshop resolves targetless descriptors and chains without a document element in the active document. The person brings the document forward.
+- Every reference must stay inside the document named by `document_id`, and the Action Manager key `null` counts as the target:
   - names are read as string ids: a key or an `_obj`, `_ref`, `_class`, `_enum` or `_value` string starting with `$` (Adobe's four-character codes, such as `$Dcmn`) returns `CommandRefused`;
-  - each reference element has exactly one form (`_id`, `_index`, `_name`, `_offset`, or `_enum` with `_value`) or is a `_property` element, and its class is document, layer, channel, path or another class listed with a live test; a chain of `_property` elements only, or one ending with `application`, is refused;
-  - a document element is accepted only as that document's `_id`, or as the active-document ordinal (`targetEnum`, or no `_value`) when that document is active, otherwise `DocumentNotActive`; a document by index, name, offset, another id or another ordinal returns `CommandRefused`, and so does `select` of a document;
-  - layer, channel and path elements by `_id` must belong to that document; a chain with a layer `_id` but no document element counts as targetless;
-  - a descriptor with no target, or with ordinal, relative or by-name layer, channel or path elements, returns `DocumentNotActive` unless that document is active;
+  - each reference element has exactly one form key (`_id`, `_index`, `_name`, `_offset`, or `_enum` with or without its `_value`), or is a property element (`_property`, at most with a `_ref` class); `_id` with `_enum` is refused. A class element with no form key is accepted only as the class a `make` creates, never for document;
+  - the class is document, layer, channel, path or another class listed with a live test; the selection reference `{_ref: "channel", _property: "selection"}` is accepted; a chain of `_property` elements with no class, or one ending with `application`, is refused;
+  - a document element is accepted only as that document's `_id`, or as the active-document ordinal (`targetEnum`, or no `_value`); a document by index, name, offset, another id or another ordinal returns `CommandRefused`, and so does `select` of a document;
+  - layer, channel and path elements by `_id` must belong to that document;
   - references to the application, Actions, presets, color settings, workspaces, menus, History states or other documents, and commands that create a document, are refused.
 - Always refused: playing Actions, script events, Adobe's generative events (Generative Fill and the like), `open`, `placeEvent`, `save`, `close`, `quit`, `splitChannels`, the export family, `print`, and events of other plugins. Dialog options are forced off.
-- File paths are canonicalized, symlinks resolved, and must sit inside the plugin's temp folder, in a capture or staged result recorded for the document named by `document_id`.
+- File paths are canonicalized, symlinks resolved, and must sit inside the plugin's temp folder, in `captures/<local_id>/` of a capture recorded for the document named by `document_id`.
 
 A refused descriptor returns `CommandRefused` with its index and the reason, and nothing runs. Allowed commands can still change anything in the target document, in one undoable step; that is why the switch is separate and off by default.
 
@@ -284,7 +285,7 @@ New lanes in v1.1 (`vectorize`, `layers`, `segment`, `maps`, `video`) reuse `est
 | `UploadRefused` | The file was not chosen by the person or made by the plugin |
 | `UnsupportedDocument` | Color mode or bit depth the lane cannot read |
 | `DocumentNotAllowed` | **Agents read the active document only** is on and the call named another document |
-| `DocumentNotActive` | An `execute_batchplay` descriptor acts on the active document (no document `_id`, or the document ordinal) and `document_id` is not active |
+| `DocumentNotActive` | `execute_batchplay` was called with a `document_id` that is not the active document |
 | `DocumentChanged` | The canvas changed since the capture |
 | `DocumentClosed` | The target document is closed |
 | `ApplicationExpired`, `ApplicationUsed` | `application_id` older than 10 minutes, or already applied |
