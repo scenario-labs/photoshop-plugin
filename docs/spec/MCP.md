@@ -25,7 +25,7 @@ Server instructions sent at `initialize`:
 
 - **Names** follow the Scenario Blender plugin's `docs/MCP.md` where the semantics match, verb-first snake case. The "Blender" column in each table says `same`, `similar` (same purpose, Photoshop inputs or a narrower scope) or `new`.
 - **Ids**: `local_id` (a job in the plugin's ledger), `job_id` (Scenario job), `capture_id`, `reference_id`, `quote_id`, `application_id`, `asset_id`, and `layer_id` and `document_id` (Photoshop ids, valid for the current Photoshop session).
-- **`document_id`** is optional on every document tool and defaults to the active document. With **Agents read the active document only** on, any other document returns `DocumentNotAllowed`, and job and result tools see only jobs whose target is the active document (SPEC 6.6).
+- **`document_id`** is optional on every document tool and defaults to the active document. With **Agents read the active document only** on, any other document returns `DocumentNotAllowed`. So does any job whose ledger records another document as source or target, in `list_local_jobs`, `job_status`, `inspect_result_previews`, `wait_for_job`, `prepare_result_application`, `recover_local_job` and `recover_cloud_job`; jobs made without a document stay visible. `prepare_result_application` also refuses a Library asset the ledger records as a result or upload of another document's job. Images in the Scenario project that the ledger does not tie to another document stay visible (SPEC 6.6).
 - **`null` means omitted.** Every optional input has a default.
 - **Annotations**: read-only tools declare `readOnlyHint: true`. Tools that change the document declare `destructiveHint: true`. The paid tool says so in the first line of its description.
 - **Errors** are one line, `Type: message` (section 8). They never contain credentials, and paths are relative to the plugin's folders and the Output Folder.
@@ -132,7 +132,7 @@ A "Scenario layer" is a layer whose metadata carries `scenario:assetId`, or one 
 | `wait_for_job` | same | `local_id` or `job_id`, `timeout` (0 to 170, default 45) | `job_status` fields once the job reaches `ready`, `applied`, `download_failed`, `uncertain` or a final status; `still_running` when the wait expired first | Waits without blocking Photoshop | Free |
 | `list_local_jobs` | same | `filter` (`all`, `active`, `needs_attention`, `agents`, `this_client`), `limit` (default 20), `cursor` | Rows {local_id, job_id, status, lane, model_name, prompt_slug, cu_quoted, cu_quoted_max, cu_charged, origin, created_at, revision} | None | Free |
 | `list_generations` | same | `created_after`, `limit` (default 20), `cursor` | The current project's jobs on Scenario: {job_id, status, created_at, asset_ids}, plus `model_id` when the job record carries it | None | Free |
-| `list_assets` | similar (no `public` input) | `collection_id`, `limit` (default 20), `cursor` | Images of the current project: {asset_id, name, width, height, created_at} | None | Free |
+| `list_assets` | similar (no `public` input) | `collection_id`, `limit` (default 20), `cursor` | Images of the current project, without the plugin's own uploads (captures, masks, references): {asset_id, name, width, height, created_at} | None | Free |
 | `search_assets` | similar (no `public` input) | `query`, `limit` (default 20) | As `list_assets`. Search can miss assets; browse with `list_assets` to be sure | None | Free |
 | `list_collections` | same | `limit`, `cursor` | {collection_id, name, asset_count} | None | Free |
 | `inspect_result_previews` | same | `local_id` or `job_id`, `takes` (default all), `max_px` (default 512, max 1024) | One JPEG per take, plus checks against the capture: `aspect_ok`, `edited`, `seam_bias`, `seam_residual`, `seam_ok`, `polarity_suspect` | Downloads results if needed; no document change | Free. Images go to the agent's provider |
@@ -164,7 +164,7 @@ Any other `path` returns `UploadRefused` before anything is read. Files from dis
 | Tool | Blender | Inputs | Output | Side effects | Cost |
 |---|---|---|---|---|---|
 | `recover_local_job` | same (actions `retry_receipt` and `find_cloud_job` are not offered: see section 6) | `local_id`, `expected_revision`, `action` | `status`, `revision`, `actions`, `error` | `refresh` reads the job on Scenario now. `recover_download` checks the files on disk against the record, with no network call: `ready` when every file verifies, else `download_failed`. `resume` is the panel's **Resume download**: fresh signed links, complete files kept. `stop_download` is **Stop download**. `cancel` asks Scenario once to cancel a running job and reports the outcome; its charge follows section 3, Charges. `resume`, `stop_download` and `cancel` act only on jobs this client session started (`NotYourJob` otherwise, including jobs of an ended session, which belong to the person). An `uncertain` job returns `UncertainNeedsPerson` | Free |
-| `recover_cloud_job` | same | `job_id` | `local_id`, `status`, `revision` | Adds a finished job of the current project to the ledger and downloads its results; never submits a generation; no document change | Free |
+| `recover_cloud_job` | same | `job_id` | `local_id`, `status`, `revision` | Adds a finished job of the current project to the ledger and downloads its results; never submits a generation; no document change. A job the ledger already holds returns its existing record, or `DocumentNotAllowed` under read scope when that record names another document | Free |
 | `cancel_prepared_job` | similar: returns `not_sent` where Blender's withdrawn job reads `canceled` | `local_id` of a job in `awaiting_approval` | `status: "not_sent"` | Withdraws the request, only for jobs this client session started (`NotYourJob` otherwise); nothing was sent to Scenario | Free |
 
 ### 4.6 Document changes
@@ -199,9 +199,15 @@ Needs both switches: **Agents may modify the document** and **Agents may run Pho
 
 The plugin checks every descriptor against an allow-list before running anything (SPEC 6.6, `shared/batchplay-allow.json`):
 - Allowed: the events the Scenario Photoshop skills' toolkits send, plus the layer, selection, mask, channel, transform, canvas, adjustment and filter events listed there, each with a live test, plus `get`, whose results lose path values and the document properties that can record paths (SPEC 6.6).
-- Every reference must stay inside the document named by `document_id`. A document element is accepted only as that document's `_id`, or as the active-document ordinal when that document is active; a document by index, name, offset or another id returns `CommandRefused`, and so does `select` of a document. Layer, channel and path elements by `_id` must belong to that document. A descriptor with no target, or with ordinal, relative or by-name layer, channel or path elements, returns `DocumentNotActive` unless that document is active. References to the application, Actions, presets, color settings, workspaces, menus, History states or other documents, and commands that create a document, are refused.
+- Every reference must stay inside the document named by `document_id`:
+  - names are read as string ids: a key or an `_obj`, `_ref`, `_class`, `_enum` or `_value` string starting with `$` (Adobe's four-character codes, such as `$Dcmn`) returns `CommandRefused`;
+  - each reference element has exactly one form (`_id`, `_index`, `_name`, `_offset`, or `_enum` with `_value`) or is a `_property` element, and its class is document, layer, channel, path or another class listed with a live test; a chain of `_property` elements only, or one ending with `application`, is refused;
+  - a document element is accepted only as that document's `_id`, or as the active-document ordinal (`targetEnum`, or no `_value`) when that document is active, otherwise `DocumentNotActive`; a document by index, name, offset, another id or another ordinal returns `CommandRefused`, and so does `select` of a document;
+  - layer, channel and path elements by `_id` must belong to that document; a chain with a layer `_id` but no document element counts as targetless;
+  - a descriptor with no target, or with ordinal, relative or by-name layer, channel or path elements, returns `DocumentNotActive` unless that document is active;
+  - references to the application, Actions, presets, color settings, workspaces, menus, History states or other documents, and commands that create a document, are refused.
 - Always refused: playing Actions, script events, Adobe's generative events (Generative Fill and the like), `open`, `placeEvent`, `save`, `close`, `quit`, `splitChannels`, the export family, `print`, and events of other plugins. Dialog options are forced off.
-- File paths are canonicalized, symlinks resolved, and must sit inside the plugin's temp folder.
+- File paths are canonicalized, symlinks resolved, and must sit inside the plugin's temp folder, in a capture or staged result recorded for the document named by `document_id`.
 
 A refused descriptor returns `CommandRefused` with its index and the reason, and nothing runs. Allowed commands can still change anything in the target document, in one undoable step; that is why the switch is separate and off by default.
 
@@ -278,7 +284,7 @@ New lanes in v1.1 (`vectorize`, `layers`, `segment`, `maps`, `video`) reuse `est
 | `UploadRefused` | The file was not chosen by the person or made by the plugin |
 | `UnsupportedDocument` | Color mode or bit depth the lane cannot read |
 | `DocumentNotAllowed` | **Agents read the active document only** is on and the call named another document |
-| `DocumentNotActive` | An `execute_batchplay` descriptor without an `_id` target names a document that is not active |
+| `DocumentNotActive` | An `execute_batchplay` descriptor acts on the active document (no document `_id`, or the document ordinal) and `document_id` is not active |
 | `DocumentChanged` | The canvas changed since the capture |
 | `DocumentClosed` | The target document is closed |
 | `ApplicationExpired`, `ApplicationUsed` | `application_id` older than 10 minutes, or already applied |

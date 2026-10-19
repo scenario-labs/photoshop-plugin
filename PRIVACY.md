@@ -28,7 +28,7 @@ Before sending, the plugin converts captured pixels to sRGB at 8 bits per channe
 
 **Never sent to anyone but Scenario's API:** your key and secret. The helper, connected agents and the plugin's logs never receive them.
 
-**When you connect an agent**, that changes. A connected agent can read the names, layers, text and previews of every open document (only the active one if you turn on **Agents read the active document only**), and what it reads goes to the agent's model provider. After you allow it, once per document or file in each agent session, it can also upload captures from that document, files you chose and results the plugin saved to your Scenario project. See "The local Scenario MCP server" below.
+**When you connect an agent**, that changes. A connected agent can read the names, layers, text and previews of every open document (only the active one, and the jobs made from it on this computer, if you turn on **Agents read the active document only**; images already in your Scenario project, such as generations and Library assets, stay readable), and what it reads goes to the agent's model provider. After you allow it, once per document or file in each agent session, it can also upload captures from that document, files you chose and results the plugin saved to your Scenario project. See "The local Scenario MCP server" below.
 
 ## Where it goes
 
