@@ -18,8 +18,8 @@ Claims here are marked *verified live* (in Photoshop), *tested automated* (Node,
 | `plugin/src/jobs/` | The job ledger, one JSON file per job in the data folder (`ledger.js`), a generation from the click to the placed layer (`runner.js`), charges and their words (`charges.js`) |
 | `plugin/src/apply/` | What a placement does, as data (`plan.js`): names, cover fit, the XMP packets, the History name; `host.placeResults` carries it out |
 | `plugin/src/capture/` | Image-lane references: captures that fit the upload limit, chosen files (`references.js`) |
-| `plugin/src/ui/` | The link and lanes panel (`panel.js`, texts in `view.js`), the lane forms, references, results tray and Generate button (`lanes.js`), the Jobs view (`jobs-view.js`, texts in `jobs-text.js`), the model picker (`picker.js`), and the account views: sign-in, projects, settings (`account-panel.js`, texts in `account-view.js`) |
-| `plugin/src/dev/` | Development builds only, stubbed out in release bundles: the pairing token import (`import-token.js`) and the API key import (`import-key.js`) |
+| `plugin/src/ui/` | The panel shell: lane tabs, agent dot and Settings > Connect an AI agent (`panel.js`, texts in `view.js`), the lane forms, target chip, model card, reference chips, results tray and Generate button (`lanes.js`), the Jobs view (`jobs-view.js`, texts in `jobs-text.js`), the model picker (`picker.js`), the account views: sign-in, projects, settings (`account-panel.js`, texts in `account-view.js`), the panel menu (`menu.js`), the icons (`icons.js`) and where small pictures come from (`thumbs.js`) |
+| `plugin/src/dev/` | Development builds only, stubbed out in release bundles: the pairing token import (`import-token.js`), the API key import (`import-key.js`), the panel's UI loop (`ui-loop.js`) and its sample states (`ui-demo.js`) |
 | `plugin/src/diagnostics.js` | The Copy diagnostics text and the list of recent error types |
 | `helper/` | `scenario-photoshop`: stdio MCP server (`mcp.js`, `tools.js`), port owner and peer (`link/`), token file (`token-file.js`), setup command (`setup.js`, `toml-edit.js`). `npm-shrinkwrap.json` pins its dependency tree for npm users |
 | `shared/` | Tool catalog (`catalog.json`), catalog mapping, lane defaults and per-model price rules as data (`catalog-map.json`), error types (`errors.json`), link protocol (`protocol.json`), enums (`enums.json`), Scenario API settings, known error texts and links (`scenario-api.json`), a small JSON Schema checker used by both sides |
@@ -103,11 +103,35 @@ Release builds replace both dev imports (pairing token and API key) with empty s
 3. Paste the key into **API key**. Pasting `key:secret`, or the key and the secret on two lines, also fills **API secret**; otherwise paste the secret into **API secret**.
 4. Click **Save and test**. "Testing 1 of 2", then "Testing 2 of 2"; the header then shows the project name and a "Connected to Scenario" banner appears.
 5. `scenario_status` (step 3 of the link check above) now reports `signed_in: true` and `project_name`.
-6. The header's project name opens Projects (add a key for another project, switch); **Settings** opens Test connection, Sign out and Copy diagnostics.
+6. The header's project name opens Projects (add a key for another project, switch); the panel menu (the icon at the panel's top right) opens Settings: Test connection, Sign out and Copy diagnostics.
 
-## Panel layout
+## Panel UI
 
-At the manifest's minimum width (280 px) the header holds on one row: the project label shrinks on one line and ends with an ellipsis, while the name, the agent dot, **Jobs** and **Settings** keep their size. UXP applies `text-overflow` to a block element, not to a button's own label, so the label is a span inside the button; the header buttons use 4 px side padding. On the Not signed in screen the key fields and **Save and test** come first, and how to get a key follows under "No key yet?". *Verified live* with a probe plugin on 27.11 (UXP 9.4), from layout metrics rather than a look at the panel: with this CSS and markup at 280 px, "Not signed in" fits in full, a long project name is cut with an ellipsis, nothing in the header wraps, and **Save and test** ends about 350 px below the top of the panel (the old order put it about 730 px down). `test/unit/panel-layout.test.js` keeps these rules.
+The panel follows Photoshop's own panels (Properties, Generative Fill, Libraries). Structure: [docs/spec/wireframes.md](docs/spec/wireframes.md) section 2.
+
+**Conventions**
+- Colors come from the host theme variables (`var(--uxp-host-background-color)`, `--uxp-host-text-color`, `--uxp-host-text-color-secondary`, `--uxp-host-border-color`, `--uxp-host-widget-hover-background-color`), so the panel follows the four Photoshop brightness themes. The only fixed colors are Spectrum's blue, green and orange for states and accents (agent dot, Jobs badge, kept take, warnings) and a translucent black behind pictures, which reads on light and dark themes.
+- 12 px text, 11 px notes, an 8 px spacing grid, Spectrum widgets at `size="s"` (24 px high): `sp-button variant="cta"` for Generate only, quiet `sp-action-button` for tools, tabs and icon buttons, `sp-picker`, `sp-textarea`, `sp-textfield`.
+- Icons are inline SVG drawn in `plugin/src/ui/icons.js` (outline, 18 px box, `currentColor`); markup asks for one with `data-icon="<name>"` and `icons.fill` draws it. No image files, no icon font.
+- The header holds the mark, the project, the agent dot and Jobs. Settings, Diagnostics, Help, About and Sign Out are in the panel menu (`plugin/src/ui/menu.js`, declared in `entrypoints.setup`).
+- A main view leads with controls; explanations go in tooltips (`title`), in an empty state or under a Details disclosure. Main views never mention ports, the helper, or "later" builds; `test/unit/panel-layout.test.js` checks the markup and every text table.
+- `sp-picker` options are an `sp-menu slot="options"` of `sp-menu-item`s, the chosen one marked `selected` (UXP ignores a value set from code).
+- Text that must end with an ellipsis is a block `span` inside the button; UXP does not apply `text-overflow` to a button's own label.
+
+**What UXP 9.4 lays out** (Photoshop 27.11, measured with the probe plugin and the panel's own metrics, *verified live*): flexbox with `flex-wrap: nowrap`, a scrolling middle part (`flex: 1 1 auto; min-height: 0; overflow-y: auto`), `max-width` media queries, `text-overflow: ellipsis` on block elements, `position: absolute` inside a relative box. Images load from `https:` (the model thumbnails, with the domain in the manifest), `data:`, `blob:` and `plugin-data:/<path>`; `file://` and `plugin-data://` do not load. Not supported: CSS grid, `gap`, `position: sticky`, `aspect-ratio`, `window.matchMedia`. A hidden element keeps its last box in `getBoundingClientRect`, so measure only what is shown. The stylesheet test refuses grid, gap, sticky and aspect-ratio.
+
+**Looking at the panel** (development builds, macOS). The panel's UI loop (`plugin/src/dev/ui-loop.js`) reads commands from the data folder, so the look can change without restarting Photoshop:
+
+```sh
+node test/live/ui-dev.js push                         # build, copy into the installed plugin, reload the panel
+node test/live/ui-dev.js view '{"name":"settings"}'   # main (with "lane"), picker, jobs, projects, settings, signin
+node test/live/ui-dev.js width '{"px":280}'           # constrain the root to check a width; '{}' removes it
+node test/live/ui-dev.js metrics                      # boxes, scroll sizes and texts of every shown element
+node test/live/ui-dev.js demo '{"what":"tray","args":{"state":"applied","images":[{"file":"take.jpg"}]}}'
+node test/live/ui-dev.js capture panel-window.png     # silent capture of Photoshop's main window
+```
+
+`demo` draws sample states with the panel's own render code (reference chips, a results tray, Jobs rows, a confirm card, a sign-in error) from local sample pictures; it spends nothing and touches no document. `capture` finds Photoshop's main window with Quartz (through `uv`) and runs `screencapture -x -o -l <window id>`, which neither activates Photoshop nor makes a sound; crop the panel from the result with ImageMagick. Photoshop hides docked panels while its Home screen shows (no document open), so a capture needs an open document; `metrics` works either way. Release builds replace the loop and the demos with stubs (`test/unit/bundle.test.js`).
 
 ## Connecting a real client by hand
 

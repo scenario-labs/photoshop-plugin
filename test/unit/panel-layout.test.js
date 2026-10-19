@@ -103,7 +103,10 @@ test("body scrolls, prompt bar pinned: one flex column whose middle part scrolls
   assert.ok(classesOf("main-foot").includes("foot"));
   assert.ok(at("lane-tabs") < at("main-scroll") && at("main-scroll") < at("main-foot"));
   for (const id of ["prompt-bar", "prompt", "takes-select", "size-select", "generate"]) assert.ok(at(id) > at("main-foot"), `#${id} is in the pinned foot`);
-  for (const id of ["model-card", "target-row", "refs-section", "lane-body"]) assert.ok(at(id) > at("main-scroll") && at(id) < at("main-foot"), `#${id} scrolls`);
+  for (const id of ["model-card", "target-row", "refs-section", "lane-body", "tray"]) assert.ok(at(id) > at("main-scroll") && at(id) < at("main-foot"), `#${id} scrolls`);
+  // The foot holds the prompt bar only, so results never squeeze the body.
+  const foot = main.slice(main.indexOf('<div class="foot" id="main-foot">'));
+  assert.ok(/^<div class="foot" id="main-foot">\s*<div class="prompt-bar" id="prompt-bar">/.test(foot), "the foot starts with the prompt bar");
   // Every other view: its header row, then one part that scrolls.
   for (const v of ["view-signin", "view-jobs", "view-projects", "view-settings"]) {
     const body = section(v);

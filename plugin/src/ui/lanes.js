@@ -705,6 +705,16 @@ function createLanes(doc, o) {
 
   // The tray: the latest job's status, its takes as pictures (take 1, the
   // visible layer once placed, carries a check), and Place / Open.
+  // The tray ends the scrolling body, just above the prompt bar; a new job
+  // or a new state scrolls it into view once.
+  function revealTray(rec) {
+    var key = rec.local_id + "|" + rec.state + "|" + (rec.outputs || []).length;
+    if (key === st.trayKey) return;
+    st.trayKey = key;
+    var box = byId("main-scroll");
+    if (box && typeof box.scrollHeight === "number") box.scrollTop = box.scrollHeight;
+  }
+
   function renderTrayRecord(rec) {
     show("tray", !!rec && st.lane === "image");
     if (!rec) return;
@@ -734,6 +744,7 @@ function createLanes(doc, o) {
       box.appendChild(take);
     }
     show("tray-takes", outs.length > 0, "flex");
+    revealTray(rec);
   }
 
   function trayAction(newDocument) {

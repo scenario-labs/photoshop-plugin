@@ -1,8 +1,8 @@
 # Wireframes (spec v1)
 
-Status: draft for review, revision 4, 2026-10-19. Companion to [SPEC.md](SPEC.md), section 3. Section numbers here follow the screen list in SPEC 3.15.
+Status: draft for review, revision 5, 2026-10-19. Companion to [SPEC.md](SPEC.md), section 3. Section numbers here follow the screen list in SPEC 3.15.
 
-- Frames are drawn at the default docked width, 320 px, as 40 columns of 8 px. Section 2 also draws the 280 px minimum (35 columns); below 320 px the lane tabs show icons with tooltips.
+- Frames are drawn at the default docked width, 320 px, as 40 columns of 8 px. Section 2 also draws the 280 px minimum (35 columns); below 380 px the lane tabs show icons with tooltips and only the chosen tab keeps its label.
 - `[ Label ]` is a button, `[v]` a dropdown, `( )` and `(o)` radio buttons, `[ ]` and `[x]` checkboxes, `(Chip)` a filter chip, `[th]` a thumbnail, `>` a collapsed row, `v` an expanded row.
 - CU figures are placeholders (`N CU`, `M CU`). Model names are placeholders: the plugin shows names and descriptions from the Scenario catalog. Project names, file names and key endings are invented examples.
 - UXP has no CSS transitions, so state changes are immediate; every progress bar carries text. Cards and notices are inline banners in the panel's flow, never overlays near a text field. Only the spend confirmation is a modal dialog.
@@ -109,109 +109,108 @@ Then the ready banner, above the Image lane. It does not block anything and goes
 
 ## 2. Main view
 
-Header, lane tabs, lane body (scrolls), results tray (collapses to one line), prompt bar (fixed). The project name opens the Projects view. The dot before **Jobs** is the agent connection: `o` when no agent is connected, `*` when one is. The Image lane with a selection active:
+Header, lane tabs, lane body (scrolls), results tray, prompt bar (pinned at the bottom, always visible). The panel is one flex column whose middle part scrolls: UXP 9.4 has no `position: sticky`, CSS grid or `gap` (measured with the probe plugin).
+
+The header is one row that never wraps: the Scenario mark (monochrome, in the theme's text color), the project name (one line, cut with an ellipsis; the full name is its tooltip; it opens the Projects view), the agent dot (`o` none connected, `*` connected, `!` needs the person; the status is its tooltip) and the Jobs icon with a count badge (`(J2)`; the counts in words are its tooltip). Everything else is in Photoshop's panel menu `[=]`: Jobs, Projects, Settings, Connect an AI Agent, Diagnostics, Scenario Help, About, Sign Out (which opens Settings with the confirm armed).
+
+Lane tabs are one row of icons with labels. Below 380 px only the chosen tab keeps its label; every tab has a tooltip saying what the lane is for.
+
+Explanations go in tooltips, not paragraphs: the target is a chip (`(Selection 928 x 928)`), and what it means ("lands as a new layer masked to the selection; to change what is inside it, use Edit") is its tooltip. The model card shows the catalog picture, the name and one line of what the model takes; the description is its tooltip. The Image lane with a selection active:
 
 ```
 +--------------------------------------+
-| [S] Fall campaign v  * Jobs 2    [=] |
+| [S] Fall campaign v      *  (J2) [=] |
 +--------------------------------------+
-| [Image] Edit Enhance Trained Library |
+| [Im Image] Ed Edit En Enhance Tr  Li |
 +--------------------------------------+
-| Target  Selection 928 x 928     [v]  |
-|         lands masked to selection    |
-| Makes a new picture, masked to the   |
-| selection. To change what is inside  |
-| it, use Edit.                        |
+| Target  (Selection 928 x 928)        |
+| +------+                             |
+| | [th] | Model name      [ Change ]  |
+| +------+ Up to 4 references . Mask   |
 |                                      |
-| Model                                |
-| +------+ Model name                  |
-| | [th] | Catalog description, two    |
-| |      | lines at most.              |
-| +------+ Refs up to 4  [ Change ]    |
-|                                      |
-| References (2 of 4)                  |
-| [th] [th] [ + Add ]                  |
+| References                   2 of 4  |
+| [th x] [th x] [ + ]                  |
 | > Advanced (6 settings)              |
 +--------------------------------------+
-| v Latest: 4 takes, placed            |
+| Placed: 4 takes              [ Jobs ]|
 | [t1*] [t2] [t3] [t4]                 |
-| Seam ok                              |
-| [ Keep this take ]                   |
-| [ Reuse settings ] [ More v ]        |
+| Model name . quoted N, charged N CU  |
+| [ Keep this take ] [ More v ]        |
 +--------------------------------------+
 | Describe the image...                |
 |                                      |
-| Takes [1 v]   Size [3:2 v]           |
+| [4 takes v] [3:2 (1536 x 1024) v]    |
 | [ Generate (N CU)                 ]  |
 +--------------------------------------+
 ```
 
-**+ Add** on references opens a menu: Selection, Current layer, All visible, From Library, File. A reference is captured when added and uploaded when Generate is clicked.
+Each reference is a thumbnail chip with a remove `x`; its source, the size it is sent at and "Input reduced" are its tooltip. The `+` opens a menu: Selection, Current layer, All visible layers, File (From Library when the Library lane exists). A reference is captured when added and uploaded when Generate is clicked. In the tray, take 1 is the visible layer once placed and carries the check (`*`).
 
 The Image lane with no document open. The result opens as a new document at the Size preset:
 
 ```
 +--------------------------------------+
-| [S] Fall campaign v  o Jobs      [=] |
+| [S] Fall campaign v      o  (J)  [=] |
 +--------------------------------------+
-| [Image] Edit Enhance Trained Library |
+| [Im Image] Ed  En  Tr  Li            |
 +--------------------------------------+
-| Target  New document 1024 x 1024     |
-|         No document is open.         |
-|                                      |
-| Model   Model name       [ Change ]  |
+| Target  (New document 1024 x 1024)   |
+| [th] Model name          [ Change ]  |
+|      Up to 10 references . Mask      |
 | > Advanced (6 settings)              |
 +--------------------------------------+
 | A lighthouse on a cliff at sunrise,  |
 | painterly                            |
-| Takes [1 v]   Size [1:1 v]           |
+| [1 take v]  [1:1 (1024 x 1024) v]    |
 | [ Generate (N CU)                 ]  |
 +--------------------------------------+
 ```
 
-Edit and Enhance with no document open:
+Edit and Enhance with no document open, and the lanes that have nothing to run yet, show an empty state: an icon, a title, one line, and an action when there is one:
 
 ```
 +--------------------------------------+
-| Image [Edit] Enhance Trained Library |
+| Im [Ed Edit] En  Tr  Li              |
 +--------------------------------------+
-| Open or create a document to use     |
-| this lane.                           |
-|                   [ New document ]   |
+|                 [ic]                 |
+|           No document open           |
+|  Open or create a document to use    |
+|  this lane.                          |
 +--------------------------------------+
 ```
 
-At the 280 px minimum width. Lane tabs show icons (drawn here as two letters) with tooltips, the tray is collapsed to one line, and the lane body keeps at least 120 px:
+At the 280 px minimum width. Lane tabs show icons with tooltips, the chosen one keeps its label, and nothing wraps:
 
 ```
 +---------------------------------+
-| [S] Fall cam... v * Jobs 2  [=] |
+| [S] Fall cam... v   *  (J2) [=] |
 +---------------------------------+
-| [Im]  Ed   En   Tr   Li         |
+| [Im Image] Ed  En  Tr  Li       |
 +---------------------------------+
-| Target Selection 928 x 928  [v] |
-|                                 |
-| Model  Model name  [ Change ]   |
-| References (2 of 4)             |
-| [th] [th] [ + ]                 |
+| Target (Selection 928 x 928)    |
+| [th] Model name    [ Change ]   |
+|      Up to 4 references . Mask  |
+| References              2 of 4  |
+| [th x] [th x] [ + ]             |
 | > Advanced (6)                  |
 +---------------------------------+
-| > Latest: 4 takes, placed       |
+| Placed: 4 takes        [ Jobs ] |
+| [t1*] [t2] [t3] [t4]            |
 +---------------------------------+
 | Describe the image...           |
-| Takes [1 v]  Size [3:2 v]       |
+| [4 takes v] [3:2 (1536 x 1...v] |
 | [ Generate (N CU)            ]  |
 +---------------------------------+
 ```
 
-The Projects view, from the project name in the header:
+The Projects view, from the project name in the header. Rows are list items: a check on the current project, the name (cut with an ellipsis), the key's last characters:
 
 ```
 +--------------------------------------+
 | < Projects                           |
 +--------------------------------------+
-| (o) Fall campaign          ....7KQ2  |
-| ( ) Mascot training        ....A1C9  |
+| v  Fall campaign           ....7KQ2  |
+|    Mascot training         ....A1C9  |
 |                                      |
 | [ Add a key for another project ]    |
 |                                      |
@@ -881,7 +880,7 @@ A charge above its quote ends the allowance:
 
 ## 11. Jobs
 
-Opened from **Jobs** in the header. **On this computer** is the ledger:
+Opened from the Jobs icon in the header or the panel menu. **On this computer** is the ledger:
 
 ```
 +--------------------------------------+
@@ -1077,6 +1076,8 @@ Empty and loading:
 ```
 
 ## 13. Settings
+
+Opened from the panel menu `[=]`; Settings, Connect an AI Agent, Diagnostics and About each open it at their section. The agent section is worded for a person ("Connect an AI agent", "Pair a client"); how the link works (the local program, localhost, the port, the pairing token) is under a **Details** disclosure.
 
 ```
 +--------------------------------------+

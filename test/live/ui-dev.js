@@ -67,12 +67,14 @@ async function send(cmd, timeoutMs = 8000) {
 function windowId() {
   const code = [
     "import Quartz",
-    "ws = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID)",
+    // All windows, not only on-screen ones: the capture works while another
+    // app covers Photoshop or another Space shows.
+    "ws = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, Quartz.kCGNullWindowID)",
     "ids = [int(w['kCGWindowNumber']) for w in ws if str(w.get('kCGWindowOwnerName', '')).startswith('Adobe Photoshop') and str(w.get('kCGWindowName', '')).startswith('Adobe Photoshop') and int(w.get('kCGWindowLayer', 0)) == 0]",
     "print(ids[0] if ids else '')"
   ].join("\n");
   const out = execFileSync("uv", ["run", "-q", "--with", "pyobjc-framework-Quartz", "python", "-c", code], { encoding: "utf8" }).trim();
-  if (!out) throw new Error("Photoshop's main window is not on screen");
+  if (!out) throw new Error("no Photoshop main window found");
   return out;
 }
 

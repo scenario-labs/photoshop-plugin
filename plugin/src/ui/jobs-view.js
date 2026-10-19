@@ -119,7 +119,9 @@ function createJobsView(doc, o) {
         head.appendChild(t);
         var stEl = doc.createElement("span");
         stEl.className = r.attention ? "job-status attention" : "job-status";
-        stEl.textContent = r.status;
+        // The shared labels are lower case (agents read them mid-sentence);
+        // the row shows them as a status word.
+        stEl.textContent = r.status ? r.status.charAt(0).toUpperCase() + r.status.slice(1) : "";
         head.appendChild(stEl);
         main.appendChild(head);
         var m = doc.createElement("div");

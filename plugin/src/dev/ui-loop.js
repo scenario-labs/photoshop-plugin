@@ -35,6 +35,24 @@ function start(o) {
   var busy = false;
   var stopped = false;
 
+  // UXP keeps a hidden element's last box, so visibility is read from the
+  // display of the element and its parents.
+  function hidden(el) {
+    var gcs = o.global && typeof o.global.getComputedStyle === "function" ? o.global.getComputedStyle : null;
+    for (var n = el; n && n !== doc.body; n = n.parentNode) {
+      var d = n.style && n.style.display;
+      if (!d && gcs) {
+        try {
+          d = gcs(n).display;
+        } catch (e) {
+          d = "";
+        }
+      }
+      if (d === "none") return true;
+    }
+    return false;
+  }
+
   function metrics(cmd) {
     var out = { body: rect(doc.body), elements: {} };
     var root = doc.getElementById(cmd.root || "app") || doc.body;
@@ -44,7 +62,7 @@ function start(o) {
     for (var i = 0; i < all.length; i++) {
       var el = all[i];
       var r = rect(el);
-      if (!cmd.all && (r[2] === 0 || r[3] === 0)) continue;
+      if (!cmd.all && (r[2] === 0 || r[3] === 0 || hidden(el))) continue;
       var text = String(el.textContent || "").replace(/\s+/g, " ").trim();
       out.elements[el.id] = {
         tag: String(el.tagName || "").toLowerCase(),
@@ -52,6 +70,10 @@ function start(o) {
         s: [el.scrollWidth, el.clientWidth, el.scrollHeight, el.clientHeight],
         text: text.length > 80 ? text.slice(0, 77) + "..." : text
       };
+      if (out.elements[el.id].tag === "img") {
+        var src = String(el.getAttribute("src") || "");
+        out.elements[el.id].img = [el.naturalWidth || 0, el.naturalHeight || 0, el.complete === true, src.slice(0, src.indexOf(":") + 1)];
+      }
     }
     return out;
   }

@@ -593,10 +593,10 @@ body {
 
 /* ---- results tray and prompt bar (pinned) ---- */
 
+/* Results end the scrolling body, right above the prompt bar. */
 .tray {
-  padding-bottom: 8px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--uxp-host-border-color);
+  padding-top: 8px;
+  border-top: 1px solid var(--uxp-host-border-color);
 }
 
 .tray-head {
@@ -670,12 +670,11 @@ body {
   margin-right: 8px;
 }
 
+/* The growing picker (Size or Factor, one at a time) ends the row; hidden
+   options still count for :last-child in UXP, so the margin sits on Takes. */
 .opt.grow {
   flex: 1 1 auto;
   min-width: 0;
-}
-
-.opts > :last-child {
   margin-right: 0;
 }
 

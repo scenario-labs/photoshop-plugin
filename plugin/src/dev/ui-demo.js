@@ -32,6 +32,7 @@ function bytesOf(img) {
 // Writes the sample pictures; returns outputs as the ledger keeps them.
 async function writeTakes(host, images, prefix) {
   var outs = [];
+  if (images.length && host.ensureDataDir) await host.ensureDataDir(DIR);
   for (var i = 0; i < images.length; i++) {
     var img = images[i];
     var ext = img.mime === "image/jpeg" ? "jpg" : "png";
