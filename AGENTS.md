@@ -46,12 +46,12 @@ npm run package:dev    # build/scenario-photoshop-0.1.0-dev.ccx
 
 ## Try the link in Photoshop (development)
 
-*Not tested* end to end with this build yet; the steps rest on behavior *verified live* on Photoshop 27.11 with a probe plugin.
+*Verified live* on Photoshop 27.11 (macOS) with this build: the dev token is adopted and its file removed, `scenario_status` comes back from the live Photoshop through the helper, and the random source is `getRandomValues`. The plugin's WebSocket sent `Host: localhost:9890`, `Origin: file://` and `User-Agent: WebSocket++/0.8.2`. The panel's look and 26.x were not checked.
 
 1. `npm run package:dev`.
-2. Install the package with Adobe's installer (macOS path shown; the plugin loads at the next Photoshop launch):
+2. Install the package with Adobe's installer (macOS path shown; the plugin loads at the next Photoshop launch). The installer needs an absolute path: a relative one fails with status -160 (*verified live* on 27.11).
    ```sh
-   "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install build/scenario-photoshop-0.1.0-dev.ccx
+   "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/build/scenario-photoshop-0.1.0-dev.ccx"
    ```
 3. `node test/live/m1-live-check.js`, then start or restart Photoshop. The script writes a fresh token as `dev-pairing-token` into the plugin's data folder; a development build adopts it at startup and deletes the file, so no one has to open the panel. The script then runs the helper with that token and calls `scenario_status` until Photoshop answers. It prints the status (document titles hidden unless `--show-titles`) and the `Host`, `Origin` and `User-Agent` the plugin's WebSocket sent.
 
