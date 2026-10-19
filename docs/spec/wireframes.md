@@ -1,6 +1,6 @@
 # Wireframes (spec v1)
 
-Status: draft for review, revision 2, 2026-10-19. Companion to [SPEC.md](SPEC.md), section 3. Section numbers here follow the screen list in SPEC 3.15.
+Status: draft for review, revision 3, 2026-10-19. Companion to [SPEC.md](SPEC.md), section 3. Section numbers here follow the screen list in SPEC 3.15.
 
 - Frames are drawn at the default docked width, 320 px, as 40 columns of 8 px. Section 2 also draws the 280 px minimum (35 columns); below 320 px the lane tabs show icons with tooltips.
 - `[ Label ]` is a button, `[v]` a dropdown, `( )` and `(o)` radio buttons, `[ ]` and `[x]` checkboxes, `(Chip)` a filter chip, `[th]` a thumbnail, `>` a collapsed row, `v` an expanded row.
@@ -28,6 +28,9 @@ Shown when no key is saved. **Create an API key** opens the API keys page on app
 |    Only team admins and project      |
 |    owners can create keys.           |
 |    [ Copy a request for your admin ] |
+|    No account, or no plan with API   |
+|    access? [ See plans ]             |
+|    [ Create a Scenario account ]     |
 | 2. Paste the key and its secret.     |
 |                                      |
 | API key                              |
@@ -43,7 +46,7 @@ Shown when no key is saved. **Create an API key** opens the API keys page on app
 +--------------------------------------+
 ```
 
-**Save and test** makes two free calls: an authenticated read, then a price check of the default model, which proves the key can run models. Its states:
+**Save and test** makes two free calls: an authenticated read, then a price check of the default model. Whether Scenario refuses that price check for a key that cannot run models is measured in M2.0; if it does not, "This key can't run models" appears at the first Generate instead, with nothing spent. Its states:
 
 ```
 +--------------------------------------+
@@ -135,7 +138,7 @@ Header, lane tabs, lane body (scrolls), results tray (collapses to one line), pr
 +--------------------------------------+
 | Describe the image...                |
 |                                      |
-| Takes [4 v]   Size [3:2 v]           |
+| Takes [1 v]   Size [3:2 v]           |
 | [ Generate (N CU)                 ]  |
 +--------------------------------------+
 ```
@@ -193,7 +196,7 @@ At the 280 px minimum width. Lane tabs show icons (drawn here as two letters) wi
 | > Latest: 4 takes, placed       |
 +---------------------------------+
 | Describe the image...           |
-| Takes [4 v]  Size [3:2 v]       |
+| Takes [1 v]  Size [3:2 v]       |
 | [ Generate (N CU)            ]  |
 +---------------------------------+
 ```
@@ -236,7 +239,9 @@ A tool selector sits where the model card sits in other lanes. Upscale:
 +--------------------------------------+
 ```
 
-Expand with an aspect preset. The anchor sets where the current image sits on the new canvas:
+With **Selection box** as the source, **Lands** offers **Layer over the box** (the default, for detail repair) and **New document**.
+
+Expand with a model that takes a mask (the default), so every anchor and Per side work. The anchor sets where the current image sits on the new canvas:
 
 ```
 +--------------------------------------+
@@ -245,6 +250,7 @@ Expand with an aspect preset. The anchor sets where the current image sits on th
 | Tool  Upscale [Expand]  Remove BG    |
 |                                      |
 | Model   Model name       [ Change ]  |
+|         Mask input: any anchor       |
 | Canvas  (o) Aspect   ( ) Per side    |
 | (1:1) [4:5] (3:2) (2:3) (16:9)       |
 | (9:16) (Custom)                      |
@@ -252,6 +258,8 @@ Expand with an aspect preset. The anchor sets where the current image sits on th
 |         [ ][x][ ]                    |
 |         [ ][ ][ ]                    |
 | Size    3000 x 2000 to 3000 x 3750   |
+| Lands   (o) This document            |
+|         ( ) A copy of this document  |
 | > Advanced (overlap 32 px, 2 more)   |
 +--------------------------------------+
 | Describe the new area (optional)     |
@@ -259,23 +267,35 @@ Expand with an aspect preset. The anchor sets where the current image sits on th
 +--------------------------------------+
 ```
 
-Expand per side, past the model's limit:
+When the new canvas is larger than the model's maximum output, the warning shows before the spend (SPEC 5.8):
 
 ```
 +--------------------------------------+
-| Canvas  ( ) Aspect   (o) Per side    |
-| Left [    0 ] px  Right  [    0 ] px |
-| Top  [  600 ] px  Bottom [ 1150 ] px |
-| Size    3000 x 2000 to 3000 x 3750   |
+| Size    6000 x 4000 to 6000 x 7500   |
 +--------------------------------------+
-| ! Bottom adds 1150 px; this model    |
-|   adds at most 1024 px per side.     |
+| ! New area at about 55% of this      |
+|   document's resolution: the model   |
+|   outputs at most 4096 px. Upscale   |
+|   the result if you need more.       |
 +--------------------------------------+
-| [ Generate (N CU)  disabled       ]  |
+| [ Generate (N CU)                 ]  |
 +--------------------------------------+
 ```
 
-Remove BG on a pixel layer, and on a layer that already has a mask:
+A model with an exact output size and no placement setting:
+
+```
++--------------------------------------+
+| Model   Model name       [ Change ]  |
+|         Exact size, no placement     |
+| Canvas  (o) Aspect   Per side (off)  |
+| Anchor  center only                  |
+|         This model expands around    |
+|         the center.                  |
++--------------------------------------+
+```
+
+Remove BG on a pixel layer, and on a layer that already has a mask. On the Background layer, **Mask on the layer** first converts it to a normal layer, in the same History state:
 
 ```
 +--------------------------------------+
@@ -362,7 +382,7 @@ Empty result:
 
 ## 5. Trained lane
 
-Make new with two LoRAs stacked on their base:
+The project's trained models come first, then Scenario's public ones, marked **Public**. Make new with two LoRAs stacked on their base:
 
 ```
 +--------------------------------------+
@@ -373,25 +393,25 @@ Make new with two LoRAs stacked on their base:
 |                                      |
 | Trained models (2 of 6)              |
 | [th] Brand style v3  LoRA            |
-|      Strength [ 0.80 ]  0 to 2       |
+|      Style strength [ 0.80 ] 0 to 2  |
 |                         [ Remove ]   |
-| [th] Ink outline     LoRA            |
-|      Strength [ 0.50 ]  0 to 2       |
+| [th] Ink outline  LoRA . Public      |
+|      Style strength [ 0.50 ] 0 to 2  |
 |                         [ Remove ]   |
 | [ + Add another ]                    |
-| Runs on Flux.2 Dev                   |
+| Runs on FLUX.2 Dev                   |
 |                                      |
-| References (1 of 4)                  |
+| References (1 of 5)                  |
 | [th] [ + Add ]                       |
 | > Advanced (5 settings)              |
 +--------------------------------------+
 | Describe the image...                |
-| Takes [2 v]   Size [1:1 v]           |
+| Takes [1 v]   Size [1:1 v]           |
 | [ Generate (N CU)                 ]  |
 +--------------------------------------+
 ```
 
-A composition replaces any LoRAs. Edit is offered because its base takes an aligned image:
+Edit with a LoRA whose base takes the capture as `image` plus `strength`. Two bases can run it, so **Run with** shows; **Change amount** is the base's `strength`, with its default and range from the schema:
 
 ```
 +--------------------------------------+
@@ -400,23 +420,44 @@ A composition replaces any LoRAs. Edit is offered because its base takes an alig
 |                                      |
 | Source  Selection 600 x 400     [v]  |
 | Sample  All visible             [v]  |
-| [th] Fall mascot   Composition       |
-|      Runs on Flux.1 Dev              |
-|                    [ Change ]        |
+| [th] Mascot paint   LoRA             |
+|      Style strength [ 0.75 ]         |
+| Run with [ Z-Image            v ]    |
+| Change amount [ 0.60 ]  0 to 1       |
+|   Lower keeps closer to your layer.  |
 +--------------------------------------+
 | Edits with trained models are        |
 | experimental: check the seam badge.  |
 +--------------------------------------+
 ```
 
-A trained model that cannot edit an area:
+An edit LoRA on a base that requires reference images: in Edit the capture is the first reference; in Make new, Generate waits for a reference:
+
+```
++--------------------------------------+
+| (o) Make new   ( ) Edit Experimental |
+| [th] Product relight  LoRA . Edit    |
+|      Runs on Qwen Edit 2511          |
+| References: required  [ + Add ]      |
+| This model edits an image. Add a     |
+| reference, or use Edit.              |
+| [ Generate  disabled              ]  |
++--------------------------------------+
+```
+
+A trained model whose base can't take the capture, and one this version does not know:
 
 ```
 +--------------------------------------+
 | (o) Make new   ( ) Edit (off)        |
 | This model can't edit an area. Use   |
-| Make new, or use its result as a     |
+| Make new, then use the result as a   |
 | reference in Edit.                   |
++--------------------------------------+
+| [th] Old style   (greyed)            |
+|      This trained model type isn't   |
+|      supported by this version of    |
+|      the plugin.                     |
 +--------------------------------------+
 ```
 
@@ -425,9 +466,10 @@ No trained models in this project:
 ```
 +--------------------------------------+
 | No trained models in project Fall    |
-| campaign. Models trained in other    |
-| projects appear when you switch      |
-| project.                             |
+| campaign yet. Scenario's public      |
+| models are listed below; models      |
+| trained in other projects appear     |
+| when you switch project.             |
 | [ Open Scenario ] [ Switch project ] |
 +--------------------------------------+
 ```
@@ -443,6 +485,7 @@ Browsing lists the project's images, newest first. Selecting a thumbnail shows i
 | Project  Fall campaign               |
 | Collection [ All images         v ]  |
 | [ Search images                   ]  |
+| [ ] Show plugin uploads              |
 +--------------------------------------+
 | [th]       [th]       [th]           |
 | [th]       [th*]      [th]           |
@@ -455,7 +498,7 @@ Browsing lists the project's images, newest first. Selecting a thumbnail shows i
 +--------------------------------------+
 ```
 
-**Use as reference** offers "in Image" and "in Edit". **Place** fits the asset to the selection box or the canvas. Search that finds nothing:
+The plugin's own uploads (captures, masks, references) are hidden unless **Show plugin uploads** is on. **Use as reference** offers "in Image", "in Edit" and "in Trained". **Place** lands the asset at native size, or contained in the selection box or the canvas when larger, never enlarged. Search that finds nothing:
 
 ```
 +--------------------------------------+
@@ -489,7 +532,12 @@ Fixed at the bottom of every generating lane. Cmd+Enter (Ctrl+Enter on Windows) 
 |   charge depends on outputs returned |
 +--------------------------------------+
 | [ Generate (from N CU)            ]  |
-|   charge can be higher               |
+|   charge can be higher; always       |
+|   confirmed                          |
++--------------------------------------+
+| [ Sending...                      ]  |
+|   disabled while this request is     |
+|   sent                               |
 +--------------------------------------+
 | [ Checking price...               ]  |
 +--------------------------------------+
@@ -510,7 +558,7 @@ Fixed at the bottom of every generating lane. Cmd+Enter (Ctrl+Enter on Windows) 
 
 ## 8. Selection edit
 
-The Edit lane with a selection, on a 16-bit document. The source chip follows the selection (coalesced at 200 ms). The capture is recorded when Generate is clicked, so changing the selection afterwards does not change the job:
+The Edit lane with a selection, on a 16-bit document. The source chip follows the selection (coalesced at 200 ms). The context is shaped to the model's size inputs (SPEC 5.8), and the capture counts as the first reference when the model edits its first reference. The capture is recorded when Generate is clicked, so changing the selection afterwards does not change the job:
 
 ```
 +--------------------------------------+
@@ -521,11 +569,14 @@ The Edit lane with a selection, on a 16-bit document. The source chip follows th
 | Source  Selection 928 x 928     [v]  |
 | Sample  All visible             [v]  |
 | Margin  auto (464 px)   Feather 2 px |
+| Context 1856 x 1856, shaped to model |
 | ! 16-bit document: edits are 8-bit   |
 |   sRGB inside the selection.         |
 |                                      |
 | Model   Model name       [ Change ]  |
 |         Mask input                   |
+| References  Capture + 1 of 10        |
+| [cap] [th] [ + Add ]                 |
 | > Advanced (5 settings)              |
 +--------------------------------------+
 | Replace the sky with dusk clouds     |
@@ -631,8 +682,8 @@ Special cases:
 |   shape differs; placed inside the   |
 |   box.                               |
 +--------------------------------------+
-| ! Input reduced to 1400 px to fit    |
-|   the upload limit.                  |
+| ! Input reduced to N px to fit the   |
+|   upload limit.                      |
 +--------------------------------------+
 ```
 
@@ -690,7 +741,7 @@ When the document left prompts or prices out, those rows read "left out of this 
 
 ## 10. Approvals
 
-The person's click on a priced button is the approval. Above the confirm limit (Settings > Spending, default 100 CU), a modal dialog:
+The person's click on a priced button is the approval. Above the confirm limit (Settings > Spending, default 100 CU, compared with M for a range), and for every `from` price, a modal dialog:
 
 ```
 +--------------------------------------+
@@ -701,7 +752,21 @@ The person's click on a priced button is the approval. Above the confirm limit (
 |                                      |
 | Model name . 4 takes . 4096 x 4096   |
 |                                      |
-| [ Cancel ]         [ Spend (N CU) ]  |
+| [ Cancel ]      [ Generate (N CU) ]  |
++--------------------------------------+
+```
+
+For a `from` price, whatever the limit:
+
+```
++--------------------------------------+
+| Confirm spend                        |
++--------------------------------------+
+| This generation costs from N CU.     |
+| The charge can be higher; Scenario   |
+| gives no upper bound for this model. |
+|                                      |
+| [ Cancel ] [ Generate (from N CU) ]  |
 +--------------------------------------+
 ```
 
@@ -716,7 +781,7 @@ When the exact price after upload differs from the price shown on the button:
 +--------------------------------------+
 ```
 
-An agent's first upload in a session:
+An agent's first upload from a document (or a chosen file) in its session:
 
 ```
 +--------------------------------------+
@@ -726,8 +791,9 @@ An agent's first upload in a session:
 +--------------------------------------+
 | First upload: selection 928 x 928    |
 | [ctx] [mask]                         |
-| Later uploads from this client are   |
-| listed in the activity log.          |
+| Later uploads from this document by  |
+| this client are listed in the        |
+| activity log.                        |
 | [ Deny ]                  [ Allow ]  |
 +--------------------------------------+
 ```
@@ -748,13 +814,25 @@ An agent asks to spend, with Agent spending set to **Ask each time** (the defaul
 +--------------------------------------+
 ```
 
-While an allowance runs, the header shows what is left:
+The card and its button state the price kind: "asks to spend N to M CU" with **Approve (up to M CU)**, or "asks to spend from N CU, no upper bound" with **Approve (from N CU)**. A `from` price shows this card even under an allowance.
+
+The person gives an allowance in Settings > Agents (section 13). While it runs, the header shows what is left, and **End** stops it:
 
 ```
 +--------------------------------------+
 | [S] Fall campaign v  * Jobs 2    [=] |
 | Agent allowance: Claude Code,        |
 | 180 of 300 CU left          [ End ]  |
++--------------------------------------+
+```
+
+A charge above its quote ends the allowance:
+
+```
++--------------------------------------+
+| ! Allowance ended: Claude Code was   |
+|   charged N CU, above the quoted M.  |
+|   [ Settings ]                       |
 +--------------------------------------+
 ```
 
@@ -792,14 +870,15 @@ Opened from **Jobs** in the header. **On this computer** is the ledger:
 |      [ Stop download ]               |
 +--------------------------------------+
 | [x]  Image "logo"            Failed  |
-|      Charged N CU, no refund on      |
-|      failure                         |
+|      Refunded by Scenario            |
 |      [ Copy error ]                  |
 |      [ Edit and retry ]              |
 +--------------------------------------+
 ```
 
-Resolving an Unknown job. Only the person can do this; agents get `UnknownNeedsPerson`:
+A failed job whose record carries `disableRefund` reads "Charged N CU, no refund on failure" instead; only then does it count in the "This document" total.
+
+Resolving an Unknown job. Only the person can do this; agents get `UncertainNeedsPerson`:
 
 ```
 +--------------------------------------+
@@ -876,6 +955,9 @@ Account and limits:
 +--------------------------------------+
 | Scenario is busy. Retrying in 5 s.   |
 +--------------------------------------+
+| No-spend mode is on.  [ Settings ]   |
+| Prices still show; Generate is off.  |
++--------------------------------------+
 | This model is no longer available    |
 | to this key.                         |
 |            [ Choose another model ]  |
@@ -890,8 +972,8 @@ Connection, documents and jobs:
 | resume when the connection returns.  |
 |                        [ Retry ]     |
 +--------------------------------------+
-| This lane reads RGB, Gray or Lab     |
-| documents. This one is CMYK.         |
+| This lane can't read this document's |
+| color mode.                          |
 |                 [ Make RGB copy ]    |
 +--------------------------------------+
 | 32-bit documents are not supported   |
@@ -910,8 +992,11 @@ Connection, documents and jobs:
 | (content policy).    [ Details ]     |
 +--------------------------------------+
 | <Scenario's failure text>            |
-| Charged N CU.                        |
+| Refunded by Scenario.                |
 | [ Copy error ] [ Edit and retry ]    |
++--------------------------------------+
+| Stored on a host this plugin can't   |
+| reach.         [ Open on Scenario ]  |
 +--------------------------------------+
 ```
 
@@ -965,6 +1050,8 @@ Empty and loading:
 | Spending                             |
 | Confirm above [ 100 ] CU             |
 | [ ] No-spend mode                    |
+|     Refuses paid calls and agent     |
+|     uploads.                         |
 | A key can carry its own CU cap, set  |
 | on app.scenario.com.                 |
 +--------------------------------------+
@@ -1000,7 +1087,8 @@ Diagnostics and About. **Copy diagnostics** shows the text before copying:
 | plugin 0.1.0 . helper 0.1.0          |
 | Photoshop 27.11.0 . macOS X.Y        |
 | switches: modify off, commands off   |
-| jobs: placed 12, failed 1, unknown 0 |
+| jobs: applied 12, failed 1,          |
+| uncertain 0                          |
 | last errors: RateLimited, Offline    |
 | [ Cancel ]                [ Copy ]   |
 +--------------------------------------+
@@ -1046,12 +1134,14 @@ Settings > Agents. All three switches are off by default. The second needs the f
 |     only                             |
 +--------------------------------------+
 | Agent spending                       |
-| (o) Ask me each time                 |
+| (o) Ask each time                    |
 | ( ) Allow without asking for         |
-|     [ Claude Code             v ]    |
+|     [ Claude Code, since 14:02  v ]  |
 |     up to [  50 ] CU per call and    |
 |     [ 300 ] CU in total, until it    |
-|     disconnects or Photoshop quits   |
+|     disconnects, Photoshop quits     |
+|     or you end it. Prices with no    |
+|     upper bound always ask.          |
 +--------------------------------------+
 | [ Connect a client ]                 |
 | [ Activity log ]                     |
@@ -1068,7 +1158,7 @@ The activity log lists what agents read, sent, spent and changed:
 | 14:05 Claude Code  read preview      |
 |       poster.psd                     |
 | 14:05 Claude Code  upload selection  |
-|       (allowed for this session)     |
+|       (allowed for poster.psd)       |
 | 14:06 Claude Code  spend N CU        |
 |       (approved)                     |
 | 14:07 Claude Code  place edit        |
@@ -1143,13 +1233,14 @@ Settings > Agents > Connect a client. The plugin cannot write client config file
 +--------------------------------------+
 ```
 
-After **Copy command**:
+After **Copy command**. The command passes the token in an environment variable, never as an argument; the helper's setup saves it in a file only your account can read and adds the server to the client without it:
 
 ```
 +--------------------------------------+
 | Copied. Paste it in a terminal, then |
 | restart Claude Code. The row turns   |
 | to Connected on the first call.      |
+| The clipboard is cleared in 60 s.    |
 +--------------------------------------+
 ```
 
