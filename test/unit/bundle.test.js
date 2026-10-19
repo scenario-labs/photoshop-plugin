@@ -35,10 +35,13 @@ test("the release bundle holds no development code and no run-time code generati
   assert.ok(!release.code.includes("dev-pairing-token"), "the dev token import is stubbed out");
   assert.ok(!release.code.includes("dev-api-key"), "the dev API key import is stubbed out");
   assert.ok(!release.code.includes("SCENARIO_API_SECRET"), "nothing in a release build reads a key file");
-  assert.equal(release.code.split("Release build: development-only module removed.").length - 1, 2, "both development-only modules are stubs");
+  assert.ok(!release.code.includes("dev-live-run.json"), "the live-check request reader is stubbed out");
+  assert.ok(!release.code.includes("Scenario dev: set up"), "nothing in a release build makes documents for the live check");
+  assert.equal(release.code.split("Release build: development-only module removed.").length - 1, 3, "the three development-only modules are stubs");
   assert.ok(release.code.includes('module.exports = {"DEV":false,"BUILD":"release"}'));
   assert.ok(dev.code.includes("dev-pairing-token"));
   assert.ok(dev.code.includes("dev-api-key"));
+  assert.ok(dev.code.includes("dev-live-run.json"));
   for (const code of [release.code, dev.code]) {
     assert.ok(!/\beval\s*\(/.test(code), "no eval");
     assert.ok(!/\bnew\s+Function\s*\(/.test(code), "no new Function");

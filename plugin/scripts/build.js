@@ -23,7 +23,8 @@ const REQUIRE = /\brequire\(\s*(["'])([^"']+)\1\s*\)/g;
 // exports, doing nothing, and no file name.
 const DEV_STUBS = {
   "import-token.js": "{ importToken: async function () { return false; }, FILE: null }",
-  "import-key.js": "{ importKey: async function () { return false; }, FILE: null, parse: null }"
+  "import-key.js": "{ importKey: async function () { return false; }, FILE: null, parse: null }",
+  "live-run.js": "{ start: function () { return null; }, REQUEST: null, DIR: null }"
 };
 
 function inside(file) {

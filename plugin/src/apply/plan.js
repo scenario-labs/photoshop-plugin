@@ -2,14 +2,16 @@
 // What a placement does, as plain data (SPEC 5.7, 6.5, 9.1, 9.2), so it is
 // tested under Node; host.placeResults carries it out in Photoshop.
 //
-// - Every take lands as an embedded smart object, scaled to cover the box
-//   and centered on it (Image lane plates; the smart object keeps the whole
-//   result, so the person can move it).
+// - Every take lands as an embedded smart object. Image lane plates cover
+//   the box, centered (the smart object keeps the whole result, so the
+//   person can move it). Edits, Expand, upscales and cutouts fit the box
+//   exactly when the result's aspect is within 1% of it, else they are
+//   contained in it, centered (SPEC 5.7, 5.8).
 // - One take is one layer `Scenario image <slug> <tail6>`. Several takes are
 //   a group `Scenario image <slug> (<n> takes)` holding `Take <i> <tail6>`,
 //   take 1 on top and visible, the others hidden.
 // - Each layer, and the group, carries the scenario XMP packet (schema 1).
-// - One History state: "Scenario: Place image".
+// - One History state: "Scenario: Place <kind>", or "Scenario: Expand".
 // - With "leave prompts out", names carry no slug and the packet no prompt
 //   and no free-text setting; with "leave prices out", no CU amounts.
 
@@ -17,7 +19,8 @@ var canonical = require("../util/canonical-json.js");
 var slugMod = require("../util/slug.js");
 var xmp = require("../util/xmp.js");
 
-var HISTORY = { image: "Scenario: Place image", edit: "Scenario: Place edit", upscale: "Scenario: Place upscale", cutout: "Scenario: Place cutout", library: "Scenario: Place library" };
+var HISTORY = { image: "Scenario: Place image", edit: "Scenario: Place edit", expand: "Scenario: Expand", upscale: "Scenario: Place upscale", cutout: "Scenario: Place cutout", library: "Scenario: Place library" };
+var ASPECT_TOLERANCE = 0.01;
 
 function kindOf(lane) {
   if (lane === "remove_background") return "cutout";
@@ -29,6 +32,15 @@ function kindOf(lane) {
 function cover(w, h, box) {
   var s = Math.max(box.width / w, box.height / h);
   return { scale_pct: s * 100, center_x: box.left + box.width / 2, center_y: box.top + box.height / 2, width: w * s, height: h * s };
+}
+
+// The box exactly when the aspects agree within 1%, else contained in it,
+// centered. Returns the fit and whether it was contained.
+function boxFit(w, h, box) {
+  var off = Math.abs(w / h - box.width / box.height) > ASPECT_TOLERANCE * (box.width / box.height);
+  if (!off) return { center_x: box.left + box.width / 2, center_y: box.top + box.height / 2, width: box.width, height: box.height, contained: false };
+  var s = Math.min(box.width / w, box.height / h);
+  return { center_x: box.left + box.width / 2, center_y: box.top + box.height / 2, width: w * s, height: h * s, contained: true };
 }
 
 // The parameters as written in metadata: canonical JSON, file inputs as
@@ -57,7 +69,11 @@ function names(kind, prompt, assetIds, leavePrompts) {
 // rec: a ledger record with outputs saved. o: { version, leave_prompts,
 // leave_prices, free_text (string parameter names without enum),
 // document: {id, width, height} | null (where it lands), box (document
-// pixels; the record's target box by default), mask, restore_active }.
+// pixels; the record's target box by default), mask, restore_active,
+// fit ("cover" by default, or "box"), insert ({layer_id} or null: the top),
+// canvas (Expand), duplicate ({name}: land in a copy), reads (for the
+// checks), cutout (Remove BG: { layer_id, lands, box, mask_box,
+// source_path }) }.
 function build(rec, o) {
   o = o || {};
   var kind = kindOf(rec.lane);
@@ -101,7 +117,7 @@ function build(rec, o) {
     for (var k in common) fields[k] = common[k];
     fields.assetId = out.asset_id;
     fields.take = String(i + 1);
-    var fit = cover(out.width || box.width, out.height || box.height, box);
+    var fit = o.fit === "box" ? boxFit(out.width || box.width, out.height || box.height, box) : cover(out.width || box.width, out.height || box.height, box);
     return { path: out.path, asset_id: out.asset_id, name: n.layers[i], xmp: xmp.build(fields), visible: i === 0, width: out.width, height: out.height, fit: fit };
   });
   var group = null;
@@ -111,17 +127,35 @@ function build(rec, o) {
     group = { name: n.group, xmp: xmp.build(gf) };
   }
   var doc = o.document || null;
+  var cut = null;
+  if (o.cutout) {
+    cut = {
+      layer_id: o.cutout.layer_id,
+      lands: o.cutout.lands,
+      box: o.cutout.box,
+      mask_box: o.cutout.lands === "mask" ? o.cutout.mask_box : o.cutout.box,
+      source_path: o.cutout.source_path || null,
+      source_fit: boxFit(o.cutout.box.width, o.cutout.box.height, o.cutout.box),
+      name: takes[0].name,
+      xmp: takes[0].xmp
+    };
+  }
   return {
     history_name: HISTORY[kind] || "Scenario: Place " + kind,
     kind: kind,
     document_id: doc ? doc.id : null,
     new_document: doc ? null : { width: Math.round(box.width), height: Math.round(box.height), name: n.group || n.layers[0] },
+    duplicate: doc && o.duplicate ? o.duplicate : null,
     box: box,
     takes: takes,
     group: group,
     mask: o.mask || null,
+    insert: o.insert || null,
+    canvas: o.canvas || null,
+    reads: o.reads || null,
+    cutout: cut,
     restore_active: !!o.restore_active
   };
 }
 
-module.exports = { build: build, cover: cover, names: names, kindOf: kindOf, parametersText: parametersText, HISTORY: HISTORY };
+module.exports = { build: build, cover: cover, boxFit: boxFit, names: names, kindOf: kindOf, parametersText: parametersText, HISTORY: HISTORY };

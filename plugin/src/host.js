@@ -5,6 +5,7 @@
 
 var utf8 = require("./util/utf8.js");
 var b64 = require("./util/base64url.js");
+var pixelsMod = require("./capture/pixels.js");
 
 function toBytes(v) {
   if (v && v.buffer && typeof v.byteLength === "number") return new Uint8Array(v.buffer, v.byteOffset || 0, v.byteLength);
@@ -95,6 +96,222 @@ function createHost(hostRequire, g) {
     var left = Math.min.apply(null, xs);
     var top = Math.min.apply(null, ys);
     return { left: left, top: top, width: Math.max.apply(null, xs) - left, height: Math.max.apply(null, ys) - top };
+  }
+
+  function findLayer(doc, id) {
+    var stack = (doc.layers || []).slice();
+    while (stack.length) {
+      var l = stack.shift();
+      if (l.id === id) return l;
+      if (l.layers && l.layers.length) for (var i = 0; i < l.layers.length; i++) stack.push(l.layers[i]);
+    }
+    return null;
+  }
+
+  function boundsOf(l) {
+    var b = l.bounds || {};
+    var left = px(b.left);
+    var top = px(b.top);
+    return { left: left, top: top, width: px(b.right) - left, height: px(b.bottom) - top };
+  }
+
+  async function hasUserMask(docId, layerId) {
+    try {
+      var r = await play([{ _obj: "get", _target: [{ _property: "hasUserMask" }, { _ref: "layer", _id: layerId }, { _ref: "document", _id: docId }] }]);
+      return !!(r && r[0] && r[0].hasUserMask);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function layerInfo(d, l) {
+    var kind = String(l.kind || "pixel");
+    var background = !!l.isBackgroundLayer;
+    return {
+      id: l.id,
+      name: String(l.name || ""),
+      visible: l.visible !== false,
+      bounds: boundsOf(l),
+      kind: kind,
+      background: background,
+      locked: !!(l.allLocked || l.pixelsLocked),
+      has_mask: await hasUserMask(d.id, l.id),
+      clipped: !!l.isClippingMask
+    };
+  }
+
+  // Pixels of an area (bounds inside the canvas) as exactly w x h, 8-bit
+  // sRGB; from one layer when layerId is given (outside its pixels: clear).
+  // Must run inside a modal scope.
+  async function readArea(doc, layerId, bounds, w, h) {
+    var opts = { documentID: doc.id, colorSpace: "RGB", colorProfile: SRGB, componentSize: 8, applyAlpha: false };
+    if (layerId) opts.layerID = layerId;
+    opts.sourceBounds = { left: bounds.left, top: bounds.top, right: bounds.left + bounds.width, bottom: bounds.top + bounds.height };
+    if (w < bounds.width || h < bounds.height) opts.targetSize = { width: w, height: h };
+    var got = await ps.imaging.getPixels(opts);
+    var image = got.imageData;
+    var img;
+    try {
+      // Width, height and components are read before dispose(): after it
+      // they are error objects (verified live on 27.11).
+      var data = toBytes(await image.getData({ chunky: true })).slice();
+      img = { width: Number(image.width), height: Number(image.height), components: Number(image.components), data: data };
+    } finally {
+      image.dispose();
+    }
+    if (!(img.components >= 1 && img.components <= 4) || img.data.length !== img.width * img.height * img.components) throw new Error("Photoshop returned pixels this plugin cannot read");
+    // With targetSize, sourceBounds come in the pyramid level's pixels
+    // (level n: document pixels / 2^n; verified live on 27.11).
+    var lv = Math.pow(2, Math.max(0, Number(got.level) || 0));
+    var sb = got.sourceBounds ? { left: px(got.sourceBounds.left) * lv, top: px(got.sourceBounds.top) * lv, right: px(got.sourceBounds.right) * lv, bottom: px(got.sourceBounds.bottom) * lv } : null;
+    var off = function (a, b) {
+      return Math.abs(a - b) >= lv;
+    };
+    if (sb && (off(sb.left, bounds.left) || off(sb.top, bounds.top) || off(sb.right, bounds.left + bounds.width) || off(sb.bottom, bounds.top + bounds.height))) {
+      // A layer smaller than the area: place what came back, clear around it.
+      var k = img.width / Math.max(1, sb.right - sb.left);
+      var rgba = img.components === 4 ? img : pixelsMod.addAlpha(img);
+      return pixelsMod.sampleRegion(rgba, { x: 0, y: 0 }, { left: (bounds.left - sb.left) * k, top: (bounds.top - sb.top) * k, width: bounds.width * k, height: bounds.height * k }, w, h, 0);
+    }
+    if (img.width !== w || img.height !== h) return pixelsMod.resize(img, w, h);
+    return img;
+  }
+
+  // Selects the layer a result goes above: the insert point, or the top of
+  // its clipping chain (SPEC 3.8), or the top of the document.
+  async function selectInsertPoint(doc, insert, notes) {
+    var target = null;
+    if (insert && insert.layer_id) {
+      target = findLayer(doc, insert.layer_id);
+      if (!target) notes.push("The layer it was made from is gone; the result went to the top.");
+    }
+    if (target) {
+      var parent = target.parent && target.parent.layers ? target.parent : doc;
+      var list = parent.layers || [];
+      var at = -1;
+      for (var i = 0; i < list.length; i++) if (list[i].id === target.id) at = i;
+      while (at > 0 && list[at - 1] && list[at - 1].isClippingMask) at--;
+      if (at >= 0) target = list[at];
+      await selectLayers(doc.id, [target.id]);
+      return;
+    }
+    var top = doc.layers && doc.layers[0];
+    if (top) await selectLayers(doc.id, [top.id]);
+  }
+
+  var ANCHOR = { tl: "TOPLEFT", br: "BOTTOMRIGHT" };
+
+  // Grows the canvas so the current image sits at offset (SPEC 3.6 Expand):
+  // left and top first (anchored bottom right), then right and bottom
+  // (anchored top left).
+  async function growCanvas(doc, c) {
+    var w0 = Math.round(Number(doc.width));
+    var h0 = Math.round(Number(doc.height));
+    var steps = [];
+    if (c.offset.x > 0 || c.offset.y > 0) steps.push({ width: w0 + c.offset.x, height: h0 + c.offset.y, anchor: "br" });
+    steps.push({ width: c.width, height: c.height, anchor: "tl" });
+    for (var i = 0; i < steps.length; i++) {
+      var s = steps[i];
+      if (Math.round(Number(doc.width)) === s.width && Math.round(Number(doc.height)) === s.height) continue;
+      var consts = ps.constants && ps.constants.AnchorPosition;
+      if (typeof doc.resizeCanvas === "function" && consts) {
+        await doc.resizeCanvas(s.width, s.height, consts[ANCHOR[s.anchor]]);
+      } else {
+        await play([
+          {
+            _obj: "canvasSize",
+            width: { _unit: "pixelsUnit", _value: s.width },
+            height: { _unit: "pixelsUnit", _value: s.height },
+            horizontal: { _enum: "horizontalLocation", _value: s.anchor === "br" ? "right" : "left" },
+            vertical: { _enum: "verticalLocation", _value: s.anchor === "br" ? "bottom" : "top" }
+          }
+        ]);
+      }
+    }
+    if (Math.round(Number(doc.width)) !== c.width || Math.round(Number(doc.height)) !== c.height) throw new Error("the canvas did not reach " + c.width + " x " + c.height);
+  }
+
+  // Places one file as an embedded smart object above the selected layer,
+  // fitted to fit {width, height, center_x, center_y}. Returns the layer.
+  async function placeFile(doc, path, fit, notes) {
+    var entry = await entryFor(path);
+    var token = lfs.createSessionToken(entry);
+    await play([
+      {
+        _obj: "placeEvent",
+        null: { _path: token, _kind: "local" },
+        freeTransformCenterState: { _enum: "quadCenterState", _value: "QCSAverage" },
+        offset: { _obj: "offset", horizontal: { _unit: "pixelsUnit", _value: 0 }, vertical: { _unit: "pixelsUnit", _value: 0 } }
+      }
+    ]);
+    var layer = doc.activeLayers[0];
+    var frame = await frameOf(doc.id, layer.id);
+    if (frame && frame.width > 0 && frame.height > 0) {
+      var sx = (fit.width / frame.width) * 100;
+      var sy = (fit.height / frame.height) * 100;
+      if (Math.abs(sx - 100) > 0.01 || Math.abs(sy - 100) > 0.01) await layer.scale(sx, sy);
+      var after = await frameOf(doc.id, layer.id);
+      var dx = fit.center_x - (after.left + after.width / 2);
+      var dy = fit.center_y - (after.top + after.height / 2);
+      if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) await layer.translate(dx, dy);
+    } else {
+      notes.push("The layer's frame could not be read; it is placed at Photoshop's default size.");
+    }
+    return layer;
+  }
+
+  async function setXmp(doc, layerId, packet) {
+    await play([{ _obj: "set", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "layer", _id: layerId }, { _ref: "document", _id: doc.id }], to: { _obj: "layer", XMPMetadataAsUTF8: packet } }]);
+  }
+
+  async function putMask(doc, layerId, m) {
+    var data = await ps.imaging.createImageDataFromBuffer(m.data, { width: m.width, height: m.height, components: 1, chunky: true, colorSpace: "Grayscale", colorProfile: "Gray Gamma 2.2" });
+    try {
+      await ps.imaging.putLayerMask({ documentID: doc.id, layerID: layerId, kind: "user", imageData: data, targetBounds: { left: m.left, top: m.top } });
+    } finally {
+      data.dispose();
+    }
+  }
+
+  // The Background layer becomes a normal layer (Remove BG's Mask on the
+  // layer, SPEC 3.6), as Layer > New > Layer from Background does.
+  async function fromBackground(doc, layer) {
+    await play([{ _obj: "set", _target: [{ _ref: "layer", _property: "background" }], to: { _obj: "layer", opacity: { _unit: "percentUnit", _value: 100 }, mode: { _enum: "blendMode", _value: "normal" } } }]);
+    return findLayer(doc, layer.id) || doc.activeLayers[0];
+  }
+
+  async function deleteLayer(doc, layer) {
+    if (typeof layer.delete === "function") await layer.delete();
+    else await play([{ _obj: "delete", _target: [{ _ref: "layer", _id: layer.id }] }]);
+  }
+
+  // Remove BG (SPEC 3.6): the cutout's alpha becomes a mask, on the source
+  // layer or on a copy of the source pixels. The result is placed for a
+  // moment to read its alpha, then removed.
+  async function cutout(doc, plan, notes) {
+    var c = plan.cutout;
+    var source = findLayer(doc, c.layer_id);
+    if (!source) throw new Error("the source layer is gone");
+    await selectLayers(doc.id, [source.id]);
+    var temp = await placeFile(doc, plan.takes[0].path, plan.takes[0].fit, notes);
+    var box = c.box;
+    var read = await readArea(doc, temp.id, box, box.width, box.height);
+    var alpha = pixelsMod.alphaMask(read);
+    await deleteLayer(doc, temp);
+    var mb = c.mask_box;
+    var mask = pixelsMod.placeInto(alpha, mb.width, mb.height, box.left - mb.left, box.top - mb.top);
+    var target;
+    if (c.lands === "mask") {
+      if (source.isBackgroundLayer) source = await fromBackground(doc, source);
+      target = source;
+    } else {
+      await selectLayers(doc.id, [source.id]);
+      target = await placeFile(doc, c.source_path, c.source_fit, notes);
+      target.name = c.name;
+      await setXmp(doc, target.id, c.xmp);
+    }
+    await putMask(doc, target.id, { left: mb.left, top: mb.top, width: mb.width, height: mb.height, data: mask.data });
+    return target;
   }
 
   async function entryFor(path) {
@@ -366,7 +583,8 @@ function createHost(hostRequire, g) {
         return null;
       }
     },
-    // The active layer of a document: { id, name, visible, bounds }, or null.
+    // The active layer of a document: { id, name, visible, bounds, kind,
+    // background, locked, has_mask }, or null.
     activeLayerInfo: async function (docId) {
       var d = findDoc(docId);
       if (!d) return null;
@@ -374,20 +592,39 @@ function createHost(hostRequire, g) {
         var layers = d.activeLayers || [];
         var l = layers[0];
         if (!l) return null;
-        var b = l.bounds || {};
-        var left = px(b.left);
-        var top = px(b.top);
-        return { id: l.id, name: String(l.name || ""), visible: l.visible !== false, bounds: { left: left, top: top, width: px(b.right) - left, height: px(b.bottom) - top } };
+        return await layerInfo(d, l);
+      } catch (e) {
+        return null;
+      }
+    },
+    // The same for a layer by id, or null when it is gone.
+    layerInfo: async function (docId, layerId) {
+      var d = findDoc(docId);
+      if (!d) return null;
+      try {
+        var l = findLayer(d, layerId);
+        return l ? await layerInfo(d, l) : null;
       } catch (e) {
         return null;
       }
     },
     // Pixels as 8-bit sRGB, read at most at long_side on the long side, in
     // one modal scope; imaging needs one (verified live on 27.11).
-    // req: { document_id, layer_id (none: all visible), bounds, long_side }.
+    // req: { document_id, layer_id (none: all visible), bounds, long_side,
+    // exact (exactly the bounds, padded clear outside a layer) }.
     // Resolves { width, height, components, data }.
     readPixels: function (req) {
       return modal("Scenario: Read reference", async function () {
+        if (req.exact && req.bounds) {
+          // Exactly the bounds, at most long_side on the long side; outside a
+          // layer's own pixels: clear (captures, SPEC 5.8).
+          var bw = req.bounds.width;
+          var bh = req.bounds.height;
+          var k = req.long_side && Math.max(bw, bh) > req.long_side ? req.long_side / Math.max(bw, bh) : 1;
+          var d0 = findDoc(req.document_id);
+          if (!d0) throw new Error("the document was closed");
+          return readArea(d0, req.layer_id || null, req.bounds, Math.max(1, Math.round(bw * k)), Math.max(1, Math.round(bh * k)));
+        }
         var opts = { documentID: req.document_id, colorSpace: "RGB", colorProfile: SRGB, componentSize: 8, applyAlpha: false };
         if (req.layer_id) opts.layerID = req.layer_id;
         var w = null;
@@ -459,13 +696,19 @@ function createHost(hostRequire, g) {
     // Carries out an apply/plan.js plan in one modal scope and one History
     // state. Takes are placed with placeEvent (an embedded smart object at
     // its native size, centered: verified live on 27.11), last take first
-    // above the top layer, so take 1 ends on top; each is scaled to cover the
-    // box and centered on it, named, and given its metadata. Several takes
-    // are grouped, takes 2 to n hidden. A mask from the selection goes on the
-    // group, or on the one layer. Anything failing rolls the History state
-    // back, so the document is as it was. opts.auto: Place when ready (waits
-    // at most 1 s for the modal state, restores the person's active layers).
-    // Resolves { document_id, layer_ids, group_id, notes }.
+    // above the insert point (the top of the document, or the layer the edit
+    // read, above its clipping chain), so take 1 ends on top; each is fitted
+    // to its box, named, and given its metadata. Several takes are grouped,
+    // takes 2 to n hidden. A mask goes on the group, or on the one layer.
+    // Expand grows the canvas first (in a copy of the document when asked);
+    // Remove BG puts the cutout's alpha on the source layer or on a copy of
+    // its pixels. plan.reads asks for small reads used by the checks: the
+    // composite before any change, each take before its mask, the composite
+    // after. opts.decide(reads) may answer { mask: false } to land unmasked.
+    // Anything failing rolls the History state back, so the document is as it
+    // was. opts.auto: Place when ready (waits at most 1 s for the modal
+    // state, restores the person's active layers).
+    // Resolves { document_id, layer_ids, group_id, notes, reads, masked }.
     placeResults: function (plan, opts) {
       opts = opts || {};
       return modal(
@@ -492,6 +735,10 @@ function createHost(hostRequire, g) {
               na.notActive = true;
               throw na;
             }
+            if (plan.duplicate) {
+              doc = await doc.duplicate(plan.duplicate.name);
+              if (ps.app.activeDocument && ps.app.activeDocument.id !== doc.id) ps.app.activeDocument = doc;
+            }
           }
           var before = [];
           try {
@@ -501,65 +748,62 @@ function createHost(hostRequire, g) {
           } catch (e) {
             before = [];
           }
+          var reads = { before: null, takes: [], after: null };
+          var R = plan.reads || {};
           var hc = ctx.hostControl;
           var sid = await hc.suspendHistory({ documentID: doc.id, name: plan.history_name });
           var placed = [];
           var groupId = null;
+          var masked = false;
           try {
-            var top = doc.layers && doc.layers[0];
-            if (top) await selectLayers(doc.id, [top.id]);
-            for (var i = plan.takes.length - 1; i >= 0; i--) {
-              var take = plan.takes[i];
-              var entry = await entryFor(take.path);
-              var token = lfs.createSessionToken(entry);
-              await play([
-                {
-                  _obj: "placeEvent",
-                  null: { _path: token, _kind: "local" },
-                  freeTransformCenterState: { _enum: "quadCenterState", _value: "QCSAverage" },
-                  offset: { _obj: "offset", horizontal: { _unit: "pixelsUnit", _value: 0 }, vertical: { _unit: "pixelsUnit", _value: 0 } }
-                }
-              ]);
-              var layer = doc.activeLayers[0];
-              var frame = await frameOf(doc.id, layer.id);
-              if (frame && frame.width > 0 && frame.height > 0) {
-                var pct = (take.fit.width / frame.width) * 100;
-                if (Math.abs(pct - 100) > 0.01) await layer.scale(pct, pct);
-                var after = await frameOf(doc.id, layer.id);
-                var dx = take.fit.center_x - (after.left + after.width / 2);
-                var dy = take.fit.center_y - (after.top + after.height / 2);
-                if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) await layer.translate(dx, dy);
-              } else {
-                notes.push("The layer's frame could not be read; it is placed at Photoshop's default size.");
+            if (R.before) reads.before = await readArea(doc, null, R.before.bounds, R.before.width, R.before.height);
+            if (plan.canvas) await growCanvas(doc, plan.canvas);
+            if (plan.cutout) {
+              var t = await cutout(doc, plan, notes);
+              placed.push(t);
+              masked = true;
+            } else {
+              await selectInsertPoint(doc, plan.insert, notes);
+              for (var i = plan.takes.length - 1; i >= 0; i--) {
+                var take = plan.takes[i];
+                var layer = await placeFile(doc, take.path, take.fit, notes);
+                layer.name = take.name;
+                await setXmp(doc, layer.id, take.xmp);
+                placed.unshift(layer);
               }
-              layer.name = take.name;
-              await play([{ _obj: "set", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "layer", _id: layer.id }, { _ref: "document", _id: doc.id }], to: { _obj: "layer", XMPMetadataAsUTF8: take.xmp } }]);
-              placed.unshift(layer);
-            }
-            var maskTarget = placed.length === 1 ? placed[0] : null;
-            if (placed.length > 1) {
-              var group;
-              if (typeof doc.createLayerGroup === "function") group = await doc.createLayerGroup({ name: plan.group.name, fromLayers: placed });
-              else group = await doc.groupLayers(placed);
-              group.name = plan.group.name;
-              groupId = group.id;
-              await play([{ _obj: "set", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "layer", _id: group.id }, { _ref: "document", _id: doc.id }], to: { _obj: "layer", XMPMetadataAsUTF8: plan.group.xmp } }]);
-              for (var v = 1; v < placed.length; v++) placed[v].visible = false;
-              maskTarget = group;
-            }
-            if (plan.mask && maskTarget) {
-              try {
-                var maskData = await ps.imaging.createImageDataFromBuffer(plan.mask.data, { width: plan.mask.width, height: plan.mask.height, components: 1, chunky: true, colorSpace: "Grayscale", colorProfile: "Gray Gamma 2.2" });
+              if (R.takes) {
+                for (var r = 0; r < placed.length; r++) reads.takes.push(await readArea(doc, placed[r].id, R.takes.bounds, R.takes.width, R.takes.height));
+              }
+              var useMask = !!plan.mask;
+              if (useMask && typeof opts.decide === "function") {
+                var d = opts.decide(reads);
+                if (d && d.mask === false) {
+                  useMask = false;
+                  if (d.note) notes.push(d.note);
+                }
+              }
+              var maskTarget = placed.length === 1 ? placed[0] : null;
+              if (placed.length > 1) {
+                var group;
+                if (typeof doc.createLayerGroup === "function") group = await doc.createLayerGroup({ name: plan.group.name, fromLayers: placed });
+                else group = await doc.groupLayers(placed);
+                group.name = plan.group.name;
+                groupId = group.id;
+                await setXmp(doc, group.id, plan.group.xmp);
+                for (var v = 1; v < placed.length; v++) placed[v].visible = false;
+                maskTarget = group;
+              }
+              if (useMask && maskTarget) {
                 try {
-                  await ps.imaging.putLayerMask({ documentID: doc.id, layerID: maskTarget.id, kind: "user", imageData: maskData, targetBounds: { left: plan.mask.left, top: plan.mask.top } });
-                } finally {
-                  maskData.dispose();
+                  await putMask(doc, maskTarget.id, plan.mask);
+                  masked = true;
+                } catch (e) {
+                  notes.push("Placed unmasked: the mask could not be applied.");
                 }
-              } catch (e) {
-                notes.push("Placed unmasked: the selection mask could not be applied.");
               }
             }
-            if (opts.auto && before.length && !plan.new_document) {
+            if (R.after) reads.after = await readArea(doc, null, R.after.bounds, R.after.width, R.after.height);
+            if (opts.auto && before.length && !plan.new_document && !plan.duplicate) {
               try {
                 await selectLayers(doc.id, before);
               } catch (e) {
@@ -581,13 +825,29 @@ function createHost(hostRequire, g) {
               return l.id;
             }),
             group_id: groupId,
-            notes: notes
+            notes: notes,
+            reads: reads,
+            masked: masked
           };
         },
         opts.auto ? { timeOut: 1000 } : null
       );
     },
 
+    // Undoes the last History state of a document when it is the one named
+    // (the "Changed outside" card's Undo, SPEC 6.5). Resolves true when done.
+    undoLast: function (docId, name) {
+      return modal("Scenario: Undo", async function () {
+        var doc = findDoc(docId);
+        if (!doc) return false;
+        var active = ps.app.activeDocument;
+        if (!active || active.id !== docId) return false;
+        var st = doc.activeHistoryState;
+        if (st && st.name !== undefined && st.name !== name) return false;
+        await play([{ _obj: "select", _target: [{ _ref: "historyState", _enum: "ordinal", _value: "previous" }] }]);
+        return true;
+      });
+    },
     // Calls fn() (coalesced at 200 ms) when the active document, the
     // selection or the layers may have changed (SPEC 3.8).
     onDocumentEvents: function (fn) {
