@@ -16,6 +16,7 @@
 
 const png = require("../../plugin/src/util/png.js");
 const jpeg = require("../../plugin/src/util/jpeg.js");
+const { createScene, selectionMask } = require("./fake-scene.js");
 
 const DATA = "plugin-data:/";
 
@@ -68,8 +69,13 @@ function fakeJpeg(w, h, bytesPerPixel) {
   return Buffer.concat(parts.map((p) => Buffer.from(p)));
 }
 
-// opts: { docs: [{id, title, width, height, pattern, layers: [{name, alpha}],
-//         selection: {left, top, width, height}}], active (doc id),
+// opts: { docs: [{id, title, width, height, pattern, layers: [{name, alpha,
+//         kind, background, locked, clipped, content: "pattern" | "solid",
+//         fill: [r, g, b], frame, mask}], selection: {left, top, width,
+//         height, shape: "rect" | "ellipse", feather}}], active (doc id),
+//         scene (pixels from fake-scene.js: composites, layer reads with
+//         alpha, masks, canvas resize, flatten, duplicate, close, undo),
+//         maskBroken (putLayerMask stores nothing: the outside check fails),
 //         files: Map (data folder, names without the prefix), secure: Map,
 //         chosenFile: {name, bytes} | null, busy: n (modal refusals before
 //         one succeeds), jpegBytesPerPixel, renameRefusesExisting,
@@ -98,6 +104,11 @@ function createFakePhotoshop(opts = {}) {
   };
   let nextId = 1000;
   let inModal = false;
+  const scene = opts.scene ? createScene({ files }) : null;
+  ps.scene = scene;
+  // Per document: committed History states, newest last, with the state
+  // before each (scene mode undo).
+  const undo = new Map();
 
   function makeLayer(doc, spec) {
     const layer = {
@@ -108,9 +119,21 @@ function createFakePhotoshop(opts = {}) {
       alpha: !!spec.alpha,
       frame: spec.frame || { left: 0, top: 0, width: doc.width, height: doc.height },
       xmp: null,
-      mask: null,
+      mask: spec.mask ? maskOf(spec.mask) : null,
       path: spec.path || null,
       layers: spec.layers || null,
+      isBackgroundLayer: !!spec.background,
+      allLocked: !!spec.locked,
+      pixelsLocked: false,
+      isClippingMask: !!spec.clipped,
+      content: spec.content || (spec.path ? "file" : spec.fill ? "solid" : "pattern"),
+      fill: spec.fill || null,
+      raster: spec.raster || null,
+      parent: null,
+      async delete() {
+        if (!inModal) throw new Error("delete needs a modal scope");
+        removeLayer(doc, this);
+      },
       get bounds() {
         const f = this.frame;
         return { left: f.left, top: f.top, right: f.left + f.width, bottom: f.top + f.height };
@@ -132,6 +155,38 @@ function createFakePhotoshop(opts = {}) {
     return layer;
   }
 
+  function maskOf(m) {
+    const out = { width: m.width, height: m.height, left: m.left, top: m.top };
+    Object.defineProperty(out, "data", { value: m.data || null, enumerable: false, writable: true });
+    return out;
+  }
+
+  function removeLayer(doc, layer) {
+    const lists = [doc.layers];
+    while (lists.length) {
+      const list = lists.shift();
+      const at = list.indexOf(layer);
+      if (at >= 0) {
+        list.splice(at, 1);
+        doc.activeLayers = doc.activeLayers.filter((l) => l !== layer);
+        if (!doc.activeLayers.length && doc.layers[0]) doc.activeLayers = [doc.layers[0]];
+        return;
+      }
+      for (const l of list) if (l.layers) lists.push(l.layers);
+    }
+  }
+
+  function allLayers(doc) {
+    const out = [];
+    const stack = [...doc.layers];
+    while (stack.length) {
+      const l = stack.shift();
+      out.push(l);
+      if (l.layers) stack.push(...l.layers);
+    }
+    return out;
+  }
+
   function makeDoc(spec) {
     const doc = {
       id: spec.id,
@@ -147,24 +202,71 @@ function createFakePhotoshop(opts = {}) {
         const from = o.fromLayers || [];
         const at = Math.min(...from.map((l) => doc.layers.indexOf(l)));
         const group = makeLayer(doc, { name: o.name || "Group", kind: "group", layers: from.slice() });
+        for (const l of from) l.parent = group;
         doc.layers = doc.layers.filter((l) => !from.includes(l));
         doc.layers.splice(at, 0, group);
         doc.activeLayers = [group];
         return group;
+      },
+      // Scene mode: the canvas grows; layers keep their pixels, moved by the
+      // anchor; the Background stays the size it was (the new area shows the
+      // white under it).
+      async resizeCanvas(w, h, anchor) {
+        if (!inModal) throw new Error("resizeCanvas needs a modal scope");
+        const dx = anchor === "BOTTOMRIGHT" ? w - doc.width : 0;
+        const dy = anchor === "BOTTOMRIGHT" ? h - doc.height : 0;
+        for (const l of allLayers(doc)) {
+          l.frame = { ...l.frame, left: l.frame.left + dx, top: l.frame.top + dy };
+          if (l.mask) l.mask.left += dx, (l.mask.top += dy);
+        }
+        doc.width = w;
+        doc.height = h;
+        ps.resized.push({ document_id: doc.id, width: w, height: h, anchor });
+      },
+      async duplicate(name) {
+        if (!inModal) throw new Error("duplicate needs a modal scope");
+        const copy = makeDoc({ id: ++nextId, title: name || `${doc.title} copy`, width: doc.width, height: doc.height, pattern: doc.pattern, layers: [] });
+        const clone = (l) => {
+          const c = makeLayer(copy, { name: l.name, kind: l.kind, visible: l.visible, frame: { ...l.frame }, background: l.isBackgroundLayer, content: l.content, fill: l.fill, raster: l.raster, path: l.path, layers: l.layers ? l.layers.map(clone) : null, mask: l.mask ? { ...l.mask, data: l.mask.data } : null });
+          c.xmp = l.xmp;
+          return c;
+        };
+        copy.layers = doc.layers.map(clone);
+        copy.activeLayers = [copy.layers[0]];
+        copy.selection = doc.selection ? { ...doc.selection } : null;
+        app.documents.push(copy);
+        app._active = copy.id;
+        return copy;
+      },
+      async closeWithoutSaving() {
+        if (!inModal) throw new Error("close needs a modal scope");
+        const at = app.documents.indexOf(doc);
+        if (at >= 0) app.documents.splice(at, 1);
+        ps.closed.push(doc.id);
+        if (app._active === doc.id) app._active = app.documents[0] ? app.documents[0].id : null;
+      },
+      get activeHistoryState() {
+        const list = undo.get(doc.id) || [];
+        return { name: list.length ? list[list.length - 1].name : "Open" };
       }
     };
-    const specs = spec.layers || [{ name: "Background" }];
+    const specs = spec.layers || [{ name: "Background", background: !!opts.scene }];
     doc.layers = specs.map((l) => makeLayer(doc, l));
     doc.activeLayers = [doc.layers[0]];
     return doc;
   }
 
+  ps.resized = [];
+  ps.closed = [];
   const app = {
     version: "27.11.0",
     documents: (opts.docs || []).map(makeDoc),
     _active: null,
     get activeDocument() {
       return app.documents.find((d) => d.id === app._active) || null;
+    },
+    set activeDocument(d) {
+      app._active = d ? d.id : null;
     },
     async createDocument(o) {
       if (!inModal) throw new Error("createDocument needs a modal scope");
@@ -197,12 +299,56 @@ function createFakePhotoshop(opts = {}) {
   function play(d) {
     ps.played.push(d._obj);
     const doc = docOf(d._target);
-    if (d._obj === "select") {
+    if (d._obj === "select" && d._target[0]._ref === "layer") {
       const layer = findLayer(app.activeDocument, d._target[0]._id);
       if (!layer) throw new Error("fake: no such layer");
       const doc2 = app.activeDocument;
       if (d.selectionModifier) doc2.activeLayers = [...doc2.activeLayers, layer];
       else doc2.activeLayers = [layer];
+      return {};
+    }
+    if (d._obj === "select" && d._target[0]._ref === "historyState") {
+      const doc3 = app.activeDocument;
+      const list = undo.get(doc3.id) || [];
+      const last = list.pop();
+      if (!last) throw new Error("fake: no History state to undo");
+      restore(doc3, last.snap);
+      ps.undone.push({ document_id: doc3.id, name: last.name });
+      return {};
+    }
+    if (d._obj === "get" && d._target[0]._property === "hasUserMask") {
+      const layer = findLayer(doc, d._target[1]._id);
+      if (!layer) throw new Error("fake: no such layer");
+      return { hasUserMask: !!layer.mask };
+    }
+    if (d._obj === "set" && d._target[0]._ref === "layer" && d._target[0]._property === "background") {
+      if (!inModal) throw new Error("layer from background needs a modal scope");
+      const target = app.activeDocument;
+      const bg = target.layers.find((l) => l.isBackgroundLayer);
+      if (!bg) throw new Error("fake: no Background layer");
+      bg.isBackgroundLayer = false;
+      bg.name = "Layer 0";
+      return {};
+    }
+    if (d._obj === "set" && d._target[0]._ref === "channel" && d._target[0]._property === "selection") {
+      const target = app.activeDocument;
+      const t = d.to;
+      const v = (x) => (typeof x === "number" ? x : x._value);
+      target.selection = { left: v(t.left), top: v(t.top), width: v(t.right) - v(t.left), height: v(t.bottom) - v(t.top), shape: t._obj === "ellipse" ? "ellipse" : "rect" };
+      return {};
+    }
+    if (d._obj === "feather") {
+      const target = app.activeDocument;
+      if (target.selection) target.selection = { ...target.selection, feather: d.radius._value };
+      return {};
+    }
+    if (d._obj === "flattenImage") {
+      if (!inModal) throw new Error("flatten needs a modal scope");
+      const target = app.activeDocument;
+      const data = scene.read(target, null, { left: 0, top: 0, right: target.width, bottom: target.height }, target.width, target.height);
+      const bg = makeLayer(target, { name: "Background", background: true, content: "raster", raster: { width: target.width, height: target.height, data } });
+      target.layers = [bg];
+      target.activeLayers = [bg];
       return {};
     }
     if (d._obj === "get") {
@@ -250,16 +396,80 @@ function createFakePhotoshop(opts = {}) {
 
   function snapshot(doc) {
     const copyLayer = (l) => Object.assign(Object.create(Object.getPrototypeOf(l)), l, { frame: { ...l.frame }, layers: l.layers ? l.layers.map(copyLayer) : null });
-    return { layers: doc.layers.slice(), state: doc.layers.map((l) => ({ l, name: l.name, visible: l.visible, xmp: l.xmp, frame: { ...l.frame } })), active: doc.activeLayers.slice(), copyLayer };
+    const every = allLayers(doc);
+    return {
+      layers: doc.layers.slice(),
+      state: doc.layers.map((l) => ({ l, name: l.name, visible: l.visible, xmp: l.xmp, frame: { ...l.frame } })),
+      deep: every.map((l) => ({ l, props: { name: l.name, visible: l.visible, xmp: l.xmp, frame: { ...l.frame }, mask: l.mask, isBackgroundLayer: l.isBackgroundLayer, layers: l.layers ? l.layers.slice() : null } })),
+      width: doc.width,
+      height: doc.height,
+      active: doc.activeLayers.slice(),
+      copyLayer
+    };
   }
 
+  function restore(doc, snap) {
+    doc.layers = snap.layers;
+    for (const st of snap.deep) Object.assign(st.l, st.props);
+    doc.width = snap.width;
+    doc.height = snap.height;
+    doc.activeLayers = snap.active;
+  }
+
+  // Scene mode reads: the composite (RGB), or one layer (RGBA) whose
+  // returned bounds are the requested ones cut to the layer's frame, as
+  // Photoshop returns them.
+  function sceneRead(doc, layer, o) {
+    let b = o.sourceBounds || (layer ? layer.bounds : { left: 0, top: 0, right: doc.width, bottom: doc.height });
+    b = { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
+    if (layer && layer.kind !== "group") {
+      const f = layer.frame;
+      b = { left: Math.max(b.left, Math.floor(f.left)), top: Math.max(b.top, Math.floor(f.top)), right: Math.min(b.right, Math.ceil(f.left + f.width)), bottom: Math.min(b.bottom, Math.ceil(f.top + f.height)) };
+      if (b.right <= b.left || b.bottom <= b.top) throw new Error("fake: the layer has no pixels there");
+    }
+    let w = b.right - b.left;
+    let h = b.bottom - b.top;
+    if (o.targetSize) {
+      const req = o.sourceBounds ? o.sourceBounds : b;
+      const k = o.targetSize.width ? o.targetSize.width / (req.right - req.left) : o.targetSize.height / (req.bottom - req.top);
+      if (k < 1) {
+        w = Math.max(1, Math.round(w * k));
+        h = Math.max(1, Math.round(h * k));
+      }
+    }
+    const comps = layer ? 4 : 3;
+    ps.reads.push({ document_id: doc.id, layer_id: o.layerID || null, width: w, height: h, profile: o.colorProfile });
+    const out = levelBounds(b, o.targetSize ? w / (b.right - b.left) : 1);
+    return { imageData: imageData(w, h, comps, scene.read(doc, layer, b, w, h)), sourceBounds: out.bounds, level: out.level };
+  }
+
+  // With targetSize, Photoshop reads from a pyramid level and returns
+  // sourceBounds in that level's pixels: level floor(log2(1 / scale)), the
+  // bounds divided by 2^level (verified live on 27.11: a 272 px box read at
+  // 100 px came back as level 1 with halved bounds; at 200 px, level 0).
+  function levelBounds(b, scale) {
+    const level = scale < 1 ? Math.max(0, Math.floor(Math.log2(1 / scale) + 1e-9)) : 0;
+    const d = 2 ** level;
+    return { level, bounds: { left: Math.floor(b.left / d), top: Math.floor(b.top / d), right: Math.ceil(b.right / d), bottom: Math.ceil(b.bottom / d) } };
+  }
+
+  // Photoshop's image data: after dispose(), its width, height and
+  // components read as an error object, not numbers (verified live on 27.11).
   function imageData(width, height, components, data) {
+    const gone = { code: "5", number: 5 };
     return {
-      width,
-      height,
-      components,
+      get width() {
+        return this.disposed ? gone : width;
+      },
+      get height() {
+        return this.disposed ? gone : height;
+      },
+      get components() {
+        return this.disposed ? gone : components;
+      },
       disposed: false,
       async getData() {
+        if (this.disposed) throw new Error("fake: image data used after dispose");
         return data;
       },
       dispose() {
@@ -271,7 +481,7 @@ function createFakePhotoshop(opts = {}) {
 
   const photoshop = {
     app,
-    constants: { NewDocumentMode: { RGB: "RGBColorMode" }, DocumentFill: { WHITE: "white" } },
+    constants: { NewDocumentMode: { RGB: "RGBColorMode" }, DocumentFill: { WHITE: "white" }, AnchorPosition: opts.scene ? { TOPLEFT: "TOPLEFT", BOTTOMRIGHT: "BOTTOMRIGHT" } : undefined },
     core: {
       async executeAsModal(fn, options) {
         ps.modals.push(options.commandName);
@@ -291,11 +501,12 @@ function createFakePhotoshop(opts = {}) {
           async resumeHistory(id, commit) {
             const s = suspended.get(id);
             suspended.delete(id);
-            if (commit) ps.history.push({ document_id: s.doc.id, name: s.name });
-            else {
-              s.doc.layers = s.snap.layers;
-              for (const st of s.snap.state) Object.assign(st.l, { name: st.name, visible: st.visible, xmp: st.xmp, frame: st.frame });
-              s.doc.activeLayers = s.snap.active;
+            if (commit) {
+              ps.history.push({ document_id: s.doc.id, name: s.name });
+              if (!undo.has(s.doc.id)) undo.set(s.doc.id, []);
+              undo.get(s.doc.id).push({ name: s.name, snap: s.snap });
+            } else {
+              restore(s.doc, s.snap);
               ps.rolledBack.push({ document_id: s.doc.id, name: s.name });
             }
           }
@@ -320,6 +531,7 @@ function createFakePhotoshop(opts = {}) {
         if (!inModal) throw new Error("imaging needs a modal scope");
         const doc = app.documents.find((d) => d.id === o.documentID);
         const layer = o.layerID ? findLayer(doc, o.layerID) : null;
+        if (scene) return sceneRead(doc, layer, o);
         const b = o.sourceBounds || (layer ? layer.bounds : { left: 0, top: 0, right: doc.width, bottom: doc.height });
         let w = b.right - b.left;
         let h = b.bottom - b.top;
@@ -332,12 +544,17 @@ function createFakePhotoshop(opts = {}) {
         }
         const comps = layer && layer.alpha ? 4 : 3;
         ps.reads.push({ document_id: doc.id, layer_id: o.layerID || null, width: w, height: h, profile: o.colorProfile });
-        return { imageData: imageData(w, h, comps, fill(w, h, comps, doc.pattern, w * 31 + h)), sourceBounds: b };
+        const lb = levelBounds(b, o.targetSize ? w / (b.right - b.left) : 1);
+        return { imageData: imageData(w, h, comps, fill(w, h, comps, doc.pattern, w * 31 + h)), sourceBounds: lb.bounds, level: lb.level };
       },
       async getSelection(o) {
         if (!inModal) throw new Error("imaging needs a modal scope");
         const doc = app.documents.find((d) => d.id === o.documentID);
         if (!doc.selection) return { imageData: null };
+        if (scene) {
+          const m = selectionMask(doc.selection, doc);
+          return { imageData: imageData(m.width, m.height, 1, m.data), sourceBounds: { left: m.left, top: m.top, right: m.left + m.width, bottom: m.top + m.height } };
+        }
         const s = doc.selection;
         return { imageData: imageData(s.width, s.height, 1, new Uint8Array(s.width * s.height).fill(255)), sourceBounds: { left: s.left, top: s.top, right: s.left + s.width, bottom: s.top + s.height } };
       },
@@ -352,7 +569,7 @@ function createFakePhotoshop(opts = {}) {
         if (!inModal) throw new Error("imaging needs a modal scope");
         const doc = app.documents.find((d) => d.id === o.documentID);
         const layer = findLayer(doc, o.layerID);
-        layer.mask = { width: o.imageData.width, height: o.imageData.height, left: o.targetBounds.left, top: o.targetBounds.top };
+        layer.mask = maskOf({ width: o.imageData.width, height: o.imageData.height, left: o.targetBounds.left, top: o.targetBounds.top, data: opts.maskBroken ? null : Uint8Array.from(o.imageData._data) });
       }
     }
   };
@@ -471,6 +688,13 @@ function createFakePhotoshop(opts = {}) {
     app._active = null;
   };
   ps.binary = (path) => files.get(path);
+  ps.undone = [];
+  // Scene mode: the composite of a document over `box` at w x h (RGB).
+  ps.composite = (id, box, w, h) => {
+    const doc = app.documents.find((d) => d.id === id);
+    return { width: w, height: h, components: 3, data: scene.read(doc, null, { left: box.left, top: box.top, right: box.left + box.width, bottom: box.top + box.height }, w, h) };
+  };
+  ps.layers = (id) => allLayers(app.documents.find((d) => d.id === id));
   return ps;
 }
 

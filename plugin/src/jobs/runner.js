@@ -9,8 +9,10 @@
 //      key (RequestInFlight); then the quote checks (single use, 120 s, same
 //      fingerprint).
 //   3. The ledger record is written before anything is sent: state
-//      uploading_inputs when references wait for upload, else submitting.
-//   4. References upload (base64 route), then a second price check with the
+//      uploading_inputs when a capture, a mask or references wait for
+//      upload, else submitting.
+//   4. The capture (Edit, Expand, Upscale, Remove BG), its mask and the
+//      references upload (base64 route), then a second price check with the
 //      real asset ids. A different price stops here: the job waits in
 //      awaiting_approval and the panel shows the new price.
 //   5. The record goes to submitting (written), then the paid request goes
@@ -23,6 +25,11 @@
 //      document is the active one (a new-document job, when no document is
 //      open), in one History state, and the person's active layer is made
 //      active again. Never after a restart, never into another document.
+//   9. The checks of SPEC 3.9 run on reads taken during the placement: the
+//      seam, alignment and edit checks per take, then the outside-the-mask
+//      check on the composite. A failed check adds a badge and, for
+//      "Changed outside", offers Undo; the result always stays placed, and
+//      a check that cannot run leaves a note. Nothing is ever discarded.
 
 var API = require("../../../shared/scenario-api.json");
 var errorsMod = require("../scenario/errors.js");
@@ -34,6 +41,9 @@ var requests = require("../forms/requests.js");
 var price = require("../forms/price.js");
 var charges = require("./charges.js");
 var planMod = require("../apply/plan.js");
+var checksMod = require("../apply/checks.js");
+var pixelsMod = require("../capture/pixels.js");
+var shapeMod = require("../capture/shape.js");
 var slugMod = require("../util/slug.js");
 
 var OUTPUT_FOLDER = "Scenario";
@@ -58,10 +68,19 @@ function pad(n) {
   return n < 10 ? "0" + n : String(n);
 }
 
+// The trained models a request applies (SPEC 3.4): its LoRAs, or its
+// composition.
+function trainedIds(params) {
+  var out = [];
+  if (params && Array.isArray(params.loras)) out = params.loras.slice();
+  if (params && typeof params.modelId === "string" && params.modelId) out.push(params.modelId);
+  return out;
+}
+
 // o: { client, quotes, ledger, catalog, host, downloader, settings,
 //      account() -> {id, key_hash, project_name}, version, session, log,
 //      timers, now, recordError(type), pollDelay(ms) (tests),
-//      placeWhenReady (default true) }
+//      placeWhenReady (default true), capture (capture/capture.js) }
 function createRunner(o) {
   var log = o.log || function () {};
   var timers = o.timers || { setTimeout: setTimeout, clearTimeout: clearTimeout };
@@ -73,7 +92,9 @@ function createRunner(o) {
   var delayFor = o.pollDelay || pollDelay;
   var pausedUntil = 0;
   var claiming = {};
-  var masks = {};
+  // What a placement needs that stays on this computer only: the selection
+  // mask, the small copies the checks compare. Kept until Photoshop quits.
+  var memos = {};
   var polling = {};
   var downloading = {};
   var autoTries = {};
@@ -117,7 +138,9 @@ function createRunner(o) {
 
   function targetRecord(a) {
     var t = a.req.target || {};
-    var out = { kind: t.kind || null, session: o.session || null, sample: null };
+    var out = { kind: t.kind || null, session: o.session || null, sample: t.sample || null };
+    var keep = ["canvas", "upload", "layer_id", "selection", "margin", "feather", "source", "read", "output", "lands", "expand", "route", "overlap", "anchor", "mask_box"];
+    for (var i = 0; i < keep.length; i++) if (t[keep[i]] !== undefined) out[keep[i]] = JSON.parse(JSON.stringify(t[keep[i]]));
     if (t.kind === "new_document") {
       out.width = t.width;
       out.height = t.height;
@@ -153,6 +176,8 @@ function createRunner(o) {
     claiming[fp] = true;
     var rec;
     var refs = a.refs || [];
+    var cap = a.capture || null;
+    var capFiles = cap ? cap.files || [] : [];
     var red;
     try {
       red = await o.quotes.redeem(key, q.cu_cost_exact, a.req);
@@ -165,16 +190,26 @@ function createRunner(o) {
         lane: a.req.lane,
         model_id: a.req.model_id,
         model_name: a.model_name || null,
-        trained_model_ids: [],
+        trained_model_ids: trainedIds(body),
         parameters: body,
         inputs: {
           references: refs.map(function (r) {
             return { source: r.source, width: r.width, height: r.height, format: r.ext, reduced: !!r.reduced };
           }),
+          capture: cap
+            ? {
+                id: cap.id,
+                reduced: !!cap.reduced,
+                source_path: cap.memo && cap.memo.source_path ? cap.memo.source_path : null,
+                files: capFiles.map(function (f) {
+                  return { slot: f.slot, input: f.input, width: f.width, height: f.height, format: f.ext, reduced: !!f.reduced };
+                })
+              }
+            : null,
           asset_ids: []
         },
         target: targetRecord(a),
-        state: refs.length ? "uploading_inputs" : "submitting",
+        state: refs.length || capFiles.length ? "uploading_inputs" : "submitting",
         job_id: null,
         remote_status: null,
         progress: null,
@@ -196,9 +231,10 @@ function createRunner(o) {
     } finally {
       delete claiming[fp];
     }
-    if (a.mask) masks[rec.local_id] = a.mask;
+    memos[rec.local_id] = { mask: a.mask || null, check: cap && cap.memo ? cap.memo.check || null : null, placement_mask: cap && cap.memo ? cap.memo.placement_mask || null : null };
+    if (cap && o.capture && typeof o.capture.link === "function") o.capture.link(cap.id, rec.local_id);
     emit({ type: "started", local_id: rec.local_id });
-    if (refs.length) return uploadThenCheck(rec, refs, red);
+    if (refs.length || capFiles.length) return uploadThenCheck(rec, refs, red, capFiles);
     return send(rec.local_id);
   }
 
@@ -215,30 +251,57 @@ function createRunner(o) {
     return { record: rec, state: state };
   }
 
-  function uploadName(ref, i) {
+  function uploadName(kind, id, ext) {
     var d = new Date(now());
     var stamp = d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate());
-    return "photoshop-reference-" + stamp + "-" + String(ref.id || i).replace(/[^A-Za-z0-9]/g, "").slice(-8) + "." + (ref.ext === "jpg" ? "jpg" : "png");
+    return "photoshop-" + kind + "-" + stamp + "-" + String(id).replace(/[^A-Za-z0-9]/g, "").slice(-8) + "." + (ext === "jpg" ? "jpg" : "png");
   }
 
-  // 4: uploads, then the second price check.
-  async function uploadThenCheck(rec, refs, red) {
+  function fileInput(schema, name) {
+    for (var i = 0; i < schema.file_inputs.length; i++) if (schema.file_inputs[i].name === name) return schema.file_inputs[i];
+    return null;
+  }
+
+  // 4: uploads (the capture, its mask, then the references), then the
+  // second price check. The capture goes to the model's image input, or
+  // first among its references.
+  async function uploadThenCheck(rec, refs, red, capFiles) {
     var ids = [];
+    var capId = null;
+    var capInput = null;
+    var placed = {};
+    var all = [];
     try {
+      for (var c = 0; c < capFiles.length; c++) {
+        var f = capFiles[c];
+        var u = await assetsMod.uploadImage(o.client, f.bytes, uploadName(f.slot === "mask" ? "mask" : "capture", rec.local_id + c, f.ext));
+        all.push(u.asset_id);
+        if (f.slot === "capture") {
+          capId = u.asset_id;
+          capInput = f.input;
+        } else placed[f.input] = u.asset_id;
+      }
       for (var i = 0; i < refs.length; i++) {
-        var up = await assetsMod.uploadImage(o.client, refs[i].bytes, uploadName(refs[i], i));
+        var up = await assetsMod.uploadImage(o.client, refs[i].bytes, uploadName("reference", refs[i].id || i, refs[i].ext));
         ids.push(up.asset_id);
+        all.push(up.asset_id);
       }
     } catch (e) {
       recordError(e && e.type);
-      return finish(rec.local_id, "not_sent", { error: "Not sent: a reference did not upload. " + ((e && e.message) || e) });
+      return finish(rec.local_id, "not_sent", { error: "Not sent: " + (capFiles.length ? "an input" : "a reference") + " did not upload. " + ((e && e.message) || e) });
     }
     var schema = await o.catalog.schema(rec.model_id);
-    var input = requests.referenceInput(schema);
     var body = JSON.parse(JSON.stringify(rec.parameters));
-    body[input.name] = input.multiple ? ids : ids[0];
+    var input = requests.referenceInput(schema);
+    if (capId) {
+      var ci = fileInput(schema, capInput);
+      if (ci && ci.multiple) body[capInput] = [capId].concat(input && input.name === capInput ? ids : []);
+      else body[capInput] = capId;
+    }
+    if (ids.length && input && !(capId && input.name === capInput)) body[input.name] = input.multiple ? ids : ids[0];
+    for (var name in placed) body[name] = placed[name];
     var inputs = JSON.parse(JSON.stringify(rec.inputs));
-    inputs.asset_ids = ids;
+    inputs.asset_ids = all;
     await update(rec.local_id, { parameters: body, inputs: inputs });
     return checkAndSend(rec.local_id, red.thousandths);
   }
@@ -458,45 +521,228 @@ function createRunner(o) {
     });
   }
 
-  // Where a job's results land, as the plan's document, box and mask.
+  function boxOf(arr) {
+    return { left: arr[0], top: arr[1], width: arr[2], height: arr[3] };
+  }
+
+  function canvasChanged() {
+    var e = err("CanvasChanged", "The canvas changed since this edit started. Use Place unmasked or Open as document.");
+    e.canvasChanged = true;
+    return e;
+  }
+
+  // Where a job's results land: the plan options (document, box, fit, mask,
+  // insert point, canvas, reads for the checks) and notes.
   function placement(rec, opts) {
     var t = rec.target || {};
     var notes = [];
     var active = o.host.activeDocumentId();
-    if (opts.new_document || t.kind === "new_document" || !t.kind) {
-      var first = (rec.outputs || [])[0] || {};
+    var memo = memos[rec.local_id] || {};
+    var first = (rec.outputs || [])[0] || {};
+    var newDoc = opts.new_document || t.kind === "new_document" || !t.kind || (t.kind === "upscale" && t.lands === "new_document");
+    if (newDoc) {
       var w = t.kind === "new_document" ? t.width : first.width;
       var h = t.kind === "new_document" ? t.height : first.height;
-      return { document: null, box: { left: 0, top: 0, width: w || first.width, height: h || first.height }, mask: null, notes: notes };
+      return { document: null, box: { left: 0, top: 0, width: w || first.width, height: h || first.height }, fit: "cover", mask: null, notes: notes };
     }
-    var sameDoc = rec.session === o.session && active !== null && active === t.document_id;
-    if (sameDoc && t.box) {
-      var mask = t.kind === "selection" ? masks[rec.local_id] || null : null;
+    var sameDoc = rec.session === o.session && active !== null && active !== undefined && active === t.document_id;
+    if (!sameDoc || !t.box) {
+      if (active === null || active === undefined) throw err("DocumentClosed", "Open a document to place this result, or use Open as document.");
+      if (t.kind === "expand" || t.kind === "cutout") throw err("DocumentClosed", "This result lands in the document it was made from. Open that document, or use Open as document.");
+      var size = o.host.documentSize(active);
+      notes.push("Placed in the current document over its canvas.");
+      return { document: size, box: { left: 0, top: 0, width: size.width, height: size.height }, fit: rec.lane === "image" ? "cover" : "box", mask: null, notes: notes };
+    }
+    var doc = o.host.documentSize(active);
+    var box = boxOf(t.box);
+    var sameCanvas = !t.canvas || (doc.width === t.canvas[0] && doc.height === t.canvas[1]);
+    if (rec.lane === "image") {
+      var mask = t.kind === "selection" ? memo.mask || null : null;
       if (t.kind === "selection" && !mask) notes.push("Placed unmasked: the selection mask is kept until Photoshop quits.");
-      return { document: o.host.documentSize(active), box: { left: t.box[0], top: t.box[1], width: t.box[2], height: t.box[3] }, mask: mask, notes: notes };
+      return { document: doc, box: box, fit: "cover", mask: mask, notes: notes };
     }
-    if (active === null || active === undefined) throw err("DocumentClosed", "Open a document to place this result, or use Open as document.");
-    var size = o.host.documentSize(active);
-    notes.push("Placed in the current document over its canvas.");
-    return { document: size, box: { left: 0, top: 0, width: size.width, height: size.height }, mask: null, notes: notes };
+    if (rec.lane === "edit") {
+      var m = null;
+      if (!sameCanvas) {
+        if (!opts.unmasked) throw canvasChanged();
+        notes.push("Placed unmasked: the canvas changed since this edit started.");
+      } else if (t.kind === "selection") {
+        m = opts.unmasked ? null : memo.placement_mask || null;
+        if (!m && !opts.unmasked) notes.push("Placed unmasked: the selection mask is kept until Photoshop quits.");
+      }
+      var check = sameCanvas ? memo.check : null;
+      var R = check ? { bounds: check.region, width: check.width, height: check.height } : null;
+      return { document: doc, box: box, fit: "box", mask: m, insert: t.sample === "layer" && t.layer_id ? { layer_id: t.layer_id } : null, reads: R ? { before: R, takes: R, after: R } : null, notes: notes };
+    }
+    if (t.kind === "expand") {
+      if (!sameCanvas) throw canvasChanged();
+      var e = t.expand;
+      var old = { left: e.offset[0], top: e.offset[1], width: t.canvas[0], height: t.canvas[1] };
+      var nc = { width: e.width, height: e.height };
+      var inCanvas = shapeMod.clip(box, nc);
+      var pm = pixelsMod.expandPlacementMask(inCanvas, old, e.sides, t.overlap);
+      var cs = pixelsMod.fitLong(old.width, old.height, 512);
+      var band = pixelsMod.expandBand(old, cs.width, cs.height, old, e.sides, t.overlap);
+      var scale = cs.width / old.width;
+      var decide = null;
+      if (t.route !== "mask") {
+        decide = function (reads) {
+          if (!reads.before || !reads.takes.length) return null;
+          var c = checksMod.bandCheck({ context: reads.before, result: reads.takes[0], band: band, scale: scale });
+          if (c.seam_ok) return null;
+          return { mask: false, note: "Placed unmasked for manual alignment: the result did not line up with the original on the overlap." };
+        };
+      }
+      memo.expand = { band: band, scale: scale };
+      memos[rec.local_id] = memo;
+      return {
+        document: doc,
+        box: box,
+        fit: "box",
+        mask: pm,
+        canvas: { width: e.width, height: e.height, offset: { x: e.offset[0], y: e.offset[1] } },
+        duplicate: t.lands === "copy" ? { name: null } : null,
+        reads: { before: { bounds: { left: 0, top: 0, width: old.width, height: old.height }, width: cs.width, height: cs.height }, takes: { bounds: old, width: cs.width, height: cs.height }, after: { bounds: old, width: cs.width, height: cs.height } },
+        decide: decide,
+        notes: notes
+      };
+    }
+    if (t.kind === "upscale") {
+      if (!sameCanvas) throw canvasChanged();
+      return { document: doc, box: box, fit: "box", mask: null, insert: t.source === "layer" && t.layer_id ? { layer_id: t.layer_id } : null, notes: notes };
+    }
+    if (t.kind === "cutout") {
+      if (!sameCanvas) throw canvasChanged();
+      var src = rec.inputs && rec.inputs.capture ? rec.inputs.capture.source_path : null;
+      if (t.lands === "new_layer" && !src) throw err("Internal", "The source pixels of this cutout were not saved; use Open as document.");
+      return { document: doc, box: box, fit: "box", mask: null, cutout: { layer_id: t.layer_id, lands: t.lands, box: box, mask_box: t.mask_box ? boxOf(t.mask_box) : box, source_path: src }, notes: notes };
+    }
+    return { document: doc, box: box, fit: "box", mask: null, notes: notes };
   }
 
-  // Places a ready job (Place, Open as document, or Place when ready).
+  function rgbOf(img) {
+    return img && img.components === 4 ? { width: img.width, height: img.height, components: 3, data: dropAlpha(img) } : img;
+  }
+
+  function dropAlpha(img) {
+    var n = img.width * img.height;
+    var out = new Uint8Array(n * 3);
+    for (var i = 0; i < n; i++) for (var c = 0; c < 3; c++) out[i * 3 + c] = img.data[i * 4 + c];
+    return out;
+  }
+
+  // 9: the checks, on the reads taken during the placement.
+  function runChecks(rec, where, result) {
+    var t = rec.target || {};
+    var memo = memos[rec.local_id] || {};
+    var reads = result.reads || {};
+    var out = { checks: [], verify: null, badges: [] };
+    var outputs = (rec.outputs || []).filter(function (x) {
+      return x && x.path;
+    });
+    if (rec.lane === "edit" && memo.check && reads.takes && reads.takes.length) {
+      var ck = memo.check;
+      for (var i = 0; i < reads.takes.length; i++) {
+        var c = checksMod.check({
+          context: ck.context,
+          result: rgbOf(reads.takes[i]),
+          mask: ck.mask,
+          scale: ck.scale,
+          shaped: t.upload ? { width: t.upload[0], height: t.upload[1] } : null,
+          result_size: outputs[i] ? { width: outputs[i].width, height: outputs[i].height } : null,
+          masked: !!where.mask && result.masked
+        });
+        out.checks.push(summary(c));
+      }
+      if (reads.before && reads.after && where.mask && result.masked) out.verify = checksMod.verify({ before: reads.before, after: reads.after, mask: ck.mask, feather: t.feather || 0, scale: ck.scale });
+    } else if (t.kind === "expand" && memo.expand && reads.takes && reads.takes.length && reads.before) {
+      for (var j = 0; j < reads.takes.length; j++) {
+        var b = checksMod.bandCheck({ context: reads.before, result: rgbOf(reads.takes[j]), band: memo.expand.band, scale: memo.expand.scale });
+        out.checks.push({ seam: b.seam ? { bias: b.seam.bias, residual: b.seam.residual } : null, seam_ok: b.seam_ok, edited: null, aspect_ok: aspectOk(rec, outputs[j]) });
+      }
+      if (reads.after && result.masked) out.verify = checksMod.verify({ before: reads.before, after: reads.after, mask: memo.expand.band, feather: 0, scale: memo.expand.scale });
+    }
+    for (var k = 0; k < Math.max(out.checks.length, outputs.length); k++) {
+      var badges = checksMod.badges(out.checks[k] || null, k === 0 ? out.verify : null, { masked: !!where.mask && result.masked });
+      var small = smallResult(rec, outputs[k]);
+      if (small) badges.push(small);
+      out.badges.push(badges);
+    }
+    return out;
+  }
+
+  function aspectOk(rec, output) {
+    var t = rec.target || {};
+    if (!output || !t.upload) return null;
+    var w = t.upload[0];
+    var h = t.upload[1];
+    return Math.abs(output.width / output.height - w / h) <= checksMod.LIMITS.aspect * (w / h);
+  }
+
+  function summary(c) {
+    return {
+      edited: c.edited,
+      polarity_suspect: c.polarity_suspect,
+      aspect_ok: c.aspect_ok,
+      inside_mean: c.inside ? c.inside.mean : null,
+      outside_mean: c.outside ? c.outside.mean : null,
+      seam: c.seam ? { bias: c.seam.bias, residual: c.seam.residual } : null,
+      seam_ok: c.seam_ok
+    };
+  }
+
+  // "Result is N px for an M px area" (SPEC 3.9): the result was scaled up
+  // into its box.
+  function smallResult(rec, output) {
+    var t = rec.target || {};
+    if (!output || !t.box || rec.lane === "image" || t.kind === "cutout") return null;
+    if (t.kind === "upscale" && t.lands === "new_document") return null;
+    var n = Math.max(output.width, output.height);
+    var m = Math.round(Math.max(t.box[2], t.box[3]));
+    return n < m ? "Result is " + n + " px for an " + m + " px area" : null;
+  }
+
+  // Places a ready job (Place, Place unmasked, Open as document, or Place
+  // when ready).
   async function place(id, opts) {
     opts = opts || {};
     var rec = o.ledger.get(id);
     if (!rec || ["ready", "apply_failed", "applied"].indexOf(rec.state) < 0) throw err("Internal", "This job has no saved results to place.");
-    var where = placement(rec, opts);
-    var p = planMod.build(rec, { version: o.version, document: where.document, box: where.box, mask: where.mask, restore_active: !!opts.auto });
+    var where;
+    try {
+      where = placement(rec, opts);
+    } catch (e) {
+      if (e && e.canvasChanged && !opts.auto) await update(id, { error: e.message });
+      throw e;
+    }
+    var p = planMod.build(rec, { version: o.version, document: where.document, box: where.box, mask: where.mask, restore_active: !!opts.auto, fit: where.fit, insert: where.insert, canvas: where.canvas, duplicate: where.duplicate, reads: where.reads, cutout: where.cutout });
     var before = rec.state;
     await update(id, { state: "applying" });
     try {
-      var result = await o.host.placeResults(p, { auto: !!opts.auto });
+      var result = await o.host.placeResults(p, { auto: !!opts.auto, decide: where.decide || null });
       var notes = where.notes.concat(result.notes || []);
+      var checked = { checks: [], verify: null, badges: [] };
+      try {
+        checked = runChecks(rec, where, result);
+      } catch (e) {
+        log("jobs: checks did not run (" + ((e && e.message) || e) + ")");
+        notes.push("The checks did not run; the result is placed.");
+      }
       var done = await update(id, {
         state: "applied",
         error: null,
-        placement: { document_id: result.document_id, layer_ids: result.layer_ids, group_id: result.group_id || null, history: p.history_name, notes: notes }
+        placement: {
+          document_id: result.document_id,
+          layer_ids: result.layer_ids,
+          group_id: result.group_id || null,
+          history: p.history_name,
+          masked: !!result.masked,
+          notes: notes,
+          checks: checked.checks,
+          verify: checked.verify ? { untouched: checked.verify.untouched, outside_max: checked.verify.outside_max } : null,
+          badges: checked.badges,
+          undone: false
+        }
       });
       delete autoTries[id];
       emit({ type: "placed", local_id: id, auto: !!opts.auto, first: !!result.first });
@@ -517,6 +763,18 @@ function createRunner(o) {
       await update(id, { state: before === "applied" ? "applied" : "apply_failed", error: "Place failed: " + ((e && e.message) || e) });
       throw e;
     }
+  }
+
+  // The Undo of a "Changed outside" card (SPEC 6.5): steps back Scenario's
+  // own History state when it is still the last one. The results stay saved.
+  async function undo(id) {
+    var rec = o.ledger.get(id);
+    if (!rec || rec.state !== "applied" || !rec.placement) throw err("Internal", "This result is not placed.");
+    var ok = await o.host.undoLast(rec.placement.document_id, rec.placement.history);
+    if (!ok) throw err("Internal", "Undo it from Photoshop's History panel: Scenario's step is no longer the last one, or its document is not active.");
+    var pl = JSON.parse(JSON.stringify(rec.placement));
+    pl.undone = true;
+    return update(id, { state: "ready", placement: pl });
   }
 
   // SPEC 6.2 step 5.3: the person marks an Unknown job not sent.
@@ -548,6 +806,7 @@ function createRunner(o) {
     approve: approve,
     decline: decline,
     place: place,
+    undo: undo,
     markNotSent: markNotSent,
     resumeDownload: resumeDownload,
     resume: resume,
@@ -560,4 +819,4 @@ function createRunner(o) {
   };
 }
 
-module.exports = { createRunner: createRunner, pollDelay: pollDelay, OUTPUT_FOLDER: OUTPUT_FOLDER, QUOTE_MODE: QUOTE_MODE };
+module.exports = { createRunner: createRunner, pollDelay: pollDelay, trainedIds: trainedIds, OUTPUT_FOLDER: OUTPUT_FOLDER, QUOTE_MODE: QUOTE_MODE };

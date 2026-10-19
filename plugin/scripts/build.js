@@ -26,7 +26,8 @@ const DEV_STUBS = {
   "import-token.js": "{ importToken: async function () { return false; }, FILE: null }",
   "import-key.js": "{ importKey: async function () { return false; }, FILE: null, parse: null }",
   "ui-loop.js": "{ start: function () { return null; }, COMMAND: null, RESULT: null }",
-  "ui-demo.js": "{ hook: function () { return null; }, run: null, DIR: null }"
+  "ui-demo.js": "{ hook: function () { return null; }, run: null, DIR: null }",
+  "live-run.js": "{ start: function () { return null; }, REQUEST: null, DIR: null }"
 };
 
 function inside(file) {

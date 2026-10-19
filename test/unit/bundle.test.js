@@ -38,12 +38,15 @@ test("the release bundle holds no development code and no run-time code generati
   assert.ok(!release.code.includes("dev-ui-command.json"), "the panel's dev UI loop is stubbed out");
   assert.ok(!release.code.includes("location.reload"), "a release build never reloads its panel");
   assert.ok(!release.code.includes("dev-demo"), "the panel's sample states are stubbed out");
-  assert.equal(release.code.split("Release build: development-only module removed.").length - 1, 4, "the four development-only modules are stubs");
+  assert.ok(!release.code.includes("dev-live-run.json"), "the live-check request reader is stubbed out");
+  assert.ok(!release.code.includes("Scenario dev: set up"), "nothing in a release build makes documents for the live check");
+  assert.equal(release.code.split("Release build: development-only module removed.").length - 1, 5, "the five development-only modules are stubs");
   assert.ok(release.code.includes('module.exports = {"DEV":false,"BUILD":"release"}'));
   assert.ok(dev.code.includes("dev-pairing-token"));
   assert.ok(dev.code.includes("dev-api-key"));
   assert.ok(dev.code.includes("dev-ui-command.json"));
   assert.ok(dev.code.includes("dev-demo"));
+  assert.ok(dev.code.includes("dev-live-run.json"));
   for (const code of [release.code, dev.code]) {
     assert.ok(!/\beval\s*\(/.test(code), "no eval");
     assert.ok(!/\bnew\s+Function\s*\(/.test(code), "no new Function");

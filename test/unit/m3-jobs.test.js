@@ -251,7 +251,7 @@ test("placeResults: a failure rolls the History state back; busy and not-active 
     throw new Error("mask refused");
   };
   const out = await host.placeResults(masked, {});
-  assert.deepEqual(out.notes, ["Placed unmasked: the selection mask could not be applied."]);
+  assert.deepEqual(out.notes, ["Placed unmasked: the mask could not be applied."]);
   assert.equal(out.layer_ids.length, 2);
   assert.ok(out.group_id);
   assert.deepEqual(ps.history, [{ document_id: 7, name: "Scenario: Place image" }]);

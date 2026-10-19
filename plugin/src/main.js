@@ -33,6 +33,9 @@ var ledgerMod = require("./jobs/ledger.js");
 var runnerMod = require("./jobs/runner.js");
 var downloadMod = require("./scenario/download.js");
 var referencesMod = require("./capture/references.js");
+var captureMod = require("./capture/capture.js");
+var flowMod = require("./lanes/flow.js");
+var devLive = require("./dev/live-run.js");
 var jobsViewMod = require("./ui/jobs-view.js");
 var menuMod = require("./ui/menu.js");
 var thumbsMod = require("./ui/thumbs.js");
@@ -120,6 +123,7 @@ function boot(env) {
   var ledger = null;
   var runner = null;
   var references = null;
+  var capture = null;
   var jobsView = null;
   var menu = null;
 
@@ -173,6 +177,7 @@ function boot(env) {
   // one, prices still show and Generate stays off.
   if (random) {
     ledger = ledgerMod.createLedger({ host: host, random: random, now: host.timers.now, log: logger.log, session: session });
+    capture = captureMod.createCapture({ host: host, random: random, log: logger.log, now: host.timers.now, session: session });
     var downloader = downloadMod.createDownloader({
       client: client,
       fetch: host.fetch,
@@ -192,6 +197,7 @@ function boot(env) {
       account: accounts.current,
       version: VERSION,
       session: session,
+      capture: capture,
       log: logger.log,
       timers: host.timers,
       now: host.timers.now,
@@ -200,6 +206,8 @@ function boot(env) {
     });
     references = referencesMod.createReferences({ host: host, random: random, log: logger.log });
   }
+  // The Edit and Enhance lanes' logic (lanes/), drawn by the panel.
+  var flow = flowMod.createFlow({ catalog: catalog, quotes: quotes, host: host, runner: runner, capture: capture, account: accounts.current, log: logger.log });
 
   var ready = (async function () {
     if (pairing && flags.DEV) {
@@ -399,6 +407,8 @@ function boot(env) {
       ledger: ledger,
       runner: runner,
       references: references,
+      capture: capture,
+      flow: flow,
       jobsView: jobsView,
       session: session,
       diagnostics: diagnostics,
@@ -408,7 +418,16 @@ function boot(env) {
       copyToken: panelActions.copyToken,
       resetToken: panelActions.resetToken
     };
-    if (flags.DEV) app.devUi = devUiLoop.start({ host: host, doc: env.document, global: env.global, app: app, log: logger.log, menu: menu });
+    if (flags.DEV) {
+      app.devUi = devUiLoop.start({ host: host, doc: env.document, global: env.global, app: app, log: logger.log, menu: menu });
+      // Development builds only: the live check's requests, read from the
+      // data folder (dev/live-run.js). Release builds carry a stub.
+      try {
+        app.devLive = devLive.start(app, env.hostRequire);
+      } catch (e) {
+        logger.log("dev live run unavailable (" + ((e && e.type) || "Internal") + ")");
+      }
+    }
     return app;
   })();
 
