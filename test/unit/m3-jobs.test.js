@@ -212,7 +212,10 @@ test("download: a result whose download stopped keeps its charge and is resumed 
   await waitFor(() => app.ledger.get(id).state === "download_failed", { label: "download stopped", timeout: 15000 });
   assert.equal(app.ledger.get(id).cu_charged, "2", "the charge is known even though the file is not saved");
   assert.match(app.ledger.get(id).error, /^Download stopped: Download stopped after 3 attempts/);
+  // The header's Jobs opens the short list; All jobs opens the Jobs view.
   doc.byId("jobs").click();
+  await waitFor(() => doc.byId("pop").getAttribute("data-menu") === "jobs", { label: "jobs popover" });
+  doc.byId("pop").children.find((e) => e.getAttribute("data-value") === "all").click();
   const row = doc.byId("jobs-list").children[0];
   const main = row.children[1];
   const acts = main.children[main.children.length - 1].children;

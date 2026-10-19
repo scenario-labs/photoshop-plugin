@@ -2,8 +2,9 @@
 // The Jobs view (SPEC 3.11), On this computer: the ledger, newest first,
 // with each row's status, price words, origin, time and the actions this
 // build offers. Text from the ledger (prompts, document titles, Scenario's
-// messages) is set with textContent only. The header's Jobs icon carries a
-// count badge.
+// messages) is set with textContent only. The header's "Jobs N" shows how
+// many jobs this computer holds (FLOWS v2), blue while one runs and amber
+// while one waits for the person; the words are in its tooltip.
 
 var text = require("./jobs-text.js");
 var icons = require("./icons.js");
@@ -100,7 +101,7 @@ function createJobsView(doc, o) {
         row.setAttribute("data-job", rec.local_id);
         var th = doc.createElement("div");
         th.className = "job-thumb";
-        th.appendChild(icons.icon(doc, rec.lane === "image" || !rec.lane ? "image" : rec.lane === "edit" ? "edit" : "enhance"));
+        th.appendChild(icons.icon(doc, rec.lane === "image" || !rec.lane ? "image" : rec.lane === "edit" ? "edit" : "enhance", null, 16));
         var first = (rec.outputs || [])[0];
         var img = doc.createElement("img");
         img.className = "thumb-img";
@@ -140,10 +141,13 @@ function createJobsView(doc, o) {
           acts.setAttribute("class", "actions");
           for (var a = 0; a < r.actions.length; a++) {
             (function (act) {
-              var b = doc.createElement("sp-action-button");
-              b.setAttribute("size", "s");
+              var b = doc.createElement("div");
+              b.className = "btn sm";
               b.setAttribute("data-action", act.name);
-              b.textContent = act.name === "mark_not_sent" && armed === rec.local_id ? "Confirm: mark not sent" : act.label;
+              var bl = doc.createElement("span");
+              bl.className = "bl";
+              bl.textContent = act.name === "mark_not_sent" && armed === rec.local_id ? "Confirm: mark not sent" : act.label;
+              b.appendChild(bl);
               b.addEventListener("click", function () {
                 run(act.name, rec);
               });
@@ -158,19 +162,15 @@ function createJobsView(doc, o) {
     }
   }
 
-  // The header's Jobs icon: a count badge for running jobs, or for jobs
-  // that wait for the person; the words are in its tooltip.
+  // The header's "Jobs N": every job on this computer; blue while one
+  // runs, amber while one waits for the person.
   function renderCount() {
     var n = o.ledger.activeCount();
     var waiting = o.ledger.count("uncertain") + o.ledger.count("awaiting_approval");
     var ready = o.ledger.count("ready");
-    var badge = n || waiting + ready;
-    setText("jobs-badge", badge ? String(badge) : "");
+    setText("jobs-badge", String(o.ledger.all().length));
     var b = byId("jobs-badge");
-    if (b) {
-      b.className = !n && waiting ? "badge attention" : "badge";
-      if (b.style) b.style.display = badge ? "block" : "none";
-    }
+    if (b) b.className = waiting ? "n attention" : n ? "n run" : "n";
     var words = [];
     if (n) words.push(n + " running");
     if (waiting) words.push(waiting + " waiting for you");
@@ -179,11 +179,14 @@ function createJobsView(doc, o) {
     if (el && el.setAttribute) el.setAttribute("title", "Jobs" + (words.length ? ": " + words.join(", ") : ""));
   }
 
-  bind("jobs", function () {
-    shown = true;
-    o.showView("jobs");
-    render();
-  });
+  // With the creation panel, the header's Jobs opens a short list first
+  // (ui/create-view.js) and its "All jobs" row opens this view.
+  if (!o.popover)
+    bind("jobs", function () {
+      shown = true;
+      o.showView("jobs");
+      render();
+    });
   bind("jobs-back", function () {
     shown = false;
     note("");

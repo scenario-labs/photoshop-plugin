@@ -136,6 +136,7 @@ function build(rec, o) {
       box: o.cutout.box,
       mask_box: o.cutout.lands === "mask" ? o.cutout.mask_box : o.cutout.box,
       source_path: o.cutout.source_path || null,
+      drop_selection: !!o.cutout.drop_selection,
       source_fit: boxFit(o.cutout.box.width, o.cutout.box.height, o.cutout.box),
       name: takes[0].name,
       xmp: takes[0].xmp

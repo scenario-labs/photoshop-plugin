@@ -22,24 +22,12 @@ body {
 
 /* The whole panel is one column: header, the shown view (its own middle
    part scrolls), nothing below. */
+
 .app {
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-}
-
-/* ---- header: mark, project, agent dot, Jobs; never wraps ---- */
-
-.hd {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: center;
-  height: 32px;
-  padding: 0 4px 0 8px;
-  border-bottom: 1px solid var(--uxp-host-border-color);
 }
 
 .mark {
@@ -49,40 +37,9 @@ body {
   margin-right: 4px;
 }
 
-/* Only the project name shrinks, on one line, ending with an ellipsis. UXP
-   applies text-overflow to a block element, not to a button's own label,
-   hence the span inside the button. */
-.project {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.project-label {
-  display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-weight: bold;
-}
-
-.chev {
-  flex: 0 0 auto;
-  margin-left: 2px;
-}
-
 .spacer {
   flex: 1 1 auto;
   min-width: 4px;
-}
-
-.dot-hit {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
 }
 
 .dot {
@@ -101,26 +58,6 @@ body {
 
 .dot.warn {
   border-color: #e68619;
-  background-color: #e68619;
-}
-
-.icon-btn {
-  flex: 0 0 auto;
-}
-
-.badge {
-  display: none;
-  margin-left: 2px;
-  padding: 0 4px;
-  border-radius: 7px;
-  font-size: 10px;
-  font-weight: bold;
-  line-height: 14px;
-  color: #ffffff;
-  background-color: #378ef0;
-}
-
-.badge.attention {
   background-color: #e68619;
 }
 
@@ -192,45 +129,9 @@ body {
   padding: 8px;
 }
 
-.foot {
-  flex: 0 0 auto;
-  padding: 8px;
-  border-top: 1px solid var(--uxp-host-border-color);
-}
-
-/* ---- lane tabs: one row; icons only below 380 px except the chosen
-   lane, which keeps its label; every tab has a tooltip ---- */
-
-.tabs {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: center;
-  height: 32px;
-  padding: 0 4px;
-  overflow: hidden;
-  border-bottom: 1px solid var(--uxp-host-border-color);
-}
-
-.tab {
-  flex: 0 0 auto;
-  margin-right: 2px;
-}
-
-.tab-label,
 .seg-label {
   margin-left: 4px;
   white-space: nowrap;
-}
-
-@media (max-width: 379px) {
-  .tab .tab-label {
-    display: none;
-  }
-  .tab.on .tab-label {
-    display: inline;
-  }
 }
 
 @media (max-width: 299px) {
@@ -389,13 +290,6 @@ body {
   flex: 0 0 auto;
 }
 
-.card {
-  margin-bottom: 8px;
-  padding: 8px;
-  border-radius: 4px;
-  border: 1px solid #378ef0;
-}
-
 .empty {
   display: flex;
   flex-direction: column;
@@ -409,61 +303,8 @@ body {
   margin-bottom: 8px;
 }
 
-/* ---- Image lane: target chip, model card, references ---- */
-
-.lane-body > * {
-  margin-bottom: 8px;
-}
-
-.target-row {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-}
-
-.label {
-  flex: 0 0 auto;
-  width: 48px;
-  font-size: 11px;
-  color: var(--uxp-host-text-color-secondary);
-}
-
-.chip {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  min-width: 0;
-  height: 22px;
-  padding: 0 8px 0 3px;
-  border-radius: 11px;
-  border: 1px solid var(--uxp-host-border-color);
-  background-color: rgba(0, 0, 0, 0.12);
-}
-
-.chip-text {
-  margin-left: 2px;
-  font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.model {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  padding: 4px;
-  border-radius: 4px;
-  border: 1px solid var(--uxp-host-border-color);
-}
-
-/* Picture boxes: the icon sits in the middle, the picture covers it once
-   it loads (ui/thumbs.js hides a picture that fails). */
-.thumb,
 .model-thumb,
-.job-thumb,
-.ref,
-.take {
+.job-thumb {
   position: relative;
   display: flex;
   align-items: center;
@@ -471,40 +312,11 @@ body {
   color: var(--uxp-host-text-color-secondary);
 }
 
-.thumb-img,
-.ref-img,
-.take-img {
+.thumb-img {
   position: absolute;
   left: 0;
   top: 0;
   object-fit: cover;
-}
-
-.thumb {
-  flex: 0 0 auto;
-  width: 40px;
-  height: 40px;
-  border-radius: 3px;
-  overflow: hidden;
-  background-color: rgba(0, 0, 0, 0.2);
-}
-
-.thumb .thumb-img {
-  width: 40px;
-  height: 40px;
-}
-
-.model-text {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0 4px 0 8px;
-}
-
-.model-name {
-  font-weight: bold;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 .chips {
@@ -513,148 +325,12 @@ body {
   flex-wrap: wrap;
 }
 
-.ref {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  margin: 0 6px 6px 0;
-  border-radius: 3px;
-  background-color: rgba(0, 0, 0, 0.2);
-}
-
-.ref .ref-img {
-  width: 40px;
-  height: 40px;
-  border-radius: 3px;
-}
-
-.ref-x {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  width: 16px;
-  height: 16px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--uxp-host-text-color);
-  background-color: var(--uxp-host-background-color);
-  border: 1px solid var(--uxp-host-border-color);
-}
-
-.ref-x svg {
-  width: 10px;
-  height: 10px;
-}
-
-.ref-badge {
-  position: absolute;
-  left: 2px;
-  bottom: 2px;
-  padding: 0 3px;
-  border-radius: 3px;
-  font-size: 9px;
-  color: #ffffff;
-  background-color: rgba(0, 0, 0, 0.6);
-}
-
-.add-tile {
-  width: 38px;
-  height: 38px;
-  margin: 0 6px 6px 0;
-  border-radius: 3px;
-  border: 1px dashed var(--uxp-host-text-color-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.add-tile.off {
-  opacity: 0.4;
-}
-
 .menu {
   margin: 0 0 8px 0;
   padding: 4px 0;
   border-radius: 4px;
   border: 1px solid var(--uxp-host-border-color);
   background-color: rgba(0, 0, 0, 0.12);
-}
-
-.menu-item {
-  display: flex;
-  width: 100%;
-}
-
-.menu-item .ico {
-  margin-right: 6px;
-}
-
-/* ---- results tray and prompt bar (pinned) ---- */
-
-/* Results end the scrolling body, right above the prompt bar. */
-.tray {
-  padding-top: 8px;
-  border-top: 1px solid var(--uxp-host-border-color);
-}
-
-.tray-head {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-}
-
-.takes {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  margin: 4px 0;
-}
-
-.take {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  margin: 0 6px 4px 0;
-  border-radius: 3px;
-  border: 2px solid transparent;
-  background-color: rgba(0, 0, 0, 0.2);
-}
-
-.take .take-img {
-  width: 40px;
-  height: 40px;
-  border-radius: 2px;
-}
-
-.take.kept {
-  border-color: #378ef0;
-}
-
-.take-mark {
-  position: absolute;
-  right: -4px;
-  bottom: -4px;
-  width: 14px;
-  height: 14px;
-  border-radius: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  background-color: #378ef0;
-}
-
-.take-mark svg {
-  width: 10px;
-  height: 10px;
-}
-
-.prompt {
-  width: 100%;
-  min-height: 48px;
-  margin-bottom: 4px;
 }
 
 .opts {
@@ -670,8 +346,6 @@ body {
   margin-right: 8px;
 }
 
-/* The growing picker (Size or Factor, one at a time) ends the row; hidden
-   options still count for :last-child in UXP, so the margin sits on Takes. */
 .opt.grow {
   flex: 1 1 auto;
   min-width: 0;
@@ -679,14 +353,6 @@ body {
 }
 
 .picker {
-  width: 100%;
-}
-
-.picker.takes {
-  width: 88px;
-}
-
-.generate {
   width: 100%;
 }
 
@@ -909,4 +575,1276 @@ body {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
+}
+/* ---- the creation panel (FLOWS v2; SPEC 3) ----
+   The prototype's look on the host theme: its raised, field and line tones
+   are translucent layers over the host background (prototype values on
+   Photoshop's medium gray in brackets), so the panel follows the four
+   brightness themes. One accent, Photoshop's blue, for the selected chip,
+   the shown take and the button; green and amber only for checks and the
+   agent dot. 13 px titles, 12 px body, 11 px notes; 24 px chips, 26 px
+   buttons, a 32 px button to generate; radius 8 for cards, 6 for chips and
+   pictures. No grid and no gap in UXP 9.4: spacing is margins. */
+
+.app {
+  position: relative;
+}
+
+.ico svg {
+  display: block;
+}
+
+/* Header, one row of 36 px: mark, project, then agent and Jobs. */
+.hd {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  height: 36px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--uxp-host-border-color);
+}
+
+.hd .mark {
+  margin-right: 6px;
+}
+
+.proj {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 5px;
+}
+
+.proj:hover,
+.hbtn:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.project-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.proj .chev {
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+}
+
+.hbtn {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 24px;
+  padding: 0 6px;
+  margin-left: 2px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.hbtn .ico {
+  width: 16px;
+  height: 16px;
+}
+
+.hbtn .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  margin-left: 4px;
+  border: 0;
+  background-color: var(--uxp-host-text-color-secondary);
+  opacity: 0.8;
+}
+
+.hbtn .dot.on {
+  background-color: #7fd17f;
+  opacity: 1;
+}
+
+.hbtn .dot.warn {
+  background-color: #f2b45a;
+  opacity: 1;
+}
+
+.hbtn .hname {
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.hbtn .hl {
+  white-space: nowrap;
+}
+
+.hbtn .n {
+  min-width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  color: var(--uxp-host-text-color);
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.hbtn .n.run {
+  color: #ffffff;
+  background-color: #2c7be5;
+}
+
+.hbtn .n.attention {
+  color: #1b1b1b;
+  background-color: #f2b45a;
+}
+
+/* The main view: context and chips on top, the middle scrolls, the
+   composer is pinned at the bottom. On a short panel (Photoshop docks it
+   at 420 px) the context, the chips and the middle scroll together, so the
+   composer and its button always show. */
+.cp .sc-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+@media (max-height: 599px) {
+  .cp .sc-body {
+    overflow-y: auto;
+  }
+  .cp .sc-body > .sc-mid {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+}
+
+.cp .sc-top {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 12px 8px 12px;
+}
+
+.cp .ctx {
+  position: relative;
+  overflow: hidden;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  background-color: rgba(0, 0, 0, 0.11);
+}
+
+.cp .ctx-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.cp .ctx-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-right: 8px;
+  overflow: hidden;
+  border-radius: 6px;
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .ctx-thumb.chk {
+  background-color: rgba(255, 255, 255, 0.72);
+  color: #555555;
+}
+
+.cp .ctx-thumb .ico {
+  width: 20px;
+  height: 20px;
+}
+
+.cp .cov {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.cp .ctx-thumb .cnt {
+  display: none;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 16px;
+  text-align: center;
+  color: #ffffff;
+  background-color: rgba(24, 24, 24, 0.74);
+}
+
+.cp .ctx-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cp .ctx-title {
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 17px;
+}
+
+.cp .ctx-detail {
+  margin-top: 1px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .ctx-detail.run {
+  color: var(--uxp-host-text-color);
+}
+
+.cp .prog {
+  display: none;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 0;
+  background-color: #2c7be5;
+}
+
+/* Action chips: one row that wraps, at most six, then More. */
+.cp .acts {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin: 8px 0 -6px 0;
+}
+
+.cp .chip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  margin: 0 6px 6px 0;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.265);
+  background-color: rgba(0, 0, 0, 0.19);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cp .chip:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .chip.on {
+  color: #ffffff;
+  border-color: #2c7be5;
+  background-color: #2c7be5;
+}
+
+.cp .chip.more {
+  padding: 0 6px 0 10px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .chip.more.on {
+  color: #ffffff;
+}
+
+.cp .chip .ml {
+  display: block;
+  max-width: 150px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cp .chip .chev {
+  width: 12px;
+  height: 12px;
+  margin-left: 4px;
+}
+
+/* The middle: the Takes card, Recent, the empty line. */
+.cp .sc-mid {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 4px 12px 12px 12px;
+}
+
+.cp .sc-mid > * {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+
+.cp .mid-card {
+  display: none;
+}
+
+.cp .card {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  background-color: rgba(0, 0, 0, 0.11);
+}
+
+.cp .card > * {
+  margin-bottom: 8px;
+}
+
+.cp .card-h {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+}
+
+.cp .card-h .h3 {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.cp .card-h .meta {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .by {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  margin-left: 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.cp .by .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  border: 0;
+  margin-right: 4px;
+  background-color: #7fd17f;
+}
+
+.cp .card-sub {
+  margin-top: -4px;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .tiles {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+}
+
+.cp .tile {
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+}
+
+.cp .tile.l {
+  margin-right: 8px;
+}
+
+.cp .tile .tw {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .tile:hover .tw {
+  border-color: rgba(255, 255, 255, 0.11);
+}
+
+.cp .tile.on .tw {
+  border-color: #2c7be5;
+}
+
+.cp .tile .num {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 18px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #ffffff;
+  background-color: rgba(24, 24, 24, 0.74);
+}
+
+.cp .tile.on .num {
+  background-color: #2c7be5;
+}
+
+.cp .tile .num .eye {
+  width: 12px;
+  height: 12px;
+  margin-right: 3px;
+}
+
+.cp .chk-b {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px 0 4px;
+  border-radius: 5px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: #a5d6a0;
+  background-color: rgba(24, 24, 24, 0.74);
+}
+
+.cp .chk-b.warn {
+  color: #f2b45a;
+}
+
+.cp .chk-b .ico {
+  width: 12px;
+  height: 12px;
+  margin-right: 3px;
+}
+
+.cp .btnrow {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: -6px;
+}
+
+.cp .btnrow.end {
+  justify-content: flex-end;
+}
+
+.btn {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  margin: 0 6px 6px 0;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background-color: rgba(0, 0, 0, 0.19);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.btn .bl {
+  display: block;
+  white-space: nowrap;
+}
+
+.btn.pri {
+  color: #2a2a2a;
+  font-weight: bold;
+  border-color: var(--uxp-host-text-color);
+  background-color: var(--uxp-host-text-color);
+}
+
+.btn.blue {
+  color: #ffffff;
+  font-weight: bold;
+  border-color: #2c7be5;
+  background-color: #2c7be5;
+}
+
+.btn.blue:hover {
+  background-color: #3d89f2;
+}
+
+.btn.sm {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.cp .btnrow.end .btn {
+  margin: 0 0 6px 6px;
+}
+
+.cp .single {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.cp .single .tw {
+  position: relative;
+  flex: 0 0 auto;
+  overflow: hidden;
+  margin-right: 8px;
+  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .single .txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .single .txt .warn {
+  color: #f2b45a;
+}
+
+.cp .recent {
+  display: none;
+}
+
+.cp .recent .h4 {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .rrow {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: -6px;
+}
+
+.cp .rthumb {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 6px 6px 0;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .rthumb:hover {
+  border-color: rgba(255, 255, 255, 0.11);
+}
+
+.cp .emptymid {
+  display: none;
+  padding: 4px 2px;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+  opacity: 0.8;
+}
+
+/* The composer, pinned. */
+.cp .composer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px 12px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.28);
+}
+
+.cp .composer > * {
+  margin-bottom: 8px;
+}
+
+.cp .composer > .ccard {
+  margin-bottom: 0;
+}
+
+.cp .ccard {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  background-color: rgba(0, 0, 0, 0.11);
+}
+
+.cp .ccard > * {
+  margin-bottom: 8px;
+}
+
+.cp .ccard > .gorow {
+  margin-bottom: 0;
+}
+
+.cp .ccard > .cnote#go-reason,
+.cp .ccard > .cnote#c-message {
+  margin: 8px 0 0 0;
+}
+
+.cp .refs {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.cp .refs > * {
+  margin: 0 6px 0 0;
+}
+
+.cp .ref {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .ref .rx {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.cp .dref {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 30px;
+  padding: 0 8px 0 3px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.265);
+  background-color: rgba(0, 0, 0, 0.19);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.cp .dref:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .dref .th {
+  width: 24px;
+  height: 24px;
+  margin-right: 6px;
+  border-radius: 4px;
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .dref.off {
+  opacity: 0.5;
+}
+
+.cp .dref.off .rl {
+  text-decoration: line-through;
+}
+
+.cp .ref-add {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.11);
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .ref-add:hover {
+  color: var(--uxp-host-text-color);
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .ref-add .ico {
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+}
+
+.cp .refs .hint {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+  opacity: 0.8;
+}
+
+.cp .prompt {
+  width: 100%;
+  min-height: 46px;
+  font-size: 12px;
+}
+
+.cp .noprompt,
+.cp .cnote {
+  display: none;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 2px;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .noprompt .ico,
+.cp .cnote .ico {
+  width: 14px;
+  height: 14px;
+  margin: 1px 6px 0 0;
+}
+
+.cp .noprompt .ct,
+.cp .cnote .ct {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cp .cchips {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.cp .cc {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  margin: 0 6px 6px 0;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.265);
+  background-color: rgba(0, 0, 0, 0.19);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cp .cc:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .cc > * {
+  margin-right: 5px;
+}
+
+.cp .cc > *:last-child {
+  margin-right: 0;
+}
+
+.cp .cc .ci {
+  width: 14px;
+  height: 14px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .cc .th {
+  position: relative;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .cc .mono,
+.pop .mono {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: bold;
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .cc .k {
+  color: var(--uxp-host-text-color-secondary);
+  opacity: 0.85;
+}
+
+.cp .cc .v {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* At 280 px the Style and Model chips share a row: the model's name ends
+   with an ellipsis (its full name is the chip's tooltip). */
+@media (max-width: 299px) {
+  .cp .cc-model .v {
+    max-width: 100px;
+  }
+}
+
+.cp .sref .sx {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 6px;
+  border-radius: 7px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .sref .sx:hover {
+  color: var(--uxp-host-text-color);
+  background-color: rgba(255, 255, 255, 0.11);
+}
+
+.cp .confirm {
+  display: none;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+}
+
+.cp .confirm > * {
+  margin-bottom: 6px;
+}
+
+.cp .gorow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.cp .go {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  overflow: hidden;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: bold;
+  color: #ffffff;
+  background-color: #2c7be5;
+}
+
+.cp .go:hover {
+  background-color: #3d89f2;
+}
+
+.cp .go.off,
+.cp .go.off:hover {
+  font-weight: normal;
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.cp .go .lbl {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cp .go .cu {
+  display: none;
+  flex: 0 0 auto;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.cp .gear {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: 6px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.cp .gear:hover {
+  color: var(--uxp-host-text-color);
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .gear .ico {
+  width: 16px;
+  height: 16px;
+}
+
+/* F5: an agent's request to spend waits above the composer. */
+.cp .agentcard {
+  display: none;
+  flex-direction: column;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background-color: rgba(0, 0, 0, 0.11);
+}
+
+.cp .agentcard > * {
+  margin-bottom: 8px;
+}
+
+.cp .agentcard .who {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.cp .agentcard .who .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  border: 0;
+  margin-right: 6px;
+  background-color: #7fd17f;
+}
+
+.cp .agentcard .what {
+  font-size: 12px;
+}
+
+.cp .agentcard .q {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.cp .agentcard .meta {
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .declined {
+  display: none;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.11);
+}
+
+/* ---- popovers: chip menus, More, Advanced, the agent ---- */
+
+.pop-scrim {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.pop {
+  display: none;
+  position: absolute;
+  flex-direction: column;
+  padding: 4px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.44);
+  background-color: var(--uxp-host-background-color);
+}
+
+.pop .h5 {
+  margin: 6px 8px 2px 8px;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--uxp-host-text-color-secondary);
+  opacity: 0.85;
+}
+
+.pop .mi {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 5px;
+}
+
+.pop .mi:hover {
+  color: #ffffff;
+  background-color: #2c7be5;
+}
+
+.pop .mi:hover .ms,
+.pop .mi:hover .tag {
+  color: #ffffff;
+}
+
+.pop .mi[aria-disabled="true"] {
+  opacity: 0.55;
+}
+
+.pop .chkm {
+  flex: 0 0 auto;
+  width: 16px;
+  margin-right: 8px;
+}
+
+.pop .chkm .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.pop .mi .th {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  overflow: hidden;
+  border-radius: 5px;
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.pop .mi .mono {
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  font-size: 11px;
+}
+
+.pop .mt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pop .mn {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.pop .ms {
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.pop .tag {
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #3d89f2;
+}
+
+.pop .r {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.pop .mrow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.pop .mrow .mi {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pop .pin {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 2px;
+  border-radius: 5px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.pop .pin:hover {
+  color: var(--uxp-host-text-color);
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.pop .pin.on {
+  color: #3d89f2;
+}
+
+.pop .pin.off {
+  opacity: 0.35;
+}
+
+.pop .pin .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.pop .sep {
+  height: 1px;
+  margin: 3px 4px;
+  background-color: rgba(0, 0, 0, 0.44);
+}
+
+.pop .ptxt {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.pop .row {
+  display: flex;
+  flex-direction: column;
+  padding: 5px 8px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.pop .row .rk {
+  margin-bottom: 4px;
+}
+
+.pop .presets {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.pop .pb {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 8px;
+  margin: 0 4px 4px 0;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  font-size: 11px;
+  line-height: 20px;
+  white-space: nowrap;
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.pop .pb:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.pop .pb.on {
+  color: #ffffff;
+  border-color: #2c7be5;
+  background-color: #2c7be5;
+}
+
+.pop .mi.attention .ms {
+  color: #e68619;
 }

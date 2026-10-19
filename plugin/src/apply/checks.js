@@ -13,6 +13,11 @@
 //   tone shift, residual the mean difference once that shift is removed
 //   (misalignment, wrong scale). seam_ok: bias < 12 and residual < 6.
 // - aspect_ok: the result's aspect within 1% of the shaped capture.
+// - kept_share (Remove only, o.cleared): the share of the masked area whose
+//   16 px cells look as before (both blurred, the inside's tone shift
+//   removed, mean difference under the seam residual limit, 6). From 0.3,
+//   part of what was to go may still be there, as in a review where a
+//   Remove kept one of four selected boats.
 // - verify (after the apply): the composite outside the mask, past the
 //   feather, is unchanged (largest difference <= 2).
 // A failed check only adds a badge: the result stays placed.
@@ -22,7 +27,7 @@
 
 var pixels = require("../capture/pixels.js");
 
-var LIMITS = { seam_bias: 12, seam_residual: 6, edited_mean: 3, untouched_max: 2, aspect: 0.01, ring: 12, gap: 2, blur: 4 };
+var LIMITS = { seam_bias: 12, seam_residual: 6, edited_mean: 3, untouched_max: 2, aspect: 0.01, ring: 12, gap: 2, blur: 4, cell: 16, kept_share: 0.3 };
 
 // Chamfer distance (in pixels) from each pixel to the nearest pixel where
 // inside(i) is true; 0 on those pixels.
@@ -140,6 +145,48 @@ function rgbOf(img) {
   return { width: img.width, height: img.height, components: 3, data: out };
 }
 
+// The share (0 to 1) of the masked pixels in cells that look unchanged, or
+// null when nothing is masked. Cells less than half masked are skipped.
+function keptShare(context, result, mask, scale) {
+  var blur = scaled(LIMITS.blur, scale);
+  var ab = pixels.boxBlur(rgbOf(context), blur);
+  var bb = pixels.boxBlur(rgbOf(result), blur);
+  var w = context.width;
+  var h = context.height;
+  var sum = [0, 0, 0];
+  var n = 0;
+  for (var i = 0; i < w * h; i++) {
+    if (mask.data[i] < 128) continue;
+    n++;
+    for (var c = 0; c < 3; c++) sum[c] += bb.data[i * 3 + c] - ab.data[i * 3 + c];
+  }
+  if (!n) return null;
+  var shift = sum.map(function (s) {
+    return s / n;
+  });
+  var size = LIMITS.cell;
+  var kept = 0;
+  for (var cy = 0; cy < h; cy += size) {
+    for (var cx = 0; cx < w; cx += size) {
+      var m = 0;
+      var r = 0;
+      var area = Math.min(size, w - cx) * Math.min(size, h - cy);
+      for (var y = cy; y < Math.min(h, cy + size); y++) {
+        for (var x = cx; x < Math.min(w, cx + size); x++) {
+          var k = y * w + x;
+          if (mask.data[k] < 128) continue;
+          m++;
+          for (var cc = 0; cc < 3; cc++) r += Math.abs(bb.data[k * 3 + cc] - ab.data[k * 3 + cc] - shift[cc]);
+        }
+      }
+      if (m * 2 < area) continue;
+      if (r / (m * 3) < LIMITS.seam_residual) kept += m;
+    }
+  }
+  if (!isFinite(kept)) return null;
+  return Math.round((kept / n) * 100) / 100;
+}
+
 // The seam ring: outside the mask, between gap and gap + ring pixels.
 function seam(context, result, mask, o) {
   var gap = o.gap;
@@ -196,6 +243,7 @@ function check(o) {
   out.polarity_suspect = !!(r.inside && r.outside && r.outside.mean > r.inside.mean && r.outside.mean >= LIMITS.edited_mean);
   out.seam = o.masked === false ? null : seam(o.context, o.result, o.mask, { gap: gap, ring: scaled(LIMITS.ring, o.scale), blur: scaled(LIMITS.blur, o.scale) });
   out.seam_ok = !out.seam || out.seam.residual === null || (out.seam.bias < LIMITS.seam_bias && out.seam.residual < LIMITS.seam_residual);
+  out.kept_share = o.cleared ? keptShare(o.context, o.result, o.mask, o.scale) : null;
   return out;
 }
 
@@ -236,10 +284,13 @@ function badges(c, v, o) {
       if (c.seam.bias >= LIMITS.seam_bias) out.push("Edge tone differs");
     }
     if (o.masked && ((c.seam && c.seam.residual !== null && c.seam.residual >= LIMITS.seam_residual) || c.aspect_ok === false)) out.push("May be misaligned");
-    if (o.masked && c.inside && !c.edited) out.push(c.polarity_suspect ? "Unchanged inside: the model may have read the mask inverted" : "Unchanged inside");
+    // c is a check result or the runner's summary of one (inside_mean).
+    var measured = !!c.inside || (c.inside_mean !== null && c.inside_mean !== undefined);
+    if (o.masked && measured && !c.edited) out.push(c.polarity_suspect ? "Unchanged inside: the model may have read the mask inverted" : "Unchanged inside");
+    else if (o.masked && c.kept_share !== null && c.kept_share !== undefined && c.kept_share >= LIMITS.kept_share) out.push("Part of the selection may be unchanged");
   }
   if (v && !v.untouched) out.push("Changed outside");
   return out;
 }
 
-module.exports = { LIMITS: LIMITS, distanceTo: distanceTo, diffStats: diffStats, seam: seam, check: check, bandCheck: bandCheck, verify: verify, badges: badges, toneAndResidual: toneAndResidual };
+module.exports = { LIMITS: LIMITS, distanceTo: distanceTo, diffStats: diffStats, seam: seam, keptShare: keptShare, check: check, bandCheck: bandCheck, verify: verify, badges: badges, toneAndResidual: toneAndResidual };

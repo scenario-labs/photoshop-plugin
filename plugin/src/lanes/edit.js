@@ -9,6 +9,8 @@
 //   prompt, takes,
 //   margin: "auto" (default) | "64" | "none",
 //   sample: "visible" (default) | "layer",
+//   quality: "low" | "medium" | "high" (models with a quality input),
+//   expect: "cleared" (Remove: the checks look for parts left unchanged),
 //   feather: px of the placed mask's edge (default 2),
 //   trained: null | { model_id, kind: "lora" | "composition", scale,
 //            strength (Change amount, image + strength route) } }
@@ -39,6 +41,11 @@ function sourceText(kind, ctx, sel) {
   if (kind === "selection") return "Selection " + sel.width + " x " + sel.height;
   if (kind === "layer") return 'Layer "' + (ctx.layer ? ctx.layer.name : "") + '"';
   return "All visible";
+}
+
+function qualityOk(schema, q) {
+  var p = common.param(schema, "quality");
+  return !!(p && p.enum && p.enum.indexOf(q) >= 0);
 }
 
 function editView(schema, ctx, o) {
@@ -108,6 +115,8 @@ function editView(schema, ctx, o) {
   var params = common.presetFor("edit", schema.model_id);
   for (var k in shaped.params) params[k] = shaped.params[k];
   if (schema.prompt_input && o.prompt) params[schema.prompt_input] = o.prompt;
+  // Quality (Advanced): Low, Medium or High, for models that have the input.
+  if (o.quality && !trained && qualityOk(schema, o.quality)) params.quality = o.quality;
   if (trained) {
     if (trained.kind === "composition") params.modelId = trained.model_id;
     else {
@@ -140,6 +149,8 @@ function editView(schema, ctx, o) {
     margin: marginPx,
     feather: feather
   };
+  // Remove: the check also looks for parts of the selection left as they were.
+  if (o.expect === "cleared" && sel) target.expect = "cleared";
   view.request = {
     lane: "edit",
     model_id: schema.model_id,

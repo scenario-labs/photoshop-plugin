@@ -1,11 +1,11 @@
 # Wireframes (spec v1)
 
-Status: draft for review, revision 5, 2026-10-19. Companion to [SPEC.md](SPEC.md), section 3. Section numbers here follow the screen list in SPEC 3.15.
+Status: draft for review, revision 6, 2026-10-20 (sections 2, 3, 5 to 8 and 10 redrawn for the creation panel, FLOWS v2). Companion to [SPEC.md](SPEC.md), section 3. Section numbers here follow the screen list in SPEC 3.15.
 
-- Frames are drawn at the default docked width, 320 px, as 40 columns of 8 px. Section 2 also draws the 280 px minimum (35 columns); below 380 px the lane tabs show icons with tooltips and only the chosen tab keeps its label.
-- `[ Label ]` is a button, `[v]` a dropdown, `( )` and `(o)` radio buttons, `[ ]` and `[x]` checkboxes, `(Chip)` a filter chip, `[th]` a thumbnail, `>` a collapsed row, `v` an expanded row.
-- CU figures are placeholders (`N CU`, `M CU`). Model names are placeholders: the plugin shows names and descriptions from the Scenario catalog. Project names, file names and key endings are invented examples.
-- UXP has no CSS transitions, so state changes are immediate; every progress bar carries text. Cards and notices are inline banners in the panel's flow, never overlays near a text field. Only the spend confirmation is a modal dialog.
+- Frames are drawn at the default docked width, 320 px, as 40 columns of 8 px. Section 2 also draws the 280 px minimum (35 columns), where action chips and composer chips wrap to more rows.
+- `[ Label ]` is a button, `[v]` a dropdown, `( )` and `(o)` radio buttons, `[ ]` and `[x]` checkboxes, `(Chip)` a chip, `[th]` a thumbnail, `>` a collapsed row, `v` an expanded row.
+- CU figures in sections 2 to 8 are examples from the test fixtures; elsewhere they are placeholders (`N CU`, `M CU`). Model names are the defaults of this build; the plugin shows names and descriptions from the Scenario catalog. Project names, file names and key endings are invented examples.
+- UXP has no CSS transitions, so state changes are immediate; every progress bar carries text. Cards are inline in the panel's flow; menus open as popovers inside the panel, above or below their chip. No banners.
 
 ## 1. First run and sign-in
 
@@ -97,109 +97,158 @@ After **Copy a request for your admin**:
 +--------------------------------------+
 ```
 
-Then the ready banner, above the Image lane. It does not block anything and goes away at the first Generate or on its close button. The Image prompt holds a sample prompt, selected, so a click on Generate is the first generation:
+After sign-in the creation panel shows directly (section 2): no banner, no sample prompt. With no document open, Create image is selected and its prompt is empty, so the button reads "Fill in the prompt to see the price" until the person types.
+
+## 2. Creation panel
+
+Header, context card and action chips on top; the Takes card and Recent in the middle part, which scrolls; the composer pinned at the bottom (SPEC 3.1). The panel is one flex column whose middle part scrolls: UXP 9.4 has no `position: sticky`, CSS grid or `gap` (measured with the probe plugin). Chips, menus, popovers and the action button are plain elements: `sp-picker` does not show its value and `sp-action-button` with an icon and a label stacks them. Below 600 px of panel height, the top and the middle part scroll as one block above the composer, so the button is always visible; under 300 px of width the Model chip cuts the model name at 100 px with an ellipsis.
+
+The header is one row of 36 px that never wraps: the Scenario mark (monochrome), the project name with `v` (one line, cut with an ellipsis; the full name is its tooltip; it opens the Projects view), then the agent icon with its dot and the first connected client's name (`o` none, `*` connected, `!` needs the person; a click opens the agent popover) and **Jobs** with the number of jobs on this computer (`Jobs 2`; blue while one runs, amber when one waits for the person). Everything else is in Photoshop's panel menu `[=]`.
+
+`(Chip)` is an action chip, `((Chip))` the selected one; `[v Chip value]` a composer chip with its menu; `[th]` a thumbnail; `[*]` the settings icon.
+
+A layer, no selection (F2). Make versions is selected; its prompt may stay empty. Once the takes land, their group is selected:
 
 ```
 +--------------------------------------+
-| Ready. Describe a new image below,   |
-| or select an area and use Edit to    |
-| change it.                       [x] |
+| [S] Fall campaign v  * Claude Jobs 2 |
 +--------------------------------------+
-```
-
-## 2. Main view
-
-Header, lane tabs, lane body and results tray (they scroll; the tray ends the body and comes into view when a job changes), prompt bar (pinned at the bottom, always visible). The panel is one flex column whose middle part scrolls: UXP 9.4 has no `position: sticky`, CSS grid or `gap` (measured with the probe plugin).
-
-The header is one row that never wraps: the Scenario mark (monochrome, in the theme's text color), the project name (one line, cut with an ellipsis; the full name is its tooltip; it opens the Projects view), the agent dot (`o` none connected, `*` connected, `!` needs the person; the status is its tooltip) and the Jobs icon with a count badge (`(J2)`; the counts in words are its tooltip). Everything else is in Photoshop's panel menu `[=]`: Jobs, Projects, Settings, Connect an AI Agent, Diagnostics, Scenario Help, About, Sign Out (which opens Settings with the confirm armed).
-
-Lane tabs are one row of icons with labels. Below 380 px only the chosen tab keeps its label; every tab has a tooltip saying what the lane is for.
-
-Explanations go in tooltips, not paragraphs: the target is a chip (`(Selection 928 x 928)`), and what it means ("lands as a new layer masked to the selection; to change what is inside it, use Edit") is its tooltip. The model card shows the catalog picture, the name and one line of what the model takes; the description is its tooltip. The Image lane with a selection active:
-
-```
-+--------------------------------------+
-| [S] Fall campaign v      *  (J2) [=] |
-+--------------------------------------+
-| [Im Image] Ed Edit En Enhance Tr  Li |
-+--------------------------------------+
-| Target  (Selection 928 x 928)        |
-| +------+                             |
-| | [th] | Model name      [ Change ]  |
-| +------+ Up to 4 references . Mask   |
-|                                      |
-| References                   2 of 4  |
-| [th x] [th x] [ + ]                  |
-| > Advanced (6 settings)              |
+| +----+ Knight . Layer 1024 x 1536    |
+| |[th]| Lands above Knight as a group |
+| +----+                               |
+| ((Make versions)) (Extend canvas)    |
+| (Upscale) (Remove background) (New   |
+| layer) (More v)                      |
 | ------------------------------------ |
-| Placed: 4 takes              [ Jobs ]|
-| [t1*] [t2] [t3] [t4]                 |
-| Model name . quoted N, charged N CU  |
-| [ Keep this take ] [ More v ]        |
+| Takes and recent runs on this        |
+| document show here.                  |
 +--------------------------------------+
-| Describe the image...                |
+| [Character: Knight] [ + Reference ]  |
+| Describe the change, or leave empty  |
+| for variations                       |
+| [v No style] [v GPT Image 2.5 Flare] |
+| [v 4 takes] [v Change: Balanced]     |
+| (    Make versions . 5 CU    )   [*] |
++--------------------------------------+
+```
+
+The document reference (`Character: Knight`) shows first in the refs row of every action that takes references; a click leaves it out of this run. `+` opens: Selection, Layer, All visible, File..., then **Pin the layer as a document reference** with Character, Set, Style, Product.
+
+No document open (F3). Create image is the one action; the result opens as a new document:
+
+```
++--------------------------------------+
+| [S] Fall campaign v  o        Jobs 0 |
++--------------------------------------+
+| +----+ No document open              |
+| |[ic]| Opens as a new document       |
+| +----+ 1536 x 1024                   |
+| ((Create image))                     |
 |                                      |
-| [4 takes v] [3:2 (1536 x 1024) v]    |
-| [ Generate (N CU)                 ]  |
++--------------------------------------+
+| [ + Reference ]  Selection, layer or |
+| file                                 |
+| Describe the image                   |
+| [v 3:2 1536 x 1024] [v GPT Image 2.5 |
+| Flare] [v 4 takes]                   |
+| (Fill in the prompt to see the price)|
 +--------------------------------------+
 ```
 
-Each reference is a thumbnail chip with a remove `x`; its source, the size it is sent at and "Input reduced" are its tooltip. The `+` opens a menu: Selection, Current layer, All visible layers, File (From Library when the Library lane exists). A reference is captured when added and uploaded when Generate is clicked. In the tray, take 1 is the visible layer once placed and carries the check (`*`).
-
-The Image lane with no document open. The result opens as a new document at the Size preset:
+A selection (F1). The card names the selection and the layer; every selection action is a chip, so there is no More. Cut out subject puts the subject on a new layer, leaves the layer as it is and drops the selection in the same History state, as Layer via Copy does; the new layer is active, so the next frame is the cut-out context:
 
 ```
 +--------------------------------------+
-| [S] Fall campaign v      o  (J)  [=] |
+| +----+ Selection 928 x 640 on Harbor |
+| |[sl]| Lands inside the selection,   |
+| +----+ masked                        |
+| ((Replace inside)) (Remove) (Make    |
+| versions) (Cut out subject)          |
 +--------------------------------------+
-| [Im Image] Ed  En  Tr  Li            |
-+--------------------------------------+
-| Target  (New document 1024 x 1024)   |
-| [th] Model name          [ Change ]  |
-|      Up to 10 references . Mask      |
-| > Advanced (6 settings)              |
-+--------------------------------------+
-| A lighthouse on a cliff at sunrise,  |
-| painterly                            |
-| [1 take v]  [1:1 (1024 x 1024) v]    |
-| [ Generate (N CU)                 ]  |
+| a red-sailed fishing boat            |
+| [v No style] [v GPT Image 2.5 Flare] |
+| [v 2 takes]                          |
+| (    Replace inside . 3 CU     ) [*] |
 +--------------------------------------+
 ```
 
-Edit and Enhance with no document open, and the lanes that have nothing to run yet, show an empty state: an icon, a title, one line, and an action when there is one:
+A cut-out layer (a mask, or less than the canvas, or a Scenario cut-out): the checkerboard thumbnail, Add background first, the layer as an automatic reference. FLOWS v2 after review adds Relight to scene after Add background; it waits for the relight flow:
 
 ```
 +--------------------------------------+
-| Im [Ed Edit] En  Tr  Li              |
+| +----+ Bottle . Layer 400 x 600      |
+| |::::| Lands below Bottle at canvas  |
+| +----+ size                          |
+| ((Add background)) (Make versions)   |
+| (Upscale) (Extend canvas)            |
+| (More v)                             |
 +--------------------------------------+
-|                 [ic]                 |
-|           No document open           |
-|  Open or create a document to use    |
-|  this lane.                          |
+| [ly] [ + ]                           |
+| Describe the background              |
+| [v No style] [v GPT Image 2.5 Flare] |
+| [v 2 takes]                          |
+| (    Add background . 7 CU     ) [*] |
 +--------------------------------------+
 ```
 
-At the 280 px minimum width. Lane tabs show icons with tooltips, the chosen one keeps its label, and nothing wraps:
+More open on a layer. Groups of the actions that run in this build, each with its price; the pin adds one to the chips (at most six):
+
+```
+| (Upscale) (Remove background)        |
+| (New layer) ((More v))               |
+|           +------------------------+ |
+|           | FINISH                 | |
+|           |   Upscale this 10 CU[p]| |
+|           |   layer                | |
+|           |   One click, no prompt | |
+|           | SELECT AND CUT         | |
+|           |   Cut out to a  1 CU[p]| |
+|           |   new layer            | |
+|           +------------------------+ |
+```
+
+A chip menu open (Takes), each count with its price from a free price check; the menu opens above the composer when there is no room below:
+
+```
+|           +------------------------+ |
+|           | TAKES                  | |
+|           |   x1   One result  2 CU| |
+|           | v x2   2 results   3 CU| |
+|           |        to compare      | |
+|           |   x3   ...         4 CU| |
+|           +------------------------+ |
+| [v GPT Image 2.5 Flare] [v 2 takes]  |
+```
+
+The Model menu: **Recommended for <action>** (tagged Recommended), **Catalog . can <action>** (up to eight), then **All models...**, which opens the full list (section 4).
+
+Generating. The context card carries the progress; the panel stays usable:
+
+```
++--------------------------------------+
+| +----+ Selection 928 x 640 on Harbor |
+| |[sl]| Generating 2 takes            |
+| +----+ ==========-------------       |
+```
+
+At the 280 px minimum width the chips wrap to more rows and the composer chips to two rows; nothing scrolls sideways:
 
 ```
 +---------------------------------+
-| [S] Fall cam... v   *  (J2) [=] |
+| [S] Fall cam... v  *     Jobs 2 |
 +---------------------------------+
-| [Im Image] Ed  En  Tr  Li       |
+| +----+ Selection 928 x 640 on   |
+| |[sl]| Harbor                   |
+| +----+ Lands inside the         |
+|        selection, masked        |
+| ((Replace inside)) (Remove)     |
+| (Make versions)                 |
+| (Cut out subject)               |
 +---------------------------------+
-| Target (Selection 928 x 928)    |
-| [th] Model name    [ Change ]   |
-|      Up to 4 references . Mask  |
-| References              2 of 4  |
-| [th x] [th x] [ + ]             |
-| > Advanced (6)                  |
-+---------------------------------+
-| Placed: 4 takes        [ Jobs ] |
-| [t1*] [t2] [t3] [t4]            |
-+---------------------------------+
-| Describe the image...           |
-| [4 takes v] [3:2 (1536 x 1...v] |
-| [ Generate (N CU)            ]  |
+| a red-sailed fishing boat       |
+| [v No style] [v GPT Image 2.5   |
+| Flare] [v 2 takes]              |
+| (  Replace inside . 3 CU  ) [*] |
 +---------------------------------+
 ```
 
@@ -220,119 +269,62 @@ The Projects view, from the project name in the header. Rows are list items: a c
 +--------------------------------------+
 ```
 
-## 3. Enhance lane
+## 3. Finishing actions
 
-A tool selector sits where the model card sits in other lanes. Upscale:
+One click, no prompt (SPEC 3.6). The composer says what the action does instead of a prompt field.
 
-```
-+--------------------------------------+
-| Image Edit [Enhance] Trained Library |
-+--------------------------------------+
-| Tool  [Upscale] Expand  Remove BG    |
-|                                      |
-| Source  All visible 3000 x 2000 [v]  |
-| Model   Model name       [ Change ]  |
-| Factor  [2x v]   Output 6000 x 4000  |
-| Lands   (o) New document             |
-|         ( ) Layer in this document   |
-| > Advanced (3 settings)              |
-+--------------------------------------+
-| [ Generate (N CU)                 ]  |
-+--------------------------------------+
-```
-
-A source larger than the read cap is read reduced, and the Output line says so (SPEC 5.8):
+Upscale on a layer (all visible), opening a new document:
 
 ```
 +--------------------------------------+
-| Source  All visible 9000 x 6000 [v]  |
-| Factor  [2x v]  Output 12288 x 8192  |
-|         1.4x of this document: the   |
-|         source is read at 6144 px.   |
+| +----+ Knight . Layer 1024 x 1536    |
+| |[th]| Opens as a new document       |
+| +----+ 2048 x 3072                   |
+| (Make versions) (Extend canvas)      |
+| ((Upscale)) (Remove background)      |
+| (New layer) (More v)                 |
++--------------------------------------+
+| (i) Adds detail at the larger size.  |
+|     No prompt needed.                |
+| [v x2 2048 x 3072] [v Topaz Image    |
+| Upscale]                             |
+| (       Upscale x2 . 10 CU      )    |
 +--------------------------------------+
 ```
 
-With **Selection box** as the source, **Lands** offers **Layer over the box** (the default, for detail repair) and **New document**.
-
-Expand with a model that takes a mask (the default), so every anchor and Per side work. The anchor sets where the current image sits on the new canvas:
+Extend canvas, with the target chip and where the original sits behind `[*]`:
 
 ```
+| +----+ Harbor . Layer 1024 x 1024    |
+| |[th]| Canvas grows to 1824 x 1024,  |
+| +----+ new area only                 |
 +--------------------------------------+
-| Image Edit [Enhance] Trained Library |
-+--------------------------------------+
-| Tool  Upscale [Expand]  Remove BG    |
-|                                      |
-| Model   Model name       [ Change ]  |
-|         Mask input: any anchor       |
-| Canvas  (o) Aspect   ( ) Per side    |
-| (1:1) [4:5] (3:2) (2:3) (16:9)       |
-| (9:16) (Custom)                      |
-| Anchor  [ ][ ][ ]                    |
-|         [ ][x][ ]                    |
-|         [ ][ ][ ]                    |
-| Size    3000 x 2000 to 3000 x 3750   |
-| Lands   (o) This document            |
-|         ( ) A copy of this document  |
-| > Advanced (overlap 32 px, 2 more)   |
-+--------------------------------------+
-| Describe the new area (optional)     |
-| [ Generate (N CU)                 ]  |
+| Optional: what the new area shows    |
+| [v 16:9] [v GPT Image 2.5 Flare]     |
+| [v 1 take]                           |
+| (     Extend canvas . 2 CU     ) [*] |
 +--------------------------------------+
 ```
 
-When the new canvas is larger than the model's maximum output, the warning shows before the spend (SPEC 5.8):
+A target the canvas already has puts "Already 1:1, pick another target" on the button. Remove background:
 
 ```
+| +----+ Bottle . Layer 400 x 600      |
+| |::::| Lands as a mask on Bottle     |
+| +----+                               |
 +--------------------------------------+
-| Size    6000 x 4000 to 6000 x 7500   |
-+--------------------------------------+
-| ! New area at about 51% of this      |
-|   document's resolution: the model   |
-|   outputs at most 3840 px. Upscale   |
-|   the result if you need more.       |
-+--------------------------------------+
-| [ Generate (N CU)                 ]  |
-+--------------------------------------+
-```
-
-A model with an exact output size and no placement setting:
-
-```
-+--------------------------------------+
-| Model   Model name       [ Change ]  |
-|         Exact size, no placement     |
-| Canvas  (o) Aspect   Per side (off)  |
-| Anchor  center only                  |
-|         This model expands around    |
-|         the center.                  |
+| (i) Keeps the subject and masks the  |
+|     rest. No prompt needed.          |
+| [v 851 Labs Background Remover]      |
+| (   Remove background . 1 CU   ) [*] |
 +--------------------------------------+
 ```
 
-Remove BG on a pixel layer, and on a layer that already has a mask. On the Background layer, **Mask on the layer** first converts it to a normal layer, in the same History state:
-
-```
-+--------------------------------------+
-| Image Edit [Enhance] Trained Library |
-+--------------------------------------+
-| Tool  Upscale  Expand  [Remove BG]   |
-|                                      |
-| Source  Layer "Product shot"    [v]  |
-| Model   Model name       [ Change ]  |
-| Lands   (o) Mask on the layer        |
-|         ( ) New cutout layer         |
-+--------------------------------------+
-| [ Generate (N CU)                 ]  |
-+--------------------------------------+
-| Source  Layer "Bottle"          [v]  |
-| Lands   New cutout layer             |
-|         This layer already has a     |
-|         mask; it stays as it is.     |
-+--------------------------------------+
-```
+`[*]` opens **Lands as**: Mask on the layer, or New masked layer (the only choice for a layer that already has a mask, is locked, or is text, shape, adjustment or a group).
 
 ## 4. Model picker
 
-A full panel view (text fields render above overlays in UXP, so the picker cannot float over the form). Tabs and tools come from the mapping in SPEC 3.3. Chips per tab:
+**All models...** in the Model chip's menu opens the full list as a panel view (text fields render above overlays in UXP, so a large list cannot float over the composer). Tabs and tools come from the mapping in SPEC 3.3; choosing a base model sets the Model chip of the selected action. Chips per tab:
 
 | Tab | Chips |
 |---|---|
@@ -396,339 +388,188 @@ Empty result:
 | [ Search: neon logo               ]  |
 | (Mask input x)                       |
 +--------------------------------------+
-| No models in this lane match these   |
+| No models in this tab match these    |
 | filters.                             |
 |                [ Clear filters ]     |
 +--------------------------------------+
 ```
 
-## 5. Trained lane
+## 5. Style chip
 
-The project's trained models come first, then Scenario's public ones, marked **Public**. Make new with two LoRAs stacked on their base:
+**Style** (SPEC 3.4): No style, **Match an image** (a picture as the style reference, any model), then on the edit actions (Replace inside, Make versions) a **Trained styles** group with the current project's trained models that can edit. A trained style switches the Model chip to the model it was trained on; on the image and strength route the **Change** chip shows:
+
+```
+|           +------------------------+ |
+|           | STYLE                  | |
+|           | v [st] No style        | |
+|           |        The model's own | |
+|           |        look            | |
+|           |   [im] Match an image >| |
+|           |        Style from a    | |
+|           |        picture, any    | |
+|           |        model           | |
+|           | TRAINED STYLES         | |
+|           |   [th] Ink & Wash      | |
+|           |        Trained style   | |
+|           | ---------------------- | |
+|           | Trained styles are the | |
+|           | project's trained      | |
+|           | models and run on the  | |
+|           | model they were        | |
+|           | trained on. Match an   | |
+|           | image uses a picture   | |
+|           | as the style           | |
+|           | reference, with any    | |
+|           | model.                 | |
+|           +------------------------+ |
+| [v Ink & Wash] [v FLUX.1 Dev]        |
+| [v 4 takes] [v Change: Balanced]     |
+```
+
+**Match an image** opens its sources (Selection, Layer, All visible, File...). The picture joins the refs row as a **Style** reference with `x`, and the Style chip reads "Match an image":
 
 ```
 +--------------------------------------+
-| Image Edit Enhance [Trained] Library |
-+--------------------------------------+
-| Project  Fall campaign               |
-| (o) Make new   ( ) Edit Experimental |
-|                                      |
-| Trained models (2 of 6)              |
-| [th] Brand style v3  LoRA            |
-|      Style strength [ 0.80 ] 0 to 2  |
-|                         [ Remove ]   |
-| [th] Ink outline  LoRA . Public      |
-|      Style strength [ 0.50 ] 0 to 2  |
-|                         [ Remove ]   |
-| [ + Add another ]                    |
-| Runs on FLUX.2 Dev                   |
-|                                      |
-| References (1 of 5)                  |
-| [th] [ + Add ]                       |
-| > Advanced (5 settings)              |
-+--------------------------------------+
-| Describe the image...                |
-| Takes [1 v]   Size [1:1 v]           |
-| [ Generate (N CU)                 ]  |
+| [th Style x] [ + ]                   |
+| a red-sailed fishing boat            |
+| [v Match an image]                   |
+| [v GPT Image 2.5 Flare] [v 2 takes]  |
+| (    Replace inside . 7 CU     ) [*] |
 +--------------------------------------+
 ```
 
-Edit with a LoRA whose base takes the capture as `image` plus `strength`. Two bases can run it, so **Run with** shows; **Change amount** is the base's `strength`, with its default and range from the schema:
+Under a trained style, the Model menu lists only its base:
+
+```
+|           +------------------------+ |
+|           | TRAINED STYLE BASE     | |
+|           | v [th] FLUX.1 Dev  N CU| |
+|           |   Ink & Wash is        | |
+|           |   trained on it        | |
+|           | ---------------------- | |
+|           | A trained style runs   | |
+|           | on the model it was    | |
+|           | trained on. Pick No    | |
+|           | style or Match an      | |
+|           | image in the Style     | |
+|           | chip to use another    | |
+|           | model.                 | |
+|           +------------------------+ |
+```
+
+Otherwise the Model menu shows each model's price for this document and these settings (`Free` for a zero price).
+
+## 6. Library
+
+Not in this build. Open from Library returns as a flow of the creation panel (SPEC 3.5, later flows); until then the Library stays in the web app and hosted Scenario MCP.
+
+## 7. Composer
+
+Pinned at the bottom (SPEC 3.7): the refs row (document references first, then this run's references with `x`, then `+`), the prompt with the action's placeholder or, for an action without a prompt, one line saying so, the chips (each shows its value), the button with the action and its price, and `[*]` for the action's advanced settings.
 
 ```
 +--------------------------------------+
-| Project  Fall campaign               |
-| ( ) Make new   (o) Edit Experimental |
-|                                      |
-| Source  Selection 600 x 400     [v]  |
-| Sample  All visible             [v]  |
-| [th] Mascot paint   LoRA             |
-|      Style strength [ 0.75 ]         |
-| Run with [ Z-Image            v ]    |
-| Change amount [ 0.60 ]  0 to 1       |
-|   Lower keeps closer to your layer.  |
-+--------------------------------------+
-| Edits with trained models are        |
-| experimental: check the seam badge.  |
+| [Set: Harbor] [th x] [th x] [ + ]    |
+| Describe what goes inside the        |
+| selection                            |
+| [v No style] [v GPT Image 2.5 Flare] |
+| [v 2 takes]                          |
+| (    Replace inside . 3 CU     ) [*] |
 +--------------------------------------+
 ```
 
-An edit LoRA on a base that requires reference images: in Edit the capture is the first reference; in Make new, Generate waits for a reference:
+Button labels:
+
+| Label | When |
+|---|---|
+| `Fill in the prompt to see the price` | The action needs a prompt and the field is empty |
+| `Replace inside . ...` | Price check in flight |
+| `Replace inside . 3 CU` | Exact price from a current quote |
+| `<Action> . Free` | An exact price of zero, never "0 CU" |
+| `Make versions . 2 to 4 CU` | A range |
+| `Upscale x2 . from 10 CU` | A `from` price; always confirmed |
+| `Sending` | While the request is being sent |
+| `Not available here` | No price; a longer reason shows under the button |
+
+Advanced settings (`[*]`) for an edit:
+
+```
+|      +-----------------------------+ |
+|      | ADVANCED . GPT Image 2.5    | |
+|      | Flare                       | |
+|      | Context margin [Auto][64 px]| |
+|      |                 [None]      | |
+|      | The model sees [All visible]| |
+|      |                 [Current    | |
+|      |                 layer]      | |
+|      | Quality  [High][Medium][Low]| |
+|      +-----------------------------+ |
+```
+
+**Quality** shows for models whose quality input offers High, Medium and Low (the GPT Image 2.5 models); Medium is the default and the price follows it.
+
+## 8. Selection edit and the Takes card
+
+F1 after the run landed. The takes are a group above Harbor, masked to the selection, take 1 visible. The Takes card shows in the middle part; a click on a tile shows that take in the document (one History state):
 
 ```
 +--------------------------------------+
-| (o) Make new   ( ) Edit Experimental |
-| [th] Product relight  LoRA . Edit    |
-|      Runs on Qwen Edit 2511          |
-| References: required  [ + Add ]      |
-| This model edits an image. Add a     |
-| reference, or use Edit.              |
-| [ Generate  disabled              ]  |
+| +----+ Selection 928 x 640 on Harbor |
+| |[sl]| Lands inside the selection,   |
+| +----+ masked                        |
+| ((Replace inside)) (Remove) ...      |
+| ------------------------------------ |
+| +----------------------------------+ |
+| | a red-sailed fishing boat 2 takes| |
+| | GPT Image 2.5 Flare . 3 CU       | |
+| | +-------------+ +-------------+  | |
+| | | [t1]   (o)1 | | [t2]      2 |  | |
+| | |   Edges ok  | | May not line|  | |
+| | +-------------+ +-------------+  | |
+| | [ Keep take 1 ] [ Refine ]       | |
+| | [ More like this ]               | |
+| +----------------------------------+ |
+| Recent on this document              |
+| [r1] [r2] [r3]                       |
++--------------------------------------+
+| (composer)                           |
 +--------------------------------------+
 ```
 
-A style LoRA on a base that takes reference images edits through the reference route (SPEC 3.4):
+`(o)` marks the take that shows; the badge is `Edges ok`, `May not line up` or, after Remove, `Part unchanged` (part of the selection came back as it was). **Keep take N** removes the other takes in one History state; their files stay in the Output Folder and in Jobs. **Refine** (tooltip "Keeps this take, then edits it") keeps the take that shows, loads the run's selection back from its mask and selects Replace inside with an empty prompt; the card's detail line reads "Starting from take 2 . lands inside the selection". **More like this** runs again with the shown take as a reference.
+
+The group selected in the Layers panel, now or after a restart: the Takes context.
 
 ```
 +--------------------------------------+
-| ( ) Make new   (o) Edit Experimental |
-| [th] Brand style v3  LoRA            |
-|      Runs on FLUX.2 Dev              |
-| References  Capture + 1 of 5         |
-| [cap] [th] [ + Add ]                 |
+| +----+ 2 takes . a red-sailed fishing|
+| |[t1]| boat                          |
+| +-2--+ Showing take 1 . click a take |
+|        to compare                    |
+| ((Compare takes)) (More like this)   |
+| (Refine) (Upscale kept take)         |
+| ------------------------------------ |
+| (the Takes card)                     |
 +--------------------------------------+
-| Say what to change and what to keep  |
-+--------------------------------------+
-```
-
-A trained model whose base can't take the capture, and one this version does not know:
-
-```
-+--------------------------------------+
-| (o) Make new   ( ) Edit (off)        |
-| This model can't edit an area. Use   |
-| Make new, then use the result as a   |
-| reference in Edit.                   |
-+--------------------------------------+
-| [th] Old style   (grayed)            |
-|      This trained model type isn't   |
-|      supported by this version of    |
-|      the plugin.                     |
+| (i) Click a take above to show it in |
+|     the document, then Keep it.      |
 +--------------------------------------+
 ```
 
-No trained models in this project:
+A run that did not land as takes (failed, waiting, or a result that opened as a new document) shows one line and **Done**:
 
 ```
-+--------------------------------------+
-| No trained models in project Fall    |
-| campaign yet. Scenario's public      |
-| models are listed below; models      |
-| trained in other projects appear     |
-| when you switch project.             |
-| [ Open Scenario ] [ Switch project ] |
-+--------------------------------------+
-```
-
-## 6. Library lane
-
-Browsing lists the project's images, newest first. Selecting a thumbnail shows its actions:
-
-```
-+--------------------------------------+
-| Image Edit Enhance Trained [Library] |
-+--------------------------------------+
-| Project  Fall campaign               |
-| Collection [ All images         v ]  |
-| [ Search images                   ]  |
-| [ ] Show plugin uploads              |
-+--------------------------------------+
-| [th]       [th]       [th]           |
-| [th]       [th*]      [th]           |
-| [th]       [th]       [th]           |
-|             [ Load more ]            |
-+--------------------------------------+
-| logo-mark . 2048 x 2048 . Oct 12     |
-| [ Place ]  [ Use as reference v ]    |
-| [ Open as document ]  [ Details ]    |
-+--------------------------------------+
-```
-
-The plugin's own uploads (captures, masks, references) are hidden unless **Show plugin uploads** is on. **Use as reference** offers "in Image", "in Edit" and "in Trained". **Place** lands the asset at native size, or contained in the selection box or the canvas when larger, never enlarged. Search that finds nothing:
-
-```
-+--------------------------------------+
-| [ Search: harbor night            ]  |
-+--------------------------------------+
-| No images match "harbor night".      |
-| Search can miss assets.              |
-|                 [ Show all ]         |
-+--------------------------------------+
-| No images in project Fall campaign   |
-| yet.                                 |
-+--------------------------------------+
-| This collection has no images.       |
-+--------------------------------------+
-```
-
-## 7. Prompt bar
-
-Fixed at the bottom of every generating lane. Cmd+Enter (Ctrl+Enter on Windows) generates when the price is current; Enter adds a line; Up and Down in an empty field recall recent prompts. The button states:
-
-```
-+--------------------------------------+
-| A coastal town at dusk, warm window  |
-| lights, wet cobblestones             |
-| Takes [2 v]   Size [3:2 v]           |
-+--------------------------------------+
-| [ Generate (N CU)                 ]  |
-|   exact price, quote valid 120 s     |
-+--------------------------------------+
-| [ Generate (N CU)                 ]  |
-|   No refund if it fails              |
-+--------------------------------------+
-| [ Generate (N to M CU)            ]  |
-|   the charge varies within a bound   |
-+--------------------------------------+
-| [ Generate (from N CU)            ]  |
-|   charge can be higher; always       |
-|   confirmed                          |
-+--------------------------------------+
-| [ Sending...                      ]  |
-|   disabled while this request is     |
-|   sent                               |
-+--------------------------------------+
-| [ Checking price...               ]  |
-+--------------------------------------+
-| [ Generate (price after upload)   ]  |
-|   this model prices the uploaded     |
-|   image; first click uploads it      |
-+--------------------------------------+
-| [ Confirm (N CU)                  ]  |
-|   selection uploaded; price exact    |
-+--------------------------------------+
-| [ Price unavailable               ]  |
-|   Prompt is required by this model.  |
-+--------------------------------------+
-| [ Generate (12.4K CU)             ]  |
-|   K and M from 10,000 CU             |
-+--------------------------------------+
-```
-
-## 8. Selection edit
-
-The Edit lane with a selection, on a 16-bit document. The source chip follows the selection (coalesced at 200 ms). The context is shaped to the model's size inputs (SPEC 5.8), and the capture counts as the first reference when the model edits its first reference. The capture is recorded when Generate is clicked, so changing the selection afterwards does not change the job:
-
-```
-+--------------------------------------+
-| [S] Fall campaign v  * Jobs 2    [=] |
-+--------------------------------------+
-| Image [Edit] Enhance Trained Library |
-+--------------------------------------+
-| Source  Selection 928 x 928     [v]  |
-| Sample  All visible             [v]  |
-| Margin [auto v] 464 px  Feather 2 px |
-| Context 1856 x 1856, shaped to model |
-| ! 16-bit document: edits are 8-bit   |
-|   sRGB inside the selection.         |
-|                                      |
-| Model   Model name       [ Change ]  |
-|         Mask input                   |
-| References  Capture + 1 of 10        |
-| [cap] [th] [ + Add ]                 |
-| > Advanced (5 settings)              |
-+--------------------------------------+
-| Replace the sky with dusk clouds     |
-|                                      |
-| Takes [2 v]                          |
-| [ Generate (N CU)                 ]  |
-+--------------------------------------+
-```
-
-Without a selection:
-
-```
-+--------------------------------------+
-| Source  Layer "Background copy" [v]  |
-|         No selection: edits the      |
-|         whole layer, lands unmasked. |
-+--------------------------------------+
-```
-
-While the job runs, the panel stays usable and the person can keep working in the document:
-
-```
-+--------------------------------------+
-| Edit "dusk-sky"                      |
-| Uploading selection        [====  ]  |
-+--------------------------------------+
-| Edit "dusk-sky"                      |
-| Generating 1 of 2          [==    ]  |
-|                           [ Cancel ] |
-+--------------------------------------+
-| Edit "dusk-sky"                      |
-| Downloading 2 of 2         [===== ]  |
-+--------------------------------------+
-```
-
-Results landed as a group with take 1 visible and the mask on the group. Clicking a thumbnail shows that take. The selection is left as it was. **More** offers Upscale, Remove BG, Expand, Use as reference and Open as document with this take as the source:
-
-```
-+--------------------------------------+
-| v Latest: 2 takes, placed            |
-| [t1*] [t2]                           |
-| t1  Seam ok                          |
-| t2  Edge tone differs                |
-| [ Keep this take ]  [ Details ]      |
-| [ Reuse settings ]  [ More v ]       |
-+--------------------------------------+
-| Placed as "Scenario edit dusk-sky    |
-| (2 takes)" at the top of poster.psd, |
-| masked to the selection. Ctrl+Z      |
-| undoes it in one step.               |
-+--------------------------------------+
-```
-
-A job whose document is open but not active waits in the tray:
-
-```
-+--------------------------------------+
-| Ready for poster.psd: 2 takes        |
-| [t1] [t2]                            |
-| [ Place ]  [ Open as document ]      |
-+--------------------------------------+
-```
-
-After the first placed result, once:
-
-```
-+--------------------------------------+
-| Prompts and prices are saved in      |
-| layer metadata and travel with the   |
-| PSD. Settings > Results can leave    |
-| them out.                            |
-| Agents can work here too:            |
-| [ Connect a client ]        [ OK ]   |
-+--------------------------------------+
-```
-
-Special cases:
-
-```
-+--------------------------------------+
-| ! Quick Mask is on.                  |
-|   [ Use Quick Mask as selection ]    |
-+--------------------------------------+
-| ! Layer "Sky" is hidden. Show it to  |
-|   use it as the source.              |
-|   [ Show layer ]                     |
-+--------------------------------------+
-| ! Selection is too small to edit.    |
-+--------------------------------------+
-| ! The canvas changed since this edit |
-|   started.                           |
-|   [ Place unmasked ]                 |
-|   [ Open as document ]               |
-+--------------------------------------+
-| ! Unchanged inside: the model may    |
-|   have read the mask inverted.       |
-|   [ Details ]                        |
-+--------------------------------------+
-| ! Pixels outside the selection       |
-|   changed.                [ Undo ]   |
-+--------------------------------------+
-| ! May be misaligned: the result's    |
-|   shape differs; placed inside the   |
-|   box.                               |
-+--------------------------------------+
-| ! Input reduced to N px to fit the   |
-|   upload limit.                      |
-+--------------------------------------+
+| +----------------------------------+ |
+| | a red-sailed fishing boat        | |
+| | GPT Image 2.5 Flare . 3 CU       | |
+| | [th] Failed: <Scenario's text>   | |
+| |                        [ Done ]  | |
+| +----------------------------------+ |
 ```
 
 ## 9. Details
 
-From a tray card, a Jobs row, the header menu or the chip that appears when the active layer carries Scenario metadata:
+From a Jobs row or the panel menu (not in this build):
 
 ```
 +--------------------------------------+
@@ -781,47 +622,57 @@ When the document left prompts or prices out, those rows read "left out of this 
 
 ## 10. Approvals
 
-The person's click on a priced button is the approval. Above the confirm limit (Settings > Spending, default 100 CU, compared with M for a range), and for every `from` price, a modal dialog:
+The person's click on a priced button is the approval. Above the confirm limit (Settings > Spending, default 100 CU, compared with M for a range), and for every `from` price, a confirm card opens in the composer, above the button, which waits for it:
 
 ```
 +--------------------------------------+
-| Confirm spend                        |
-+--------------------------------------+
-| This generation costs N CU, above    |
-| your confirm limit of 100 CU.        |
-|                                      |
-| Model name . 4 takes . 4096 x 4096   |
-|                                      |
-| [ Cancel ]      [ Generate (N CU) ]  |
-+--------------------------------------+
-```
-
-For a range the dialog reads "This generation costs N to M CU; M is above your confirm limit" with **Generate (N to M CU)**. When the model gives no refund on failure, the dialog adds "No refund if it fails".
-
-For a `from` price, whatever the limit:
-
-```
-+--------------------------------------+
-| Confirm spend                        |
-+--------------------------------------+
-| This generation costs from N CU.     |
-| The charge can be higher; Scenario   |
-| gives no upper bound for this model. |
-|                                      |
-| [ Cancel ] [ Generate (from N CU) ]  |
+| a lighthouse at dusk                 |
+| [v 3:2 1536 x 1024] [v GPT Image 2.5 |
+| Flare] [v 4 takes]                   |
+| +----------------------------------+ |
+| | This costs 150 CU, above your    | |
+| | confirm limit of 100 CU.         | |
+| |   [ Cancel ] [ Create image .    | |
+| |                150 CU ]          | |
+| +----------------------------------+ |
+| (   Create image . 150 CU    )   [*] |
 +--------------------------------------+
 ```
 
-When the exact price after upload differs from the price shown on the button:
+For a range the card reads "This costs N to M CU; M CU is above your confirm limit of 100 CU." When the model gives no refund on failure, the card adds "No refund if it fails."
+
+For a `from` price, whatever the limit, the card reads "This costs from N CU. The charge can be higher; Scenario gives no upper bound for this model."
+
+When the exact price after upload differs from the price on the button, the job waits for approval and the card reads:
+
+```
+| +----------------------------------+ |
+| | Price changed after upload. Now  | |
+| | 5 CU (was 2 CU). Nothing was     | |
+| | spent.                           | |
+| |     [ Cancel ] [ Approve . 5 CU ]| |
+| +----------------------------------+ |
+```
+
+**Cancel** marks the job not sent ("Not sent: Declined."); nothing is charged.
+
+An agent asks to spend (F5). The card sits above the composer only while a request exists; the header's agent icon shows who is connected:
 
 ```
 +--------------------------------------+
-| Price changed after upload.          |
-| Now N CU (was M CU). Nothing was     |
-| spent.                               |
-| [ Cancel ]      [ Generate (N CU) ]  |
+| +----------------------------------+ |
+| | * Claude wants to                | |
+| | Replace inside the selection on  | |
+| | Harbor, 2 takes                  | |
+| | "a red-sailed fishing boat"      | |
+| | GPT Image 2.5 Flare . 3 CU       | |
+| |        [ Decline ] [ Approve ]   | |
+| +----------------------------------+ |
+| (composer)                           |
 +--------------------------------------+
 ```
+
+**Decline** tells the agent and spends nothing ("Declined. The agent was told, and nothing was spent."). Approved runs land in Takes like the person's own, marked with the agent's name. Agent spending runs through the agent link (M6); until then nothing raises the card.
 
 An agent's first upload from a document (or a chosen file) in its session:
 
@@ -840,23 +691,7 @@ An agent's first upload from a document (or a chosen file) in its session:
 +--------------------------------------+
 ```
 
-An agent asks to spend, with Agent spending set to **Ask each time** (the default). The card sits at the top of the panel and in Jobs:
-
-```
-+--------------------------------------+
-| ! Claude Code asks to spend N CU     |
-+--------------------------------------+
-| Edit . Model name . 2 takes          |
-| "Replace the sky with dusk clouds"   |
-| Inputs  [ctx] [mask]                 |
-| Target  poster.psd, above Sky        |
-| Client name as reported by the       |
-| client.                              |
-| [ Decline ]     [ Approve (N CU) ]   |
-+--------------------------------------+
-```
-
-The card and its button state the price kind: "asks to spend N to M CU" with **Approve (N to M CU)**, or "asks to spend from N CU, no upper bound" with **Approve (from N CU)**. A `from` price shows this card even under an allowance. Each client has one pending card at a time: later requests wait behind it, and the card offers **Decline all from Claude Code**. A card expires after 10 minutes, or when the client's session ends.
+With Agent spending set to **Ask each time** (the default), each request raises the card above; the card states the price kind ("N to M CU", "from N CU, no upper bound"). Each client has one pending card at a time, and a card expires after 10 minutes or when the client's session ends.
 
 The person gives an allowance in Settings > Agents (section 13). While it runs, the header shows what is left, and **End** stops it:
 
@@ -880,7 +715,27 @@ A charge above its quote ends the allowance:
 
 ## 11. Jobs
 
-Opened from the Jobs icon in the header or the panel menu. **On this computer** is the ledger:
+**Jobs** in the header opens the popover first (SPEC 3.11):
+
+```
+|            +-----------------------+ |
+|            | JOBS ON THIS COMPUTER | |
+|            | v Remove BG "knight"  | |
+|            |   10:42 . 1 CU        | |
+|            |   Image "harbor key"  | |
+|            |   Unknown . 09:58 .   | |
+|            |   2 CU                | |
+|            | --------------------- | |
+|            | Every file stays in   | |
+|            | the output folder,    | |
+|            | kept or not.          | |
+|            |   All jobs            | |
+|            |   Place, open or      | |
+|            |   resolve a job       | |
+|            +-----------------------+ |
+```
+
+A row or **All jobs** opens the Jobs view, also reachable from the panel menu. **On this computer** is the ledger:
 
 ```
 +--------------------------------------+
@@ -1015,8 +870,8 @@ Connection, documents and jobs:
 | resume when the connection returns.  |
 |                        [ Retry ]     |
 +--------------------------------------+
-| This lane can't read this document's |
-| color mode.                          |
+| This action can't read this          |
+| document's color mode.               |
 |                 [ Make RGB copy ]    |
 +--------------------------------------+
 | 32-bit documents are not supported   |

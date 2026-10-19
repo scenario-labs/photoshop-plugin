@@ -204,7 +204,7 @@ function createRunner(o) {
   function targetRecord(a) {
     var t = a.req.target || {};
     var out = { kind: t.kind || null, session: o.session || null, sample: t.sample || null };
-    var keep = ["canvas", "upload", "layer_id", "selection", "margin", "feather", "source", "read", "output", "lands", "expand", "route", "overlap", "anchor", "mask_box", "background"];
+    var keep = ["canvas", "upload", "layer_id", "selection", "margin", "feather", "source", "read", "output", "lands", "expand", "route", "overlap", "anchor", "mask_box", "background", "insert"];
     for (var i = 0; i < keep.length; i++) if (t[keep[i]] !== undefined) out[keep[i]] = JSON.parse(JSON.stringify(t[keep[i]]));
     if (t.kind === "new_document") {
       out.width = t.width;
@@ -778,7 +778,10 @@ function createRunner(o) {
     if (rec.lane === "image") {
       var mask = t.kind === "selection" ? memo.mask || null : null;
       if (t.kind === "selection" && !mask) notes.push("Placed unmasked: the selection mask is kept until Photoshop quits.");
-      return { document: doc, box: box, fit: "cover", mask: mask, notes: notes };
+      // New layer lands above the active layer, Add background below it
+      // (the panel's actions, SPEC 3).
+      var ins = t.layer_id && (t.insert === "above" || t.insert === "below") ? { layer_id: t.layer_id, below: t.insert === "below" } : null;
+      return { document: doc, box: box, fit: "cover", mask: mask, insert: ins, notes: notes };
     }
     if (rec.lane === "edit") {
       var m = null;
@@ -834,7 +837,10 @@ function createRunner(o) {
       if (!sameCanvas) throw canvasChanged();
       var src = rec.inputs && rec.inputs.capture ? rec.inputs.capture.source_path : null;
       if (t.lands === "new_layer" && !src) throw err("Internal", "The source pixels of this cutout were not saved; use Open as document.");
-      return { document: doc, box: box, fit: "box", mask: null, cutout: { layer_id: t.layer_id, background: !!t.background, lands: t.lands, box: box, mask_box: t.mask_box ? boxOf(t.mask_box) : box, source_path: src }, notes: notes };
+      // A cut-out of a selection lands as a new layer and drops the
+      // selection, as Layer via Copy does (FLOWS v2, F1).
+      var drop = t.source === "selection" && t.lands === "new_layer";
+      return { document: doc, box: box, fit: "box", mask: null, cutout: { layer_id: t.layer_id, background: !!t.background, lands: t.lands, box: box, mask_box: t.mask_box ? boxOf(t.mask_box) : box, source_path: src, drop_selection: drop }, notes: notes };
     }
     return { document: doc, box: box, fit: "box", mask: null, notes: notes };
   }
@@ -869,7 +875,8 @@ function createRunner(o) {
           scale: ck.scale,
           shaped: t.upload ? { width: t.upload[0], height: t.upload[1] } : null,
           result_size: outputs[i] ? { width: outputs[i].width, height: outputs[i].height } : null,
-          masked: !!where.mask && result.masked
+          masked: !!where.mask && result.masked,
+          cleared: t.expect === "cleared"
         });
         out.checks.push(summary(c));
       }
@@ -906,7 +913,8 @@ function createRunner(o) {
       inside_mean: c.inside ? c.inside.mean : null,
       outside_mean: c.outside ? c.outside.mean : null,
       seam: c.seam ? { bias: c.seam.bias, residual: c.seam.residual } : null,
-      seam_ok: c.seam_ok
+      seam_ok: c.seam_ok,
+      kept_share: c.kept_share === undefined ? null : c.kept_share
     };
   }
 

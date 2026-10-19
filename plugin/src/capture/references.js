@@ -99,8 +99,9 @@ function createReferences(o) {
   }
 
   // source: "selection" | "layer" | "visible". modelId picks the encoding,
-  // maxLong the input size. Resolves a reference.
-  async function capture(source, docId, modelId, maxLong) {
+  // maxLong the input size, layerId a layer other than the active one (a
+  // document reference). Resolves a reference.
+  async function capture(source, docId, modelId, maxLong, layerId) {
     var size = o.host.documentSize(docId);
     if (!size) throw invalid("Open or create a document to add a reference from it.");
     maxLong = maxLong || MAP.capture.default_long_side_px;
@@ -121,8 +122,8 @@ function createReferences(o) {
       h = req.bounds.height;
       label = "Selection " + w + " x " + h;
     } else if (source === "layer") {
-      var layer = await o.host.activeLayerInfo(size.id);
-      if (!layer) throw invalid("Select a layer first.");
+      var layer = layerId && typeof o.host.layerInfo === "function" ? await o.host.layerInfo(size.id, layerId) : await o.host.activeLayerInfo(size.id);
+      if (!layer) throw invalid(layerId ? "The reference layer is gone from this document." : "Select a layer first.");
       if (layer.visible === false) throw invalid('Layer "' + layer.name + '" is hidden. Show it to use it as the source.');
       req.layer_id = layer.id;
       if (layer.bounds && layer.bounds.width > 0 && layer.bounds.height > 0) {

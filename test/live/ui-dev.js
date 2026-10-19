@@ -11,9 +11,13 @@
 //   node test/live/ui-dev.js width '{"px":400,"shift":120}'
 //   node test/live/ui-dev.js capture out.png   silent capture of Photoshop's main
 //                                              window (needs uv; never activates it)
-//   node test/live/ui-dev.js demo '{"what":"refs","args":{"images":[{"file":"a.jpg","label":"File"}]}}'
-//                                              sample states (plugin/src/dev/ui-demo.js);
+//   node test/live/ui-dev.js demo '{"what":"failure"}'
+//                                              sample states of the account views and
+//                                              Jobs rows (plugin/src/dev/ui-demo.js);
 //                                              each {"file": path} is sent as base64
+//   node test/live/ui-dev.js makedoc|select|click|prompt|pop|state|inspect|adopt|closedoc '{...}'
+//                                              drives the creation panel on documents
+//                                              the loop makes (AGENTS.md, Panel UI)
 //
 // Any other first argument is sent as a command with the JSON that follows
 // (see ui-loop.js for the list). The loop exists only in development builds;

@@ -4,18 +4,8 @@
 // (helper, port, token) is said only under Settings > Connect an AI agent >
 // Details.
 
-var LANES = [
-  { id: "image", label: "Image", purpose: "Image: make a new image from a prompt" },
-  { id: "edit", label: "Edit", purpose: "Edit: change what is inside a selection" },
-  { id: "enhance", label: "Enhance", purpose: "Enhance: upscale, expand, remove a background" },
-  { id: "trained", label: "Trained", purpose: "Trained: your project's own models" },
-  { id: "library", label: "Library", purpose: "Library: your project's images" }
-];
-
 // SPEC 2.6: a client that has not sent its name yet shows as this.
 var DEFAULT_NAME = require("../../../shared/protocol.json").sessions.default_name;
-
-var NOT_BUILT = "Not available in this version yet.";
 
 var AGENTS = {
   intro: "Let an AI agent such as Claude Code, Codex or Cursor use Scenario in this Photoshop.",
@@ -48,6 +38,7 @@ function describeLink(link) {
       var names = clientNames(link.clients || []);
       return {
         dot: "on",
+        names: names,
         headline: names.length ? "Agent connected: " + names.join(", ") : "Agent link ready",
         detail: names.length ? "Agents can read the open documents' titles." : "The agent link is running; its agent has not started a session yet."
       };
@@ -82,4 +73,4 @@ function maskToken(token, shown) {
   return "...." + token.slice(-4);
 }
 
-module.exports = { LANES: LANES, NOT_BUILT: NOT_BUILT, AGENTS: AGENTS, describeLink: describeLink, maskToken: maskToken };
+module.exports = { AGENTS: AGENTS, describeLink: describeLink, maskToken: maskToken };

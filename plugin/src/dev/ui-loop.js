@@ -10,17 +10,33 @@
 //
 // Commands: ping; reload (reloads the panel, which reads index.html,
 // styles.css and dist/main.js again from the installed plugin folder); view
-// (shows a view, a lane, a tool or the model picker); width (constrains the
+// (shows a view, an action or the model picker); width (constrains the
 // panel's root to a width, or shifts it left, to look at widths other than
 // the docked one); scroll; metrics (the box of every element with an id);
 // demo (fills a view with sample data through the panel's own render code,
-// dev/ui-demo.js);
+// dev/ui-demo.js, for pictures made for the docs only);
 // menu (the panel menu items, and runs one of them).
+//
+// Driving the real creation panel, on documents the loop makes itself (it
+// never touches another document): makedoc (a new document from a fixture
+// in the data folder, with a selection), select (sets or drops the selection
+// of its document), state (the controller's state and the model the view
+// draws), click (an element by id, or by a data attribute and its value, as
+// a person would), prompt (types into the prompt), pop (opens a chip menu by
+// kind, or closes it), inspect (its document's layers, masks, Scenario
+// metadata and History state), adopt (takes on a document that a run
+// started from this loop opened, such as Create image's new document, so it
+// can be inspected and closed), closedoc (closes the documents it made,
+// without saving). The list of documents it made survives a reload of the
+// panel (dev-ui-made.json), so a reload never strands one.
 
 var uiDemo = require("./ui-demo.js");
 
 var COMMAND = "dev-ui-command.json";
 var RESULT = "dev-ui-result.json";
+// The documents the loop made, kept across panel reloads so a reload never
+// leaves one it cannot close.
+var MADE = "dev-ui-made.json";
 var POLL_MS = 500;
 
 function rect(el) {
@@ -34,6 +50,30 @@ function start(o) {
   var doc = o.doc;
   var busy = false;
   var stopped = false;
+  var made = [];
+  var startedAt = new Date().toISOString();
+  var madeRead = null;
+
+  // Ids from before a reload count only while that document is still open.
+  async function loadMade() {
+    try {
+      var text = await host.readDataText(MADE);
+      var saved = text ? JSON.parse(text) : null;
+      var open = typeof host.listDocuments === "function" ? host.listDocuments() : [];
+      var ids = {};
+      for (var i = 0; i < open.length; i++) ids[open[i].id] = true;
+      if (saved && Array.isArray(saved.ids)) {
+        for (var j = 0; j < saved.ids.length; j++) if (ids[saved.ids[j]] && made.indexOf(saved.ids[j]) < 0) made.push(saved.ids[j]);
+      }
+      if (saved && typeof saved.since === "string" && made.length) startedAt = saved.since;
+    } catch (e) {
+      // nothing saved
+    }
+  }
+
+  function saveMade() {
+    return host.writeDataText(MADE, JSON.stringify({ ids: made, since: startedAt }));
+  }
 
   // UXP keeps a hidden element's last box, so visibility is read from the
   // display of the element and its parents.
@@ -95,12 +135,8 @@ function start(o) {
       app.picker.open(cmd.tab || "image", cmd.tool || null);
     } else if (cmd.name === "main") {
       if (app.accountPanel) app.accountPanel.showView("main");
-      if (cmd.lane && app.panel) app.panel.selectLane(cmd.lane);
-      if (cmd.tool) {
-        var b = doc.getElementById("tool-" + cmd.tool);
-        if (b) b.click();
-      }
-      if (app.lanes) app.lanes.activate();
+      if (app.controller) app.controller.activate();
+      if (cmd.action && app.controller) app.controller.selectAction(cmd.action);
     } else if (app.accountPanel) {
       app.accountPanel.showView(cmd.name);
     }
@@ -124,6 +160,88 @@ function start(o) {
       return { demo: "link" };
     }
     return { demo: cmd.what, out: await uiDemo.run(cmd.what, cmd.args || {}, { host: host, app: o.app, doc: doc }) };
+  }
+
+  function live() {
+    if (!o.app.devLive || typeof o.app.devLive.makeDocument !== "function") throw new Error("the dev live run is not available");
+    return o.app.devLive;
+  }
+
+  function own(id) {
+    var d = id === undefined || id === null ? made[made.length - 1] : Number(id);
+    if (made.indexOf(d) < 0) throw new Error("not a document this loop made");
+    return d;
+  }
+
+  function find(cmd) {
+    if (cmd.id) return doc.getElementById(cmd.id);
+    var all = doc.querySelectorAll("[" + cmd.attr + "]");
+    for (var i = 0; i < all.length; i++) if (all[i].getAttribute(cmd.attr) === String(cmd.value) && !hidden(all[i])) return all[i];
+    return null;
+  }
+
+  async function drive(cmd) {
+    var app = o.app;
+    switch (cmd.cmd) {
+      case "makedoc": {
+        var id = await live().makeDocument(cmd.document, cmd.selection || null, cmd.name || "Scenario panel check");
+        made.push(id);
+        await saveMade();
+        return { document_id: id };
+      }
+      case "select":
+        return { selection: await live().select(own(cmd.document_id), cmd.selection || null) };
+      case "state":
+        return { state: app.controller.state(), model: app.controller.model(), pop: app.createView ? app.createView.popKind() : null };
+      case "click": {
+        var el = find(cmd);
+        if (!el) throw new Error("no such element shown");
+        el.click();
+        return { clicked: true };
+      }
+      case "prompt": {
+        var p = doc.getElementById("prompt");
+        if (p) p.value = String(cmd.text || "");
+        app.controller.setPrompt(String(cmd.text || ""));
+        return { prompt: String(cmd.text || "") };
+      }
+      case "pop":
+        if (cmd.close) app.createView.closePop();
+        else await app.createView.openPop(cmd.kind);
+        return { pop: app.createView.popKind() };
+      case "adopt": {
+        // Only a document that a job created after the loop started opened
+        // as its result (a new-document target), never one the person opened.
+        var want = Number(cmd.document_id);
+        var recs = app.ledger ? app.ledger.all() : [];
+        var ok = false;
+        for (var i = 0; i < recs.length; i++) {
+          var r = recs[i];
+          var t = r.target || {};
+          var opened = t.kind === "new_document" || (t.kind === "upscale" && t.lands === "new_document");
+          if (opened && r.created_at >= startedAt && r.placement && r.placement.document_id === want) ok = true;
+        }
+        if (!ok) throw new Error("not a document opened by a run of this loop");
+        if (made.indexOf(want) < 0) made.push(want);
+        await saveMade();
+        return { adopted: want };
+      }
+      case "inspect":
+        return await live().inspect(own(cmd.document_id));
+      case "composite":
+        return { path: await live().composite(own(cmd.document_id), String(cmd.path || "dev-live/panel-composite.png")) };
+      case "closedoc": {
+        var ids = cmd.all ? made.slice() : [own(cmd.document_id)];
+        await live().closeDocs(ids);
+        made = made.filter(function (x) {
+          return ids.indexOf(x) < 0;
+        });
+        await saveMade();
+        return { closed: ids };
+      }
+      default:
+        return null;
+    }
   }
 
   function menu(cmd) {
@@ -153,8 +271,11 @@ function start(o) {
         return demo(cmd);
       case "menu":
         return menu(cmd);
-      default:
-        throw new Error("unknown command " + cmd.cmd);
+      default: {
+        var out = await drive(cmd);
+        if (out === null) throw new Error("unknown command " + cmd.cmd);
+        return out;
+      }
     }
   }
 
@@ -163,6 +284,8 @@ function start(o) {
     if (!busy) {
       busy = true;
       try {
+        if (!madeRead) madeRead = loadMade();
+        await madeRead;
         var text = await host.readDataText(COMMAND);
         if (text) {
           await host.removeData(COMMAND);

@@ -218,6 +218,30 @@ test("checks: a mask read inverted is Unchanged inside, polarity suspect", () =>
   assert.ok(checks.badges(c, null, { masked: true }).includes("Unchanged inside: the model may have read the mask inverted"));
 });
 
+test("checks: a Remove that left half of the selection as it was is flagged; a full Remove is not", () => {
+  // Two boxes are the selection: the result fills both (removed), or only
+  // the left one and keeps the right one as it was, with a small tone shift
+  // and noise as a regenerated picture has.
+  const sel = { width: W, height: H, data: new Uint8Array(W * H) };
+  for (let y = 64; y < 192; y++) for (let x = 16; x < 240; x++) if (x < 112 || x >= 144) sel.data[y * W + x] = 255;
+  const fill = (img, test) => {
+    const data = Uint8Array.from(img.data);
+    for (let i = 0; i < W * H; i++) if (sel.data[i] >= 128 && test(i % W)) data.set([118, 128, 138], i * 3);
+    return { width: W, height: H, components: 3, data };
+  };
+  const all = run(noisy(fill(context, () => true), 3), { mask: sel, cleared: true });
+  assert.ok(all.kept_share < 0.3, `kept ${all.kept_share}`);
+  assert.equal(checks.badges(all, null, { masked: true }).includes("Part of the selection may be unchanged"), false);
+  const half = run(noisy(fill(scene(undefined, undefined, [4, 4, 4]), (x) => x < 112), 3), { mask: sel, cleared: true });
+  assert.equal(half.edited, true);
+  assert.ok(half.kept_share >= 0.4, `kept ${half.kept_share}`);
+  assert.ok(checks.badges(half, null, { masked: true }).includes("Part of the selection may be unchanged"));
+  // Only a Remove is looked at this way; and the runner's summary (with
+  // inside_mean instead of inside) still gets Unchanged inside.
+  assert.equal(run(context, { mask: sel }).kept_share, null);
+  assert.deepEqual(checks.badges({ edited: false, inside_mean: 0.4, polarity_suspect: false, seam: null }, null, { masked: true }), ["Unchanged inside"]);
+});
+
 test("checks: an off-aspect result is flagged against the shaped box, never the raw selection", () => {
   const c = run(take(context, mask), { result_size: { width: 1024, height: 1000 }, shaped: { width: 1008, height: 1008 } });
   assert.equal(c.aspect_ok, false);

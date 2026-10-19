@@ -34,7 +34,15 @@ var PATHS = {
   warning: '<path d="M9 2.8l6.6 11.7H2.4z"/><path d="M9 7.3v3.4"/><path d="M9 12.6v.1"/>',
   refresh: '<path d="M14.5 9a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2.5v3h-3"/>',
   agent: '<rect x="3.5" y="6" width="11" height="8.5" rx="2"/><path d="M9 3.5V6"/><path d="M7 10h.1"/><path d="M11 10h.1"/>',
-  more: '<path d="M4.5 9h.1"/><path d="M9 9h.1"/><path d="M13.5 9h.1"/>'
+  more: '<path d="M4.5 9h.1"/><path d="M9 9h.1"/><path d="M13.5 9h.1"/>',
+  eye: '<path d="M1.8 9s2.6-4.6 7.2-4.6S16.2 9 16.2 9s-2.6 4.6-7.2 4.6S1.8 9 1.8 9z"/><circle cx="9" cy="9" r="2.1"/>',
+  settings: '<circle cx="9" cy="9" r="2.3"/><path d="M9 2.6v2M9 13.4v2M2.6 9h2M13.4 9h2M4.5 4.5l1.4 1.4M12.1 12.1l1.4 1.4M4.5 13.5l1.4-1.4M12.1 5.9l1.4-1.4"/>',
+  takes: '<rect x="2.5" y="4.5" width="9" height="9" rx="1.2"/><path d="M6.5 2.5h8a1 1 0 0 1 1 1v8"/>',
+  ratio: '<rect x="2.5" y="4.5" width="13" height="9" rx="1"/>',
+  slider: '<path d="M3 6h7M13 6h2M3 12h2M8 12h7"/><circle cx="11.5" cy="6" r="1.5"/><circle cx="6.5" cy="12" r="1.5"/>',
+  style: '<path d="M12.5 3.5l2 2-6 6-2-2z"/><path d="M6.5 9.5c-2 0-3 1.5-3 3.5 0 .8-.5 1.3-1 1.5 2.5.5 5.5 0 5.5-3"/>',
+  pin: '<path d="M10.6 2.8l4.6 4.6"/><path d="M12.9 5.1l-3.2 3.2-3.3-.6-1.6 1.6 4.9 4.9 1.6-1.6-.6-3.3 3.2-3.2"/><path d="M6.9 11.1L3 15"/>',
+  folder: '<path d="M2.5 5.2a1 1 0 0 1 1-1h3.1l1.5 1.5h6.4a1 1 0 0 1 1 1v6.6a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/>'
 };
 
 // Filled drawings: the star when a model is a favorite, and the Scenario
@@ -51,12 +59,15 @@ var FILLED = {
     "</svg>"
 };
 
-function markup(name) {
+// size: the drawn size in px (18 by default; the creation panel draws 16,
+// 14 and 12, like Photoshop's own panels).
+function markup(name, size) {
   if (Object.prototype.hasOwnProperty.call(FILLED, name)) return FILLED[name];
   if (!Object.prototype.hasOwnProperty.call(PATHS, name)) return "";
+  var s = size > 0 ? Math.round(size) : 18;
   // Each shape carries the stroke itself: renderers that do not inherit
   // presentation attributes from <svg> still draw it.
-  return '<svg width="18" height="18" viewBox="0 0 18 18">' + PATHS[name].replace(/<(path|circle|rect)\b/g, "<$1 " + OUTLINE) + "</svg>";
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 18 18">' + PATHS[name].replace(/<(path|circle|rect)\b/g, "<$1 " + OUTLINE) + "</svg>";
 }
 
 function names() {
@@ -64,27 +75,33 @@ function names() {
 }
 
 // A span holding the drawing, for rows built at run time.
-function icon(doc, name, cls) {
+function icon(doc, name, cls, size) {
   var span = doc.createElement("span");
   span.className = "ico" + (cls ? " " + cls : "");
   span.setAttribute("data-icon", name);
-  span.innerHTML = markup(name);
+  if (size) span.setAttribute("data-size", String(size));
+  span.innerHTML = markup(name, size);
   return span;
 }
 
 // Swaps the drawing of an element that carries data-icon.
 function set(el, name) {
   if (!el) return;
-  if (el.getAttribute && el.getAttribute("data-icon") === name && el.firstChild) return;
+  if (el.getAttribute && el.getAttribute("data-icon") === name && el.innerHTML) return;
   el.setAttribute("data-icon", name);
-  el.innerHTML = markup(name);
+  el.innerHTML = markup(name, sizeOf(el));
+}
+
+function sizeOf(el) {
+  var v = el && el.getAttribute ? Number(el.getAttribute("data-size")) : 0;
+  return v > 0 ? v : 0;
 }
 
 // Draws every [data-icon] element of the panel.
 function fill(doc) {
   if (!doc || typeof doc.querySelectorAll !== "function") return 0;
   var all = doc.querySelectorAll("[data-icon]");
-  for (var i = 0; i < all.length; i++) all[i].innerHTML = markup(all[i].getAttribute("data-icon"));
+  for (var i = 0; i < all.length; i++) all[i].innerHTML = markup(all[i].getAttribute("data-icon"), sizeOf(all[i]));
   return all.length;
 }
 

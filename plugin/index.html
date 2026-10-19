@@ -8,10 +8,10 @@
     <div class="app" id="app">
       <header class="hd" id="header">
         <span class="mark" id="mark" data-icon="mark" title="Scenario"></span>
-        <sp-action-button quiet size="s" class="project" id="project" title="Projects"><span class="project-label" id="project-label">Not signed in</span><span class="ico chev" data-icon="chevron-down"></span></sp-action-button>
+        <div class="proj" id="project" title="Projects"><span class="project-label" id="project-label">Not signed in</span><span class="ico chev" data-icon="chevron-down" data-size="12"></span></div>
         <span class="spacer"></span>
-        <span class="dot-hit" id="agent-hit" title="No agent connected"><span class="dot off" id="agent-dot"></span></span>
-        <sp-action-button quiet size="s" class="icon-btn" id="jobs" title="Jobs"><span class="ico" data-icon="jobs"></span><span class="badge" id="jobs-badge"></span></sp-action-button>
+        <div class="hbtn" id="agent-hit" title="No agent connected"><span class="ico" data-icon="agent" data-size="16"></span><span class="dot off" id="agent-dot"></span><span class="hname" id="agent-name"></span></div>
+        <div class="hbtn" id="jobs" title="Jobs"><span class="hl">Jobs</span><span class="n" id="jobs-badge">0</span></div>
       </header>
 
       <!-- Sign-in: the key fields and Save and test first, the help on getting a key after. -->
@@ -75,16 +75,27 @@
       </section>
 
       <!-- Main: lane tabs, a body that scrolls, the tray and the prompt bar pinned at the bottom. -->
-      <section class="view" id="view-main">
-        <nav class="tabs" id="lane-tabs">
-          <sp-action-button quiet size="s" class="tab" data-lane="image" title="Image: make a new image from a prompt" selected><span class="ico" data-icon="image"></span><span class="tab-label">Image</span></sp-action-button>
-          <sp-action-button quiet size="s" class="tab" data-lane="edit" title="Edit: change what is inside a selection"><span class="ico" data-icon="edit"></span><span class="tab-label">Edit</span></sp-action-button>
-          <sp-action-button quiet size="s" class="tab" data-lane="enhance" title="Enhance: upscale, expand, remove a background"><span class="ico" data-icon="enhance"></span><span class="tab-label">Enhance</span></sp-action-button>
-          <sp-action-button quiet size="s" class="tab" data-lane="trained" title="Trained: your project's own models"><span class="ico" data-icon="trained"></span><span class="tab-label">Trained</span></sp-action-button>
-          <sp-action-button quiet size="s" class="tab" data-lane="library" title="Library: your project's images"><span class="ico" data-icon="library"></span><span class="tab-label">Library</span></sp-action-button>
-        </nav>
+      <section class="view cp" id="view-main">
+        <!-- The context, the chips and the middle; on a short panel they
+             scroll together above the pinned composer. -->
+        <div class="sc-body" id="sc-body">
+        <!-- What Photoshop has now, and the actions that fit it (FLOWS v2). -->
+        <div class="sc-top" id="sc-top">
+          <div class="ctx" id="ctx">
+            <div class="ctx-row">
+              <div class="ctx-thumb" id="ctx-thumb"><span class="ico" id="ctx-icon" data-icon="file" data-size="20"></span><img class="cov" id="ctx-img" alt="" /><span class="cnt" id="ctx-count"></span></div>
+              <div class="ctx-txt">
+                <div class="ctx-title" id="ctx-title">No document open</div>
+                <div class="ctx-detail" id="ctx-detail"></div>
+              </div>
+            </div>
+            <div class="prog" id="ctx-prog"></div>
+          </div>
+          <div class="acts" id="acts"></div>
+        </div>
 
-        <div class="scroll" id="main-scroll">
+        <!-- The run's takes and the document's recent runs scroll here. -->
+        <div class="sc-mid" id="mid">
           <div class="banner" id="account-banner">
             <div class="banner-row">
               <div class="grow">
@@ -92,109 +103,51 @@
                 <div class="note" id="account-banner-2"></div>
                 <div class="note" id="account-banner-3"></div>
               </div>
-              <sp-action-button quiet size="s" class="close" id="account-banner-close" title="Close"><span class="ico" data-icon="close"></span></sp-action-button>
+              <div class="close" id="account-banner-close" title="Close"><span class="ico" data-icon="close" data-size="14"></span></div>
             </div>
           </div>
-          <div class="banner" id="ready-banner">
-            <div class="banner-row">
-              <div class="text grow" id="ready-banner-text"></div>
-              <sp-action-button quiet size="s" class="close" id="ready-banner-close" title="Close"><span class="ico" data-icon="close"></span></sp-action-button>
-            </div>
+          <div class="mid-card" id="mid-card"></div>
+          <div class="recent" id="recent">
+            <div class="h4">Recent on this document</div>
+            <div class="rrow" id="recent-row"></div>
           </div>
-          <div class="banner" id="meta-banner">
-            <div class="banner-row">
-              <div class="note grow" id="meta-banner-text"></div>
-              <sp-action-button quiet size="s" class="close" id="meta-banner-close" title="Close"><span class="ico" data-icon="close"></span></sp-action-button>
-            </div>
-          </div>
-
-          <div class="lane-body" id="lane-body">
-            <div class="seg" id="enhance-tools">
-              <sp-action-button quiet size="s" id="tool-upscale" title="Upscale the image"><span class="ico" data-icon="upscale"></span><span class="seg-label">Upscale</span></sp-action-button>
-              <sp-action-button quiet size="s" id="tool-expand" title="Expand the canvas"><span class="ico" data-icon="expand"></span><span class="seg-label">Expand</span></sp-action-button>
-              <sp-action-button quiet size="s" id="tool-remove_background" title="Remove the background"><span class="ico" data-icon="removebg"></span><span class="seg-label">Remove BG</span></sp-action-button>
-            </div>
-
-            <div class="empty" id="lane-empty">
-              <span class="ico big" id="lane-empty-icon" data-icon="info"></span>
-              <div class="text strong" id="lane-empty-title"></div>
-              <div class="note" id="lane-note"></div>
-              <sp-action-button size="s" id="lane-empty-action"></sp-action-button>
-            </div>
-
-            <div class="target-row" id="target-row">
-              <span class="label" id="target-label">Target</span>
-              <span class="chip" id="target-chip" title=""><span class="ico" id="target-icon" data-icon="canvas"></span><span class="chip-text" id="lane-source"></span></span>
-            </div>
-
-            <div class="model" id="model-card">
-              <div class="thumb" id="model-thumb-box"><span class="ico" id="model-thumb-icon" data-icon="image"></span><img class="thumb-img" id="model-thumb" alt="" /></div>
-              <div class="model-text">
-                <div class="model-name" id="model-name"></div>
-                <div class="note one-line" id="model-badges"></div>
-              </div>
-              <sp-action-button quiet size="s" id="model-change" title="Choose another model">Change</sp-action-button>
-            </div>
-
-            <div class="section" id="refs-section">
-              <div class="section-head">
-                <span class="section-title" id="refs-title">References</span>
-                <span class="note" id="refs-count"></span>
-              </div>
-              <div class="chips" id="refs-list"></div>
-              <div class="menu" id="refs-menu">
-                <sp-action-button quiet size="s" class="menu-item" id="refs-add-selection"><span class="ico" data-icon="selection"></span><span>Selection</span></sp-action-button>
-                <sp-action-button quiet size="s" class="menu-item" id="refs-add-layer"><span class="ico" data-icon="layer"></span><span>Current layer</span></sp-action-button>
-                <sp-action-button quiet size="s" class="menu-item" id="refs-add-visible"><span class="ico" data-icon="visible"></span><span>All visible layers</span></sp-action-button>
-                <sp-action-button quiet size="s" class="menu-item" id="refs-add-file"><span class="ico" data-icon="file"></span><span>File...</span></sp-action-button>
-              </div>
-              <div class="note" id="refs-note"></div>
-            </div>
-
-            <div class="note" id="lane-output"></div>
-          </div>
-
-          <div class="tray" id="tray">
-            <div class="tray-head">
-              <span class="text strong one-line grow" id="tray-status"></span>
-              <sp-action-button quiet size="s" id="tray-jobs" title="All jobs">Jobs</sp-action-button>
-            </div>
-            <div class="takes" id="tray-takes"></div>
-            <div class="note one-line" id="tray-detail"></div>
-            <div class="note" id="tray-badges"></div>
-            <div class="actions">
-              <sp-action-button size="s" id="tray-place">Place</sp-action-button>
-              <sp-action-button size="s" id="tray-open">Open as document</sp-action-button>
-            </div>
-          </div>
+          <div class="emptymid" id="mid-empty"></div>
+        </div>
         </div>
 
-        <div class="foot" id="main-foot">
-          <div class="prompt-bar" id="prompt-bar">
-            <sp-textarea class="prompt" id="prompt" placeholder="Describe the image"></sp-textarea>
-            <div class="opts" id="opts-row">
-              <div class="opt" id="takes-row" title="Number of takes">
-                <sp-picker size="s" quiet class="picker takes" id="takes-select" label="Takes"></sp-picker>
-              </div>
-              <div class="opt grow" id="size-row" title="Size">
-                <sp-picker size="s" quiet class="picker" id="size-select" label="Size"></sp-picker>
-              </div>
-              <div class="opt grow" id="factor-row" title="Upscale factor">
-                <sp-picker size="s" quiet class="picker" id="factor-select" label="Factor"></sp-picker>
-              </div>
+        <!-- The composer, pinned: references, prompt, chips, the button. -->
+        <div class="composer" id="composer">
+          <div class="agentcard" id="agent-card">
+            <div class="who"><span class="dot on"></span><span id="agent-who"></span></div>
+            <div class="what" id="agent-what"></div>
+            <div class="q" id="agent-q"></div>
+            <div class="meta" id="agent-meta"></div>
+            <div class="btnrow end">
+              <div class="btn" id="agent-decline"><span class="bl">Decline</span></div>
+              <div class="btn blue" id="agent-approve"><span class="bl" id="agent-approve-label">Approve</span></div>
             </div>
-            <div class="card" id="confirm-card">
+          </div>
+          <div class="declined" id="declined"></div>
+          <div class="ccard" id="ccard">
+            <div class="cnote" id="c-note"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="c-note-text"></span></div>
+            <div class="refs" id="refs"></div>
+            <div class="noprompt" id="noprompt"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="noprompt-text"></span></div>
+            <sp-textarea class="prompt" id="prompt" placeholder="Describe the image"></sp-textarea>
+            <div class="cchips" id="cchips"></div>
+            <div class="confirm" id="confirm-card">
               <div class="text" id="confirm-text"></div>
               <div class="note" id="confirm-detail"></div>
-              <div class="actions end">
-                <sp-action-button size="s" id="confirm-cancel">Cancel</sp-action-button>
-                <sp-button variant="cta" size="s" id="confirm-ok">Generate</sp-button>
+              <div class="btnrow end">
+                <div class="btn" id="confirm-cancel"><span class="bl">Cancel</span></div>
+                <div class="btn blue" id="confirm-ok"><span class="bl" id="confirm-ok-label">Generate</span></div>
               </div>
             </div>
-            <sp-button variant="cta" size="s" class="generate" id="generate" disabled>Generate</sp-button>
-            <div class="note warn" id="generate-reason"></div>
-            <div class="note" id="generate-refund"></div>
-            <div class="note" id="generate-note"></div>
+            <div class="gorow" id="gorow">
+              <div class="go off" id="go" aria-disabled="true"><span class="lbl" id="go-label">Fill in the prompt to see the price</span><span class="cu" id="go-cu"></span></div>
+              <div class="gear" id="gear" title="Advanced settings"><span class="ico" data-icon="settings" data-size="16"></span></div>
+            </div>
+            <div class="cnote" id="go-reason"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="go-reason-text"></span></div>
+            <div class="cnote" id="c-message"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="c-message-text"></span></div>
           </div>
         </div>
 
@@ -357,6 +310,9 @@
           </div>
         </div>
       </section>
+      <!-- Chip menus and More: one popover over the panel, closed by a click outside. -->
+      <div class="pop-scrim" id="pop-scrim"></div>
+      <div class="pop" id="pop"></div>
     </div>
 
     <script src="dist/main.js"></script>

@@ -165,4 +165,28 @@ function row(rec) {
   };
 }
 
-module.exports = { statusLabel: statusLabel, title: title, tray: tray, row: row, actions: actions, timeOf: timeOf, TEXT: TEXT, ACTION_LABELS: ACTION_LABELS };
+// The header's Jobs popover: the newest jobs, one line each (name, then
+// status when not placed, time, CU and who started it).
+var POP_STATES_QUIET = ["applied"];
+function popRows(records, max) {
+  var out = [];
+  for (var i = 0; i < records.length && out.length < (max || 6); i++) {
+    var rec = records[i];
+    var cu = rec.cu_charged !== null && rec.cu_charged !== undefined ? rec.cu_charged : rec.cu_quoted;
+    var parts = [];
+    if (POP_STATES_QUIET.indexOf(rec.state) < 0) parts.push(statusLabel(rec.state));
+    parts.push(timeOf(rec.created_at));
+    if (cu !== null && cu !== undefined && cu !== "") parts.push(cu + " CU");
+    if (origin(rec) !== "You") parts.push("by " + origin(rec));
+    out.push({ local_id: rec.local_id, label: title(rec), sub: parts.filter(Boolean).join(" · "), done: rec.state === "applied", attention: ATTENTION.indexOf(rec.state) >= 0 });
+  }
+  return out;
+}
+
+TEXT.pop_title = "Jobs on this computer";
+TEXT.pop_empty = "No jobs on this computer yet.";
+TEXT.pop_note = "Every file stays in the output folder, kept or not.";
+TEXT.pop_all = "All jobs";
+TEXT.pop_all_sub = "Place, open or resolve a job";
+
+module.exports = { statusLabel: statusLabel, title: title, tray: tray, row: row, actions: actions, timeOf: timeOf, popRows: popRows, TEXT: TEXT, ACTION_LABELS: ACTION_LABELS };

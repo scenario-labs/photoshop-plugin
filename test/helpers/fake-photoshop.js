@@ -100,7 +100,8 @@ function createFakePhotoshop(opts = {}) {
     chosenFile: opts.chosenFile === undefined ? null : opts.chosenFile,
     dialogs: 0,
     jpegBytesPerPixel: opts.jpegBytesPerPixel || 0.3,
-    reads: []
+    reads: [],
+    moves: []
   };
   let nextId = 1000;
   let inModal = false;
@@ -134,6 +135,18 @@ function createFakePhotoshop(opts = {}) {
         if (!inModal) throw new Error("delete needs a modal scope");
         removeLayer(doc, this);
       },
+      // Layer.move(relativeTo, placement): placeAfter puts it right under
+      // relativeTo, placeBefore right above, in relativeTo's list.
+      async move(rel, placement) {
+        if (!inModal) throw new Error("move needs a modal scope");
+        removeLayer(doc, this);
+        const list = rel.parent && rel.parent.layers ? rel.parent.layers : doc.layers;
+        const at = list.indexOf(rel);
+        if (at < 0) throw new Error("fake: move target is not in the document");
+        list.splice(placement === "placeAfter" ? at + 1 : at, 0, this);
+        this.parent = rel.parent || null;
+        ps.moves.push({ id: this.id, rel: rel.id, placement });
+      },
       get bounds() {
         const f = this.frame;
         return { left: f.left, top: f.top, right: f.left + f.width, bottom: f.top + f.height };
@@ -152,6 +165,12 @@ function createFakePhotoshop(opts = {}) {
         this.frame = { ...this.frame, left: this.frame.left + dx, top: this.frame.top + dy };
       }
     };
+    // A group given as specs (a document opened with a group in it): its
+    // layers are made here, each with the group as parent.
+    if (layer.layers) {
+      layer.layers = layer.layers.map((l) => (l && l.id ? l : makeLayer(doc, l)));
+      for (const l of layer.layers) if (!l.parent) l.parent = layer;
+    }
     return layer;
   }
 
@@ -197,6 +216,8 @@ function createFakePhotoshop(opts = {}) {
       height: spec.height || 1024,
       pattern: spec.pattern || "gradient",
       selection: spec.selection || null,
+      // The document's own XMP packet (File Info), as XMPMetadataAsUTF8.
+      xmp: spec.xmp || null,
       layers: [],
       activeLayers: [],
       async createLayerGroup(o) {
@@ -340,6 +361,17 @@ function createFakePhotoshop(opts = {}) {
       ps.undone.push({ document_id: doc3.id, name: last.name });
       return {};
     }
+    if (d._obj === "get" && d._target[0]._property === "XMPMetadataAsUTF8" && d._target[1]._ref === "document") {
+      if (!doc) throw new Error("fake: no such document");
+      return doc.xmp ? { XMPMetadataAsUTF8: doc.xmp } : {};
+    }
+    if (d._obj === "set" && d._target[0]._property === "XMPMetadataAsUTF8" && d._target[1]._ref === "document") {
+      if (!inModal) throw new Error("document metadata needs a modal scope");
+      if (!doc) throw new Error("fake: no such document");
+      doc.xmp = d.to.XMPMetadataAsUTF8;
+      ps.docXmpWrites = (ps.docXmpWrites || 0) + 1;
+      return {};
+    }
     if (d._obj === "get" && d._target[0]._property === "XMPMetadataAsUTF8") {
       const layer = findLayer(doc, d._target[1]._id);
       if (!layer) throw new Error("fake: no such layer");
@@ -358,6 +390,21 @@ function createFakePhotoshop(opts = {}) {
       if (!bg) throw new Error("fake: no Background layer");
       bg.isBackgroundLayer = false;
       bg.name = "Layer 0";
+      return {};
+    }
+    if (d._obj === "set" && d._target[0]._ref === "channel" && d._target[0]._property === "selection" && d.to && Array.isArray(d.to._ref)) {
+      // A layer's mask loaded as the selection: its box (pixels inside it
+      // are not modeled).
+      const target = app.activeDocument;
+      const ref = d.to._ref.find((r) => r._ref === "layer");
+      const layer = ref ? findLayer(target, ref._id) : null;
+      if (!layer || !layer.mask) throw new Error("fake: the layer has no mask");
+      const m = layer.mask;
+      target.selection = { left: m.left, top: m.top, width: m.width, height: m.height, shape: "rect", from_mask: layer.id };
+      return {};
+    }
+    if (d._obj === "set" && d._target[0]._ref === "channel" && d._target[0]._property === "selection" && d.to && d.to._enum === "ordinal") {
+      app.activeDocument.selection = null;
       return {};
     }
     if (d._obj === "set" && d._target[0]._ref === "channel" && d._target[0]._property === "selection") {
@@ -511,7 +558,7 @@ function createFakePhotoshop(opts = {}) {
 
   const photoshop = {
     app,
-    constants: { NewDocumentMode: { RGB: "RGBColorMode" }, DocumentFill: { WHITE: "white" }, AnchorPosition: opts.scene ? { TOPLEFT: "TOPLEFT", BOTTOMRIGHT: "BOTTOMRIGHT" } : undefined },
+    constants: { NewDocumentMode: { RGB: "RGBColorMode" }, DocumentFill: { WHITE: "white" }, AnchorPosition: opts.scene ? { TOPLEFT: "TOPLEFT", BOTTOMRIGHT: "BOTTOMRIGHT" } : undefined, ElementPlacement: { PLACEAFTER: "placeAfter", PLACEBEFORE: "placeBefore" } },
     core: {
       async executeAsModal(fn, options) {
         ps.modals.push(options.commandName);

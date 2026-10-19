@@ -218,6 +218,7 @@ module.exports = {
   TOOL_LABELS: TOOL_LABELS,
   CHIPS: CHIPS,
   CHIP_LABELS: CHIP_LABELS,
+  isBase: isBase,
   tabsOf: tabsOf,
   toolsOf: toolsOf,
   lanesOf: lanesOf,

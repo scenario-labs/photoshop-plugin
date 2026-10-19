@@ -1,6 +1,6 @@
 # Scenario for Photoshop: Spec v1
 
-Status: draft for review, revision 4, 2026-10-19. Scope: the Scenario plugin for Adobe Photoshop (a UXP panel) and its local Scenario MCP server `scenario-photoshop`, feature scope v1.
+Status: draft for review, revision 5, 2026-10-20 (section 3 rewritten for the creation panel, FLOWS v2). Scope: the Scenario plugin for Adobe Photoshop (a UXP panel) and its local Scenario MCP server `scenario-photoshop`, feature scope v1.
 
 Companion files: [wireframes.md](wireframes.md), [MCP.md](MCP.md), [PRIVACY.md](../../PRIVACY.md).
 
@@ -395,42 +395,39 @@ photoshop-plugin/
 
 ## 3. UX
 
-Every v1 screen named in this section has a wireframe; section 3.15 maps screens to frames in [wireframes.md](wireframes.md).
+The panel reads what the person has in Photoshop (no document, a layer, a cut-out layer, a selection, a group of Scenario takes) and leads with the actions that fit it. One composer adapts to the chosen action, results land in the document where people judge them, and the panel is where they compare, keep and refine. This replaces the tool-tab panel of earlier builds (five lanes, each a settings form), kept in the mission's version history. The lane logic stays: each action runs through `lanes/flow.js`, `lanes/edit.js`, `lanes/enhance.js` or the Image request builder, so the money contract of section 6 applies unchanged. Section 3.15 maps screens to frames in [wireframes.md](wireframes.md).
 
 ### 3.1 Panel layout
 
-Default docked width 320 px, minimum 280 px. Top to bottom:
+Default docked width 320 px, minimum 280 px, drawn and checked at 280, 320 and 360 px. Top to bottom:
 
-1. **Header**: Scenario mark (black and white), project name (opens the Projects view, section 4.5), agent status dot, **Jobs** with the count of active jobs, and a menu: **Settings**, **Details of selected layer**, **Help** (the plugin's user guide), **Get help** (Scenario's help center), **Report a problem**.
-2. **Lane tabs**: Image, Edit, Enhance, Trained, Library. Below 320 px the tabs show icons with tooltips.
-3. **Lane body** (scrolls): source chip, model card, references, lane options, **Advanced** (every other schema parameter).
-4. **Results tray**: takes of the latest job of this lane. It collapses to one line.
-5. **Prompt bar** (fixed at the bottom): prompt, takes, size, and the Generate button carrying the price.
+1. **Header** (36 px): the Scenario mark (monochrome), the project name with a chevron (opens the Projects view, section 4.5; the full name is the tooltip), then on the right the agent icon with a status dot and the first connected client's name (a click opens a short popover: who is connected, what an agent may do, **Connect an AI agent**), and **Jobs** with the number of jobs on this computer (blue while one runs, amber when one needs the person; the tooltip says how many). Settings, Projects, Connect an AI Agent, Diagnostics, Help, About and Sign Out are in the panel menu.
+2. **Context card**: a 44 px thumbnail (an icon for a plain layer or a selection; the take for a Scenario result; a checkerboard behind a cut-out), one title line ("Selection 928 × 640 on Hero", "Hero · Layer 2048 × 1365", "4 takes · red lantern", "No document open") and one detail line that says where the result will land ("Lands inside the selection, masked", "Lands above Hero as a group", "Opens as a new document 1536 × 1024"). While a run of this document is in flight, the detail line says what it is doing ("Generating 2 takes") over a thin progress bar. The card follows Photoshop within 200 ms of a change (notifications coalesced at 80 ms, then one read of the document, the selection and the active layer's Scenario metadata).
+3. **Action chips**: the context's actions (section 3.2), the first selected when the context appears, then **More ▾** when the context has other actions. Chips wrap to a second row at narrow widths and never reorder by themselves.
+4. **Middle part** (scrolls): the **Takes card** of the active run (section 3.9), then **Recent on this document** (small thumbnails of the document's earlier runs in this session; a click selects that run's group, which reopens its takes). With neither: "Takes and recent runs on this document show here."
+5. **Composer** (pinned at the bottom, section 3.7): the agent's approval card when an agent asks to spend (F5), the refs row, the prompt, the chips, the confirm card when one is needed, and the button carrying the action and its price.
 
-Height: the manifest asks for at least 420 px. How much height a panel docked under Layers gets, and whether Photoshop honors the minimum there, is measured in M3 with the docked width. Below 480 px the tray collapses by default and the lane body keeps at least 120 px; the prompt bar stays visible.
+Popovers (More, the chip menus, the reference sources, Advanced, the agent) open above or below their anchor inside the panel, over a transparent scrim that closes them on a click outside. Height: the manifest asks for at least 420 px; the middle part takes what is left after the top and the composer. Below 600 px of panel height, the context card, the action chips and the middle part scroll as one block above the composer, so the button stays visible without scrolling (not tested: whether UXP applies a height media query is not verified live yet). Under 300 px of width, the Model chip cuts the model name at 100 px with an ellipsis (the full name is its tooltip), so the composer chips keep to two rows.
 
-### 3.2 Lanes
+### 3.2 Contexts and actions
 
-| Lane | Tools | Release | Notes |
+| Context | When | Actions, in order | More ▾ |
 |---|---|---|---|
-| Image | Text to image, with references | v1 | Fills the selection box (masked) or the canvas; with no document open, the result opens as a new document |
-| Edit | Selection edit, whole-layer edit | v1 | Any aligned image-to-image model; native mask input used when the model has one |
-| Enhance | Upscale, Expand, Remove BG | v1 | One tool selector at the top of the lane (section 3.6) |
-| Enhance | Vectorize, Layers (decomposition), Segment, Maps (depth, normal, line art, pose) | v1.1 | Section 5.1 |
-| Trained | Trained models of the current project, then public ones, run as Make new or Edit | v1 | Section 3.4. Edit with a trained model is labeled Experimental until it passes live (M4) |
-| Library | Assets and collections of the current project | v1 | Section 3.5 |
-| Workflows | Workflows of the current project whose inputs are images | v1.1 | Each workflow input maps to a Photoshop source |
-| Video | Image to video from a layer or selection | v1.1 | Files in the Output Folder; open as document |
-| Audio | None in the panel | later | No Photoshop surface for audio; hosted Scenario MCP covers it |
+| No document | No document is open | Create image | |
+| Layer | A layer is active, no selection, not a Scenario result | Make versions · Extend canvas · Upscale · Remove background · New layer | Finish: Upscale this layer. Select and cut: Cut out to a new layer |
+| Cut-out layer | A pixel or smart object layer with a mask, or one that covers less than 97% of the canvas (the Background never) | Add background · Make versions · Upscale · Extend canvas | Finish: Upscale this layer. Select and cut: Remove background. Layers: New layer |
+| Selection | Any selection, feathered or not | Replace inside · Remove · Make versions · Cut out subject | |
+| Takes | The active layer is a Scenario group holding takes (layer metadata `jobId`, kind image or edit, children with `assetId`), or one Scenario result layer outside a group | Compare takes · More like this · Refine · Upscale kept take | |
 
-Lanes that have not shipped are not shown. Image comes first so a first generation needs no selection; Edit, the most used lane, comes second.
+- **More ▾** lists only actions that run in this build, grouped, each with its price for the current context (a free price check with its default model when the menu opens; an action that needs a prompt shows one once the prompt is filled). Each row has a pin: a pinned action joins its context's chips (at most six chips; a seventh pin is refused with "Up to 6 chips: unpin one first"). Pins are kept per context in the plugin's data folder (`panel-pins.json`). Choosing an action from More selects it; while it is selected the More chip shows its name.
+- The flows of FLOWS v2 that do not run yet (Open from Library, Start a set, Render sketch, Split into layers, Select by description, New angle, Relight to scene, Animate, Formats, Remove text, Vectorize, Make maps, Same action on each, Run a workflow) are not listed anywhere in the panel until they ship (section 3.5). FLOWS v2 after review also adds Relight to scene to the cut-out chips and a **Split element** context (a layer made by Split into layers: Make versions, Relight to scene, New angle, Upscale); both wait for those flows. Until then a split element reads as a cut-out or a plain layer.
 
 ### 3.3 Model picker
 
-Opens from **Change** on the model card, as a full panel view with a back arrow (text fields render above overlays, so a floating picker would be covered by the prompt field).
+The **Model** chip opens a menu: **Recommended for <action>** (the action's default model, shipped as data, tagged Recommended), **Catalog · can <action>** (up to eight base models that can do the action, from the tab mapping below), and **All models…**, which opens the full list as a view in the panel's place with a back arrow (text fields render above overlays, so a large floating list would be covered by the prompt field).
 
 1. **Search** filters locally on name, description, tags and base model.
-2. **Type tabs**: Image, Edit, Enhance, Trained. The current lane's tab is selected. Tab membership comes from a mapping table shipped as data (`shared/catalog-map.json`), so a catalog change needs no code change:
+2. **Type tabs**: Image, Edit, Enhance, Trained; the tab of the selected action is open. Tab membership comes from a mapping table shipped as data (`shared/catalog-map.json`), so a catalog change needs no code change:
 
 | Tab or tool | A model belongs when | Basis |
 |---|---|---|
@@ -443,151 +440,163 @@ Opens from **Change** on the model card, as a full panel view with a back arrow 
 
 Models that fit no tab (video, audio, 3D) are not shown.
 
-3. **Chips**, fixed per tab: **All**, **Favorites**, **Recommended** (Scenario's recommendation for the lane, when the API offers one), **Mask input** (Edit), **References** (Image, Edit), in Enhance the tool chips **Upscale**, **Expand**, **Remove BG**, and in Trained **This project** and **Public**. A **Tags** menu lists the catalog tags found among the tab's models, most common first (data, never hard-coded).
-4. **Rows**: 56 px thumbnail loaded at 2x, name, two-line description, badges (Mask input, up to N references, max output size, Trained, Experimental); a trained row names its kind and first base ("LoRA via FLUX.2 Dev") and **Public** when it is. A star marks a favorite (stored locally).
-5. **Highlighted row** expands to the full description, the input limits and the price range Scenario gives.
-6. **Order**: favorites, then Scenario's recommendation for the lane, then the newest; in Trained, the project's models, then public ones. REST's `GET /v1/recommendations/models` filters by capability only and returned texture and segmentation models for `img2img` (measured live 2026-10-19), so **Recommended** shows a short "Scenario picks" list per tab, shipped as data with the default models.
-7. Choosing a model returns to its lane (a trained model switches to the Trained lane), fetches its schema and runs a price check.
+3. **Chips**, fixed per tab: **All**, **Favorites**, **Recommended**, **Mask input** (Edit), **References** (Image, Edit), in Enhance the tool chips **Upscale**, **Expand**, **Remove BG**, and in Trained **This project** and **Public**. A **Tags** menu lists the catalog tags found among the tab's models, most common first.
+4. **Rows**: 56 px thumbnail, name, two-line description, badges (Mask input, up to N references, Trained, Experimental); a trained row names its kind and first base ("LoRA via FLUX.2 Dev") and **Public** when it is. A star marks a favorite (stored locally).
+5. **Order**: favorites, then the "Scenario picks" list per tab shipped as data, then the newest; in Trained, the project's models, then public ones. REST's `GET /v1/recommendations/models` filters by capability only (measured live 2026-10-19), so the picks are data.
+6. Choosing a base model sets the Model chip of the selected action's family and prices again. Trained rows browse only here; trained models are used through the Style chip (section 3.4).
 
-The catalog is cached in the plugin data folder and refreshed in the background every 24 h and on demand. Private models come from the general list and are filtered locally, because a `filters.type` filter on private models was refused (seen through hosted Scenario MCP). Model records are large, so the cache keeps display fields only.
+In the Model chip's menu, each row shows its price for this document and these settings, from a free price check per model made when the menu opens ("Free" for a zero price; an action that needs a prompt prices once the prompt is filled).
 
-### 3.4 Trained lane
+The catalog is cached in the plugin data folder and refreshed in the background every 24 h and on demand. Private models come from the general list and are filtered locally (a `filters.type` filter on private models was refused, seen through hosted Scenario MCP). The cache keeps display fields only.
 
-The plugin ships no table of trained families: families change, so each trained model's record and its base's schema decide everything below.
+### 3.4 Style chip and trained models
 
-- **Scope.** The current project's trained models, then Scenario's public trained models marked **Public**, as the Blender plugin lists them. Private models are project-scoped: the same listing returned none in one project and ten in another (seen through hosted Scenario MCP). **Switch project** in the header reaches models trained elsewhere (section 4.5). `GET /v1/models?privacy=public` with a trained `type` lists the public ones (measured live 2026-10-19).
-- **Base.** A trained model is never the model called; it runs on a base model. Its REST record gives its `type` (such as `flux.1-lora`) and, for some types, `compliantModelIds`, "base model IDs compliant with the model" (documented, retrieve-model reference). No field names the base to call: hosted Scenario MCP returns a `run_with` instruction built on its side, which REST does not carry. The plugin derives the bases from the catalog it already reads:
-  - **Candidates**: catalog models whose `loras` input or `modelId` input lists the trained model's `type` in its `modelTypes` (documented for model-array inputs). Every base read carried `modelTypes` on both `loras` and `modelId` (measured live 2026-10-19). `compliantModelIds` holds base names such as `flux.1-dev`, not catalog ids, so it orders candidates only through a name-to-id map shipped as data.
-  - **Kind**: a LoRA when a `loras` input lists the type; it runs with `loras` and `lorasScale`. A composition when only a `modelId` input lists it (a `modelId` input lists LoRA types too); it runs with `modelId` and replaces any LoRAs. `concepts` is not a marker: LoRA records carry it (their own id at 0.8) (measured live 2026-10-19).
-  - Example: a public FLUX.2 Dev LoRA runs on `model_bfl-flux-2-dev` with `loras: [its id]` (seen through hosted Scenario MCP).
-- **Unknown types.** A trained model with no candidate base is listed grayed: "This trained model type isn't supported by this version of the plugin." Nothing is guessed, and each model stands on its own record: the lane never grays as a whole.
-- **Run with.** Some types run on several bases: Z-Image and Z-Image Turbo take the same Z-Image LoRA types, and FLUX.2 Klein 9B and Klein 9B Base the same Klein types (base schemas seen through hosted Scenario MCP). With more than one candidate, the card shows **Run with**, set to the first candidate and remembered per trained model on this computer.
-- **Stacking.** **Add another** lists only trained models whose type the chosen base takes, up to its limit (6 on current bases), and **Run with** then offers the bases that take every model in the stack. Choosing a composition replaces the stack; the panel says so before it does.
-- **Make new or Edit**, a switch at the top of the lane, decided from the chosen base's schema:
-  - **Make new** works as the Image lane when the base runs without file inputs. A base that requires reference images, such as Qwen Edit 2511, keeps Generate disabled until a reference is added: "This model edits an image. Add a reference, or use Edit." Agents see this as `make_new: "needs_reference"`.
-  - **Edit** runs the capture, shaping, mask and checks of the Edit lane (sections 3.8 and 5.8). No current base takes a `mask` (FLUX.2 Dev, Klein 9B and 4B, Z-Image, Z-Image Turbo and Qwen Edit 2511, seen through hosted Scenario MCP), so Photoshop's mask keeps the change inside the selection. The route follows the base, first match:
-    - `image` plus `strength` (today Z-Image and Z-Image Turbo): the capture goes as `image`, and **Change amount** shows;
-    - reference images, when the base takes them (FLUX.2 Dev, Klein 9B, 9B Base and 4B, Qwen Edit 2511), for style and edit types alike (such as `flux.2-dev-lora` and `flux.2-dev-edit-lora`): the capture goes as the first reference, and the prompt field reads "Say what to change and what to keep". These schemas give a reference count but do not say that the first reference is the image edited (seen through hosted Scenario MCP), so `shared/catalog-map.json` records it per base (assumed, M4);
-    - a `mask` input (no base today): the mask goes in the base's polarity, as in the Edit lane;
-    - otherwise Edit is disabled: "This model can't edit an area. Use Make new, then use the result as a reference in Edit." That fallback sends the patch to an Edit model that takes a mask.
-  - Edit with a trained model is labeled **Experimental** until a trained selection edit passes the seam and alignment checks live on each route, with a style LoRA and an edit LoRA on the reference route (M4).
-- **Controls**, two strengths named apart:
-  - **Style strength** per LoRA (`lorasScale`), within the base's range (0 to 2 on FLUX.2 Dev); default the record's own `concepts[].scale` when present, else 0.75, the Scenario web app's default (documented in the Blender plugin's public MCP.md).
-  - **Change amount**, on the `image` plus `strength` route: the base's `strength`, with its default and range from the schema (Z-Image 0.6 and Z-Image Turbo 0.75, both 0 to 1, seen through hosted Scenario MCP), and the line "Lower keeps closer to your layer."
-  - Reference slots appear when the base takes references; on the reference route the capture fills the first slot ("Capture + 2 of 5").
-- **Records.** The ledger and layer metadata keep the base as `modelId`, the trained models as `trainedModelIds`, and both strengths in `scenario:parameters`; the quote fingerprint covers all of them.
-- **Agents** use the same contract (MCP.md 4.2). Per-project default trained models (Blender has them) are v1.1.
+**Style** is a first-class chip on Replace inside, Make versions (on a selection or a layer), New layer, Add background, Create image and More like this. Its menu:
 
-### 3.5 Library lane
+- **No style**: the model's own look.
+- **Match an image**: a picture as the style reference, with any model that takes reference images. It opens the sources (Selection, Layer, All visible, File…); the picture joins the refs row as a **Style** reference with ×, goes as the run's last reference image, and the prompt sent gets one sentence: "Use the last reference image for its style only (colors, rendering, texture), not for its content." The person's prompt and the chips stay in charge. Removing the reference, or picking No style, ends it.
+- **Trained styles** (edit actions only: Replace inside and Make versions): the current project's trained models that can edit, with their thumbnails. A trained style runs on the model it was trained on, through the trained edit of `lanes/edit.js`: the Model chip switches to that base (for example FLUX.1 Dev), and the Model menu then lists only that base with the note "A trained style runs on the model it was trained on. Pick No style or Match an image in the Style chip to use another model." Leaving the trained style puts back the action's model. The menu's note: "Trained styles are the project's trained models and run on the model they were trained on. Match an image uses a picture as the style reference, with any model."
 
-- **Scope.** Images of the current project. The plugin's own uploads (captures, masks, references, all named `photoshop-...`) are hidden by default; **Show plugin uploads** lists them. Video, audio and 3D assets are not listed in v1. Public Library assets and organizing (tags, collections) stay in the web app and hosted Scenario MCP.
-- **Browse.** A **Collection** menu (All images, then the project's collections) and a search field. Browsing uses the asset list, newest first, 30 per page with **Load more**. Typing uses the search endpoint; when it returns nothing, the panel offers "Search can miss assets. **Show all**" (a search found nothing while the list showed matching assets, seen through hosted Scenario MCP).
-- **Grid.** Three square thumbnails per row at 320 px, two at 280 px. Selecting one shows its name, size and date with **Place**, **Use as reference** (in Image, Edit or Trained), **Open as document** and **Details** (model, prompt, size, date and the caption stored on the asset record; the record holds the prompt as a separate text asset, read with a second call, seen through hosted Scenario MCP; REST asset rows also hold the prompt as a text asset id, so Details reads it with a second call).
-- **Place** downloads the asset and lands it as an embedded smart object at native size, or fitted inside the selection box or the canvas when larger, never enlarged (as Photoshop's Place Embedded does; section 5.7). It is named `Scenario library <slug> <tail6>` and placed in one History state. Nothing spends.
-- **Empty.** "No images in project <name> yet." In a collection: "This collection has no images."
-- Sending a layer to the Library is v1.1 (section 5.1).
+Trained styles on Create image, New layer and Add background (Make new with a trained model) are not in this build.
 
-### 3.6 Enhance lane
+The plugin ships no table of trained families: each trained model's record and its base's schema decide everything below.
 
-A tool selector (**Upscale**, **Expand**, **Remove BG**) sits where the model card sits in other lanes; each tool has a default model, shipped as data, and **Change**.
+- **Scope.** The current project's trained models; switching project in the header reaches models trained elsewhere (section 4.5). Private models are project-scoped (seen through hosted Scenario MCP).
+- **Base.** A trained model is never the model called; it runs on a base model. Its REST record gives its `type` (such as `flux.1-lora`) and, for some types, `compliantModelIds` (documented). The plugin derives the bases from the catalog it already reads:
+  - **Candidates**: catalog models whose `loras` input or `modelId` input lists the trained model's `type` in its `modelTypes` (documented for model-array inputs; measured live 2026-10-19). `compliantModelIds` holds base names such as `flux.1-dev`, not catalog ids, so it orders candidates only through a name-to-id map shipped as data.
+  - **Kind**: a LoRA when a `loras` input lists the type; it runs with `loras` and `lorasScale`. A composition when only a `modelId` input lists it; it runs with `modelId` and replaces any LoRAs (measured live 2026-10-19).
+- **Unknown types.** A trained model with no candidate base is not offered as a style. Nothing is guessed.
+- **Routes**, decided from the chosen base's schema, first match:
+  - `image` plus `strength` (today Z-Image and Z-Image Turbo, FLUX.1 Dev): the capture goes as `image`, and a **Change amount** chip shows, from Subtle to Free (Subtle, Light, Balanced, Strong, Free, sent as the base's `strength`);
+  - reference images, when the base takes them (FLUX.2 Dev, Klein 9B, 9B Base and 4B, Qwen Edit 2511): the capture goes as the first reference, recorded per base in `shared/catalog-map.json` (assumed, M4);
+  - a `mask` input (no base today): the mask goes in the base's polarity;
+  - otherwise the model is not offered as a style.
+  - Edit with a trained model stays **Experimental** until a trained selection edit passes the seam and alignment checks live on each route (M4 passed the image and strength route and the reference route once each).
+- **Style strength** per LoRA (`lorasScale`) is the record's own `concepts[].scale` when present, else 0.75.
+- **Records.** The ledger and layer metadata keep the base as `modelId`, the trained models as `trainedModelIds`, and both strengths in `scenario:parameters`; the quote fingerprint covers all of them. Agents use the same contract (MCP.md 4.2).
 
-- **Upscale.** Source (All visible, Current layer, Selection box), factor from the model's schema, and the output size from the generated size (section 5.8): "Output 6000 x 4000", or "Output 12288 x 8192, 1.4x of this document" when the source was read reduced. **Lands**: from a selection box, **Layer over the box** by default (the larger pixels inside a smart object placed back over the box, for detail repair); from All visible or a layer, **New document** by default, or **Layer in this document** (a smart object holding the larger pixels, scaled to the source's size).
-- **Expand.**
-  - **Canvas**: aspect presets (1:1, 4:5, 3:2, 2:3, 16:9, 9:16, and Custom) or **Per side** (left, top, right, bottom in pixels). **Anchor**: a 3 x 3 grid for where the current image sits (center by default; Per side sets it implicitly). **Lands**: This document (default) or A copy of this document, for making several formats from one master.
-  - What a model can honor depends on its route (section 5.8). The default is a model with a mask input, so every anchor and Per side work: GPT Image 2.5 Flare at release, compared with Photoroom Expand in M4. With an exact-size model that has no placement setting, Anchor and Per side are disabled: "This model expands around the center."
-  - The new size shows as "3000 x 2000 to 3000 x 3750", with the resolution warning of section 5.8 when it applies. Overlap with the original (default 32 px) sits in Advanced. The prompt field is hidden for models that take no prompt.
-  - Result: the canvas grows and the result lands as section 5.8 says, in one History state.
-- **Remove BG.** Source: Current layer or the selection box, read at full resolution (section 5.5). **Lands**:
-  - **Mask on the layer**: the default for a pixel layer, a smart object without a mask, and the Background layer, which is first converted to a normal layer in the same History state, as Photoshop's own Remove Background does (assumed, M4).
-  - **New cutout layer**: a copy of the source pixels with the cutout as its mask, so Select and Mask can still refine the edge. The only choice when the layer already has a mask (left as it is), is locked (the Background layer aside), or is a text, shape, adjustment or group layer.
-  - From the selection box, the mask hides everything outside the box.
+### 3.5 The flows
 
-### 3.7 Prompt bar
+Each action runs the logic named below and lands as section 5.3 says. Every run is priced first (section 6.1); Generate builds the request again from the document as it is, so a change since the price check makes the quote mismatch and nothing is spent.
 
-- Multi-line field that grows to 4 lines. **Cmd+Enter** (Ctrl+Enter on Windows) generates when the button shows a current price; Enter adds a line, as in Photoshop's own text fields.
-- **Takes**: 1, 2 or 4, within the model's limit; default 1 in Image and Trained Make new (faster and cheaper first results), 2 in Edit. **Size**: presets from the schema; the default matches the target box aspect.
-- Generate button labels follow the Blender plugin's form:
+| Flow | Actions | Logic | Lands as |
+|---|---|---|---|
+| F1 Replace inside a selection | Replace inside, Remove, Make versions, Cut out subject | Edit on the selection plus its margin, mask in the model's polarity (section 3.8); Cut out subject runs the cut-out of section 3.6 | A group of takes above the active layer, masked to the selection, take 1 visible; the selection stays. Cut out subject: a new masked layer, the selection dropped, the new layer active, so the context becomes the cut-out one, led by Add background |
+| F2 Make versions of a layer | Make versions (4 takes by default; an empty prompt sends the built-in variations prompt) | Edit of the layer's own pixels, no mask; Style and Change amount apply | A group of takes above the layer at its bounds; the new group is selected, so the panel shows the takes context |
+| F3 New image or background | Create image (no document; Size presets from the model), New layer (a canvas-sized layer above the active layer), Add background (the cut-out layer goes as an automatic reference, the result lands below it) | Image request (`panel/image.js`, `forms/requests.js`) | A new document with the takes as a group; or a group of canvas-sized takes above or below the layer, the new group selected |
+| F4 Finish | Extend canvas (16:9, 4:5, 1:1, 9:16, 3:2, or +20% each side), Upscale (×2 and the factors the model offers; source: all visible, this layer, the kept take), Remove background, Cut out subject, Cut out to a new layer | Enhance (`lanes/enhance.js`, section 3.6) | Extend: the canvas grows and the result lands over the new area only, in one History state. Upscale: a new document at the larger size (the selection: a layer over the box). Remove background: a mask on the layer. Cut out subject and Cut out to a new layer: a new layer with the subject masked, the layer untouched |
+| F5 An agent asks to spend | | The agent link (M6) | An approval card above the composer: who asks, what, the prompt it will send, the model and the price, **Approve** and **Decline** ("Declined. The agent was told, and nothing was spent."). It shows only when a request exists. Approved runs land in Takes like the person's own, marked with the agent's name |
+
+**Selection after a run.** After every run that is not masked to a selection (Make versions on a layer, New layer, Add background, Extend canvas, a cut-out to a new layer), the new group or layer is selected once it lands, so the next chip works on the result and not on the hidden source. Masked runs keep the person's selection and active layer; a mask on the layer and a new document select nothing.
+
+**Built-in prompts.** Models need a prompt where the person gives none; these are sent then, and nothing else is added to a person's prompt:
+
+| Action | Prompt sent when the field is empty, or always for actions without a field |
+|---|---|
+| Make versions (on a layer or a selection), More like this | "A variation of this image: same subject, composition and colors, new details." |
+| Remove | "Remove what is inside the masked area and fill it so it matches the surroundings, as if it was never there." |
+| Extend canvas | "Extend the image into the empty area so it continues the scene naturally, with the same light and style." |
+
+**Later flows** (FLOWS v2 F6 to F14), not in this build and not shown in the panel: Render this sketch, Split into layers and Split text, Select by description, Animate and frames for video, Formats and variants, Start a set, Same action on each and Run a workflow, New angle, turnaround and relight, the agent's multi-step plan card, and Open from Library. The Library (FLOWS v2 after review: the project's images as a 3-column grid in the composer, a click opens one as a new document, and + Reference > Library) returns as a flow; until then it stays in the web app and hosted Scenario MCP.
+
+### 3.6 Finishing actions
+
+- **Upscale.** Source: All visible (Upscale), the active layer (Upscale this layer), or the take that shows (Upscale kept take). Upscale the selection (Upscale with a crop) was removed after the prototype review. The factor chip lists the factors the model's schema offers and shows the output size ("×2 · 2048 × 2048"), capped at the model's largest output (section 5.8). The result opens as a **new document**, which keeps the working PSD at its size. The default upscaler stays Topaz (the prototype shows Magnific Precision, which quotes 30 CU up to about 6.3 MP of output and 180 CU above); the Model menu shows each upscaler's price, so the jump is visible before the click. FLOWS v2 also has a print size (A4 at 300 ppi) and a result card comparing the same region at 100%; neither is in this build.
+- **Extend canvas.** Targets 16:9, 4:5, 1:1, 9:16, 3:2, and **+20% each side** (models with a mask route only). The Model menu lists the catalog's Expand models (Uncrop is one of them in FLOWS v2, not a separate action). **Original at** (center, top, bottom, left, right) sits behind the settings icon. What a model can honor depends on its route (section 5.8): the default, GPT Image 2.5 Flare, takes a mask, so every anchor and per-side growth work; with an exact-size model the original stays centered. The canvas grows and the result lands masked to the new area with a 32 px overlap, in one History state. A target the canvas already has says "Already 16:9, pick another target". FLOWS v2 draws the new canvas outline in the document while the action is selected; not in this build.
+- **Remove background** (layer): a mask on the layer, the default for a pixel layer, a smart object without a mask, and the Background layer, first converted to a normal layer in the same History state. A layer that already has a mask, is locked, or is text, shape, adjustment or group gets **a new cutout layer** instead, a copy of the source pixels with the cutout as its mask. **Lands as** (mask on the layer, new masked layer) sits behind the settings icon.
+- **Cut out subject** (selection): the subject found inside the selection, on a new layer with the subject masked; the active layer stays as it is (a mask on it would hide everything outside the subject). As Layer via Copy does, the selection is dropped in the same History state ("Scenario: Place cutout") and the new layer is made active, so the panel shows the cut-out context. **Cut out to a new layer** does the same for the whole layer.
+- Finishing actions take no prompt; the composer says what they do ("Adds detail at the larger size. No prompt needed.") and the button reads "Upscale ×2 · 10 CU".
+
+### 3.7 Composer
+
+- **Refs row** (actions whose model takes reference images): the document references first (section 9.2), each a chip with its role; a click leaves it out of this run without removing it from the document. Then this run's references with ×, then `+` with the sources: Selection, Layer, All visible, File…, and **Pin the layer as a document reference** with a role (Character, Set, Style, Product). Add background shows the cut-out layer as an automatic reference ("Bottle, for light and perspective"); More like this on a selection edit shows the shown take. With nothing added, the hint reads "Selection, layer or file".
+- **Document references** are kept in the document's own XMP packet under the Scenario namespace, as one attribute `scenario:references` holding a JSON list of `{ role, layer_id, name }` (up to 8, one per layer); writing keeps every other field of the packet. They travel with the PSD, and the pixels are read from the layer when a run starts, so a reference follows the layer as the person edits it.
+- **Prompt**: a multi-line field with the action's placeholder ("Describe what goes inside the selection", "Describe the change, or leave empty for variations", "Describe the image"). It starts empty. Actions without a prompt show one line instead ("Fills the selection from what surrounds it. No prompt needed."). FLOWS v2 after review puts **Suggest** in the prompt box (Prompt Spark, free: three proposals, picking one replaces the prompt only); not in this build. When it ships, it passes the document size, the Style chip and the cut-out state as constraints, drops size and quality from the answer, and replaces em dashes with commas (prototype review findings).
+- **Chips**, each showing its value: **Style** (section 3.4), **Model** (thumbnail or initials, name; section 3.3), **Takes** ("1 take" to "4 takes" within the model's limit, each with its price from a free price check made when the menu opens; defaults 2 takes for selection edits, New layer and Add background, 4 for Make versions on a layer and Create image, 1 for finishing actions), and only where it is a choice **Size** (Create image: the model's aspect presets, "3:2 · 1536 × 1024"), **Extend to**, **Upscale** factor (each factor with its output size and its price) and **Change amount**.
+- **Settings icon**: the action's advanced settings in a popover (context margin and what the model sees for edits, where the original sits for Extend, how Remove background lands, and **Quality** High, Medium or Low for models whose `quality` input offers those three, such as the GPT Image 2.5 models; Medium by default, and the price follows it), never in the main view. Quality is not offered under a trained style.
+- **The button** carries the action and its price, built from the selected action and a current quote:
+
+The button repeats the action's name, then the price; the count sits on the Takes chip ("2 takes"), and × only means an upscale factor.
 
 | Label | When |
 |---|---|
-| `Generate (N CU)` | Exact price from a current quote |
-| `Generate (N to M CU)` | The charge can vary within a bound the schema gives (section 6.1, step 6) |
-| `Generate (from N CU)` | The charge can exceed the quote and the schema gives no bound; always confirmed (section 6.1) |
-| `Checking price...` | Dry run in flight |
-| `Sending...` | Disabled while this request is being sent (section 6.2) |
-| `Generate (price after upload)` | The price depends on an input file that no stand-in can price (section 6.1, step 3) |
-| `Price unavailable` | Disabled; the reason shows under the button |
-| `Confirm (N CU)` | Second click in the price-after-upload case |
+| `Fill in the prompt to see the price` | The action needs a prompt and the field is empty; nothing is priced |
+| `<Action> · …` | Price check in flight (400 ms after the last change) |
+| `<Action> · N CU` | Exact price from a current quote, for example `Replace inside · 8 CU`, `Make versions · 12 CU`, `Create image · 5 CU`, `Upscale ×2 · 10 CU` |
+| `<Action> · N to M CU` | The charge can vary within a bound the schema gives (section 6.1, step 6) |
+| `<Action> · from N CU` | The charge can exceed the quote and the schema gives no bound; always confirmed (section 6.1) |
+| `Sending` | Disabled while this request is being sent (section 6.2) |
+| The reason, when short (`Not available here`, `Already 16:9, pick another target`) | No price; a longer reason shows under the button |
 
-- Prices show up to three decimals, trailing zeros dropped; from 10,000 they show as K and M with three significant digits, as in the Blender plugin.
-- On first run the Image lane's prompt holds a sample prompt, selected so typing replaces it.
-- With a selection active, the Image lane shows one line under the Target chip: "Makes a new picture, masked to the selection. To change what is inside it, use Edit."
-- Up and Down in an empty field recall the last 20 prompts (stored locally).
-- Prompt helper, style description and prompt translation (each priced separately): v1.1.
+- Prices show up to three decimals, trailing zeros dropped; from 10,000 they show as K and M with three significant digits. An exact price of zero reads "Free", never "0 CU".
+- **Confirm card**, above the button: above the confirm limit ("This costs 150 CU, above your confirm limit of 100 CU.", **Cancel**, `<Action> · 150 CU`), for a `from` price always, and after an upload that changed the price ("Price changed after upload. Now 5 CU (was 2 CU). Nothing was spent.", **Cancel**, `Approve · 5 CU`). Cancel on a changed price marks the job not sent.
+- Messages under the button: the not-sent answers ("Not enough CU for this job. Nothing was sent.", "Not sent: Scenario asked to wait 30 s."), "A matching request may already be running. Resolve it in Jobs first.", and "The document or the settings changed since the price check. Check the new price, then click again."
 
-### 3.8 Source chip and selection-aware editing
+### 3.8 Selection-aware editing
 
-The source chip states what the lane will read: `Selection 928 x 928`, `Layer "Background copy"`, `All visible`. It updates on Photoshop notifications (select, set, make, delete, open, close, document switch) through `action.addNotificationListener` (documented), coalesced at 200 ms. Its menu offers **All visible** (default) and **Current layer**, and the line "To use a layer mask as the area, Cmd-click (Ctrl-click) its thumbnail first" until mask sources ship (v1.1). On 16-bit documents and on Display P3, Adobe RGB or ProPhoto documents, the chip adds "Edits are 8-bit sRGB" before anything is spent (section 5.4).
+The context card states what an edit reads: the selection on the active layer, or the layer. The panel updates on Photoshop notifications (select, set, make, delete, open, close, document switch) through `action.addNotificationListener` (documented). On 16-bit documents and on Display P3, Adobe RGB or ProPhoto documents, edits are 8-bit sRGB (section 5.4).
 
-**Edit lane default model**, shipped as data like the others: GPT Image 2.5 Flare at release. It takes a mask with a documented polarity (transparent = edit), exact width and height on a 16 px grid, and up to 10 references, the first being the image edited (schema seen through hosted Scenario MCP); it is the model of the selection-edit round trip (capture, placement and outside check verified live (27.11) with the ExtendScript toolkit; generation through hosted Scenario MCP). M4 compares it with two other mask-taking models on alignment and price.
+**Edit default model**, shipped as data: GPT Image 2.5 Flare. The panel sends Medium quality unless the person picks High or Low under Advanced (section 3.7); requests that carry no quality, such as an agent's, keep the mapping's preset (low). FLOWS v2 after review shows GPT Image 2.5 Sunburst as the edit model; the build keeps Flare until a shoot-out on the same input says otherwise. It takes a mask with a documented polarity (transparent = edit), exact width and height on a 16 px grid, and up to 10 references, the first being the image edited (schema seen through hosted Scenario MCP).
 
-Under the source chip, **Margin** (auto: half the long side, at least 64 px; or 64 px; or none) and the context size show before the spend, with "generated at about N% of this area's resolution" when the generated size (section 5.8) is smaller than the context box.
+**Margin** (Advanced: auto, half the long side and at least 64 px; or 64 px; or none) and **The model sees** (all visible, or the current layer; Make versions on a layer reads the layer only).
 
-Flow for a selection edit by a person:
+Flow for a selection edit by a person (F1):
 
-1. The person selects an area with any tool, feathered or not. The chip reads `Selection W x H` and `Sample: All visible`.
+1. The person selects an area with any tool, feathered or not. The context card reads "Selection W × H on Layer" and "Lands inside the selection, masked"; Replace inside is selected.
 2. They type a prompt. The button shows the price.
-3. They click Generate. The plugin records the target: document id and title, canvas size and resolution, capture box, insert point, sample mode, and the selection mask (saved to the plugin temp folder).
+3. They click the button. The plugin records the target: document id and title, canvas size and resolution, capture box, insert point, sample mode, and the selection mask (saved to the plugin's data folder).
 4. Capture, in a short modal scope: the context box (selection bounds plus margin, shaped to the model's size inputs, section 5.8) read as sRGB 8-bit at upload size, and the mask.
-5. Outside the modal scope: encode (section 5.5), then upload the context, any reference slots and, when the model has a mask input, the mask in the model's polarity.
-6. Second dry run with the real asset ids. A different price stops the run and shows the new price for approval; the job waits in `awaiting_approval`.
-7. Ledger write, then submit. The panel stays free while the job runs.
-8. On success: download the takes, run the checks, and place them (section 3.9). The selection is left as it was: placement changes no selection, so the person can generate again on the same area.
+5. Outside the modal scope: encode (section 5.5), then upload the capture, any references and, when the model has a mask input, the mask in the model's polarity.
+6. Second price check with the real asset ids. A different price stops the run and shows the new price for approval; the job waits in `awaiting_approval`.
+7. Ledger write, then submit. The panel stays usable while the job runs; the context card shows its progress.
+8. On success: download the takes, run the checks, and place them (section 3.9). The selection is left as it was, so the person can run again on the same area.
 
 | Situation | Behavior |
 |---|---|
-| No document open | Image: the result opens as a new document at the Size preset (default 1024 x 1024, sRGB); the quote binds to "new document W x H". Edit and Enhance: "Open or create a document to use this lane." with **New document** |
-| No selection | The edit covers the current layer's bounds or the canvas; the result lands unmasked |
-| Quick Mask is on | Chip reads "Quick Mask is on"; Generate is disabled; **Use Quick Mask as selection** leaves Quick Mask |
+| No document open | Create image only; the result opens as a new document at the Size preset (default 3:2, sRGB) |
+| No selection | Make versions on a layer edits the layer's own pixels; the result lands unmasked above it |
+| Quick Mask is on | "Quick Mask is on"; the button is disabled |
 | Selection partly outside the canvas | Clipped to the canvas; "Selection is outside the canvas" when nothing remains |
 | Selection smaller than 16 px | "Selection is too small to edit" |
-| Source layer hidden (Current layer) | "Layer "x" is hidden. Show it to use it as the source." with **Show layer**; Generate disabled |
+| Source layer hidden (the model sees the current layer) | "Layer "x" is hidden. Show it to use it as the source."; the button is disabled |
 | Source layer locked | Read as usual; results land above it |
-| Selection changes after Generate | The job keeps the selection recorded at step 3 |
-| Canvas size or resolution changed before the result lands | Masked placement is refused: "The canvas changed since this edit started." Offers **Place unmasked** and **Open as document** |
-| Document closed | Results stay saved: **Place in current document**, **Open as document** |
+| Selection changes after the click | The job keeps the selection recorded at step 3 |
+| Canvas size or resolution changed before the result lands | Masked placement is refused: "The canvas changed since this edit started." Jobs offers **Place unmasked** and **Open as document** |
+| Document closed | Results stay saved: **Place in current document**, **Open as document** in Jobs |
 | Insert point deleted | The result goes to the top of the stack |
 | Insert point inside a clipping chain | The result goes above the chain's top layer (verified live (27.11), ExtendScript) |
 
-Insert point: with **All visible**, the result goes to the top of the document, so adjustment layers are not applied twice. With **Current layer**, it goes directly above that layer, inside its group.
+Insert point: with **All visible**, a selection edit goes to the top of the document, so adjustment layers are not applied twice; with **Current layer**, and for Make versions on a layer, it goes directly above the layer, inside its group.
 
-### 3.9 Results tray and takes
+### 3.9 Results model and the Takes card
 
-- **Place when ready** (on by default): when a person's job finishes, its document is the active document and Photoshop is idle (the plugin obtains the modal state within 1 s), the results land without a click, and the person's active layer is made active again so the next brush stroke does not hit the new layer. After a **Place** click the new layer stays active. A job whose document is open but not active waits in the tray as "Ready for poster.psd" with **Place**; the plugin never switches documents. Results never land by themselves after a Photoshop restart, and agents' results never land by themselves.
-- Several takes land as a group `Scenario <kind> <slug> (<n> takes)` with take 1 visible and the others hidden. For a selection edit, the mask sits on the group, so switching takes keeps it. Clicking a thumbnail in the tray shows that take. Visibility changes are not History states under Photoshop's default preference (verified live (27.11), ExtendScript: stepping History does not restore visibility). **Keep this take** deletes the hidden takes and leaves the kept take as a single layer in the group's place, with the group's mask and metadata, in one History state.
-- One take lands as a single layer.
-- Each tray card: thumbnail, check badges, **Place** (until placed), **Keep this take** (takes), **Reuse settings** (puts lane, model, prompt, settings and references back in the form; nothing spends until Generate), **Details**, **More** (**Open as document**, **Use as reference**, and **Upscale**, **Remove BG**, **Expand** with this take as the source, which fill the Enhance lane), and **Copy error** on a failure.
-- After the first placed result, a one-time banner says: "Prompts and prices are saved in layer metadata and travel with the PSD. Settings > Results can leave them out." It also links **Connect a client**.
+- **Landing.** A run lands in the document right away when its document is the active one, Photoshop is idle and the run is the person's own, in the same Photoshop session; the person's active layer is made active again. Several takes land as a group `Scenario <kind> <slug> (<n> takes)` with take 1 visible and the others hidden; a selection edit is masked on the group, so switching takes keeps the mask. One take lands as a single layer. Results never land by themselves after a restart, and agents' results never land by themselves.
+- **Takes card** (the run of the selected group, or the document's latest run until closed): the run's prompt, "N takes" or "Kept", the model and the CU charged, and one tile per take in a 2 by 2 grid (one row for two), the showing take marked, with its check badge. A click on a tile shows that take in the document and hides the others, as one History state ("Scenario: Show take").
+  - **Keep take N** removes the hidden takes and leaves the kept one in the group, with the group's mask and metadata, in one History state ("Scenario: Keep take"). Their files stay in the Output Folder and in Jobs, so nothing paid is lost.
+  - **Refine** keeps the take that shows and puts the composer on it with an empty prompt: Replace inside on the same selection, loaded back from the run's mask, for a selection edit ("Starting from take 2 · lands inside the selection"); Make versions on a layer on the kept take otherwise.
+  - **More like this** runs again with the shown take as a reference (the take's own file), on the run's selection for a selection edit.
+  - **Compare takes**, the Takes context's first action, says "Click a take above to show it in the document, then Keep it."; once kept, "Take N is kept. Refine or More like this start from it."
+- **After a restart, or on a PSD from someone else's run**: selecting a Scenario group in the Layers panel makes it the Takes context and reopens its card from the layers' own metadata (section 9.2). Thumbnails come from the Output Folder when the job is on this computer.
+- **A run that did not land as takes** (failed, waiting for approval, ready to place, or a result that opened elsewhere): the card shows one line with what happened (Scenario's failure text, "Ready to place" with **Place**), and **Done** closes it.
+- **Recent on this document**: the document's other placed runs of this session, newest first, up to eight; a click selects that run's group.
 
 | Check badge | Condition |
 |---|---|
-| `Seam ok` | bias < 12 and residual < 6 |
-| `Edge tone differs` | bias >= 12 |
-| `May be misaligned` | residual >= 6 or aspect mismatch above 1% against the shaped capture; shown only when a mask is applied, since whole-layer edits (camera angle, restyle) are meant to move pixels |
-| `Unchanged inside` | inside mean difference < 3; with `polarity_suspect`, the text adds "the model may have read the mask inverted" |
-| `Changed outside` | outside-the-mask check failed after the apply; card offers **Undo** |
-| `Input reduced` | the capture was reduced to fit the upload limit (section 5.5) |
-| `Result is N px for an M px area` | the result was scaled up into the box; offers **Upscale this take** |
+| `Edges ok` | bias < 12 and residual < 6 |
+| `May not line up` (amber) | residual >= 6 or aspect mismatch above 1% against the shaped capture, shown only when a mask is applied; or `Changed outside` or `Unchanged inside` |
+| `Part unchanged` (amber) | Remove only: 30% or more of the selection's 16 px cells came back as they were (residual under 6 after a blur and after removing the overall tone shift inside), so part of what the person selected may still be there. Full words: `Part of the selection may be unchanged` |
+
+The full check words (`Edge tone differs`, `Unchanged inside`, `Changed outside` with **Undo**, `Input reduced`, `Result is N px for an M px area`) stay in the job's record and in Jobs. A failed check never removes a take.
 
 ### 3.10 Details
 
-**Details** shows the provenance of a Scenario layer: model and trained models, prompt (unless left out), settings, input assets, quoted and charged CU (section 2.5), date, origin, job and asset ids, check results, plugin version. It opens from a tray card, a Jobs row, the header menu (**Details of selected layer**), and a chip that appears under the lane tabs when the active layer carries Scenario metadata ("Scenario layer: edit dusk-sky. **Details**"). It reads the layer's XMP locally, so it works on a PSD received from someone else, and it reads older snake_case keys too (section 9.2). Actions: **Reuse settings**, **Select layer**, **Copy ids**. Text read from a document is shown as plain text only.
+**Details** shows the provenance of a Scenario layer: model and trained models, prompt (unless left out), settings, input assets, quoted and charged CU (section 2.5), date, origin, job and asset ids, check results, plugin version. It opens from a Jobs row and from the panel menu (not in this build). It reads the layer's XMP locally, so it works on a PSD received from someone else, and it reads older snake_case keys too (section 9.2). Text read from a document is shown as plain text only.
 
 ### 3.11 Jobs view
 
-Two tabs.
+**Jobs** in the header opens a popover, as FLOWS v2 draws it: **Jobs on this computer**, the six newest jobs one line each (a check on a placed job; name; status when not placed, time, CU, and the client's name for an agent's job; amber when it waits for the person), the line "Every file stays in the output folder, kept or not.", and **All jobs**. A row or **All jobs** opens the full Jobs view below, with a back arrow, where each row has its action buttons.
 
-**On this computer** (the ledger). Newest first, filters **All**, **Needs attention**, **Agents**, **This document** (with the total `cu_charged` for the active document, section 2.5). Each row: thumbnail, title (lane and prompt slug), status, the price as section 2.5 words it, origin ("You" or the client name), time.
+**On this computer** (the ledger). Newest first, filters **All**, **Needs attention**, **Agents**, **This document**. Each row: thumbnail, title (kind and prompt slug), status, the price as section 2.5 words it, origin ("You" or the client name), time.
 
 | Status | Actions |
 |---|---|
@@ -598,16 +607,14 @@ Two tabs.
 | canceling | **Details** |
 | finished on Scenario, downloading results | **Stop download**, **Details** |
 | download stopped | **Resume download**; for `ResultUnreachable` or `ResultExpired`, **Open on Scenario** and **Details** |
-| results saved | **Place**, **Open as document**, **Use as reference**, **Copy file path** |
+| results saved | **Place**, **Open as document** |
 | placing | none |
 | place failed | **Place**, **Details**, **Copy error** |
-| placed | **Select layer**, **Reuse settings**, **Details** |
-| Failed, Blocked, Not sent, Canceled | **Details**, **Copy error**, **Edit and retry** (a new quote) |
-| Unknown | **Resolve** (section 6.2) |
+| placed | **Select layer**, **Details** |
+| Failed, Blocked, Not sent, Canceled | **Details**, **Copy error** |
+| Unknown | **Resolve** (section 6.2), **Mark not sent** (two clicks) once a complete look-up found no match |
 
-When the ledger is empty, the empty state links to **On Scenario**: jobs from another Photoshop version or another computer are listed there.
-
-**On Scenario**: the current project's recent jobs from the jobs list, paged, including jobs made in the web app or other plugins. Rows show the prompt read from its text asset, one read per row. Actions: **Place**, **Open as document**, **Use as reference**, **Add to this computer**, and **Reuse settings**. Nothing here spends.
+This build offers **Approve**, **Decline**, **Place**, **Open as document**, **Resume download**, **Mark not sent** (two clicks; the runner refuses it while a matching job may exist) and **Copy error**, with no filters; the Resolve card of `jobs/view-model.js` is built and tested as logic but not drawn yet. **On Scenario** (the project's recent jobs from the jobs list, including jobs made in the web app or other plugins) is not in this build.
 
 ### 3.12 First run
 
@@ -618,59 +625,50 @@ When the ledger is empty, the empty state links to **On Scenario**: jobs from an
 | 3 | Opens Plugins > Scenario | 5 s |
 | 4 | Clicks **Create an API key**; the browser opens Scenario's "API keys and scopes" article, which leads to Settings > Organization > API Keys; they create a Project key with the Editor role, optionally with a CU limit (section 4.2), and copy the key and secret | 40 s |
 | 5 | Pastes them and clicks **Save and test** (two free calls, section 4.2) | 10 s |
-| 6 | Clicks Generate on the sample prompt in the Image lane; with no document open, the result opens as a new document | 5 s |
-| 7 | Waits for generation, download and placement with the default Image model | 15 s |
+| 6 | With no document open, Create image is selected: they type a prompt and click the button, which shows the price | 10 s |
+| 7 | Waits for generation, download and the new document with the default Image model | 15 s |
 | | Total | 2 min |
 
 - The clock starts with the `.ccx` on disk. It excludes installing Photoshop and creating a Scenario account.
-- It applies to a person whose team plan includes API access (Starter and above) and who can create keys (team admin or project owner), per Scenario's help center (documented). Others need a key from their admin; the first-run screen says so and offers **Copy a request for your admin**. People without an account or on the Free plan get **Create a Scenario account** and **See plans** next to **Create an API key**. **See plans** opens `https://app.scenario.com/settings/organization-plans`; **Create an API key** opens the help center article "API keys and scopes", which gives the path Settings > Organization > API Keys, since no deep link to that page is documented.
-- Every number is a target until measured on a clean machine in M3. The default Image model is chosen at release for latency at 1024 px, from the M3 measurements, and shipped as data.
-- The ready banner after sign-in does not block: "Ready. Describe a new image below, or select an area and use Edit to change it." It dismisses itself at the first Generate.
-- The first-run screen and Settings > About say "Generative AI by Scenario".
+- It applies to a person whose team plan includes API access (Starter and above) and who can create keys (team admin or project owner), per Scenario's help center (documented). Others need a key from their admin; the first-run screen says so and offers **Copy a request for your admin**. People without an account or on the Free plan get **Create a Scenario account** and **See plans** next to **Create an API key**.
+- Every number is a target until measured on a clean machine.
+- The first-run screen and Settings > About say "Generative AI by Scenario". The panel has no banners: the context card and the composer carry what the person needs.
 
 ### 3.13 Empty, loading and error states
 
-The plugin classifies Scenario errors by HTTP status and the body's text: REST error bodies carry `reason` (400, 403, 404) or `message` (401, 413), and no `code` field was observed (measured live 2026-10-19). The known texts ship as data; any other shows Scenario's text. Which codes Scenario uses for a plan without API access, a key's CU cap, a plan limit, a scope refusal and a team key is not documented: M2.0 records every code it observes and they ship as data. Until a code is known, the panel shows Scenario's own message with the generic text below.
+The plugin classifies Scenario errors by HTTP status and the body's text: REST error bodies carry `reason` (400, 403, 404) or `message` (401, 413), and no `code` field was observed (measured live 2026-10-19). The known texts ship as data; any other shows Scenario's text.
 
 | State | Message | Actions |
 |---|---|---|
 | Not signed in | "Connect your Scenario account to generate. Needs a Scenario plan with API access (Starter or above)." | **Create an API key**, **Copy a request for your admin**, **Create a Scenario account**, **See plans**, key fields |
 | Key refused (401, or 403 with `reason` "Given APIKey does not exists") | "Scenario did not accept this key and secret." | **Enter key again**, **Create an API key** |
 | No API access on this plan | "API keys need a Starter plan or above. This team's plan has no API access." | **Open plans**, **Copy a request for your admin** |
-| Key cannot run models (403 at Save and test, or at the first Generate) | "This key can't run models. Create a Project key with the Editor or Admin role." plus Scenario's message; nothing was spent | **Create an API key**, **Copy error** |
+| Key cannot run models (403 at Save and test, or at the first run) | "This key can't run models. Create a Project key with the Editor or Admin role." plus Scenario's message; nothing was spent | **Create an API key**, **Copy error** |
 | Team key | "This is a team (Organization) key. Generating needs a Project key." | **Create an API key** |
 | Forbidden later (403) | "Scenario refused this request: <message>. The key may not have access to this model or action." | **Copy error** |
-| Key or plan limit reached | "This key's or this plan's CU limit is reached. Nothing was sent." | **Open plans**, **Copy error** (no **Try again**) |
-| Not enough CU | "Not enough CU for this job." | **Open plans** |
-| No-spend mode on | Header banner "No-spend mode is on"; Generate keeps showing the price, disabled | **Settings** |
+| Key or plan limit reached | "This key's or this plan's CU limit is reached. Nothing was sent." | **Copy error** |
+| Not enough CU (402) | "Not enough CU for this job. Nothing was sent." | none |
+| No-spend mode on | The button keeps showing the price, disabled | **Settings** |
 | Rate limited (429) on a read | "Scenario is busy. Retrying in N s." | none (automatic) |
-| Rate limited (429) on a paid call | "Not sent: Scenario asked to wait N s." Paid requests pause for N s, or 60 s when Scenario gives no time | **Try again** (a new quote), enabled after the wait |
-| Offline | Header banner "Offline. Price checks paused; jobs resume when the connection returns." | **Retry** |
+| Rate limited (429) on a paid call | "Not sent: Scenario asked to wait N s." Paid requests pause for N s, or 60 s when Scenario gives no time | the button, enabled after the wait |
+| A price check that created a job | "A price check created a job on Scenario. Price checks are stopped until Photoshop restarts." | none |
 | Catalog failed | "Models could not load." | **Retry** |
-| No models for the lane | "No models in this lane match these filters." | **Clear filters** |
-| Model no longer available | "This model is no longer available to this key." | **Choose another model** |
-| No trained models | "No trained models in project <name> yet. Scenario's public models are listed below; models trained in other projects appear when you switch project." Without a public listing (M2.0 item 12), the second sentence reads "Models trained in other projects appear when you switch project." | **Open Scenario**, **Switch project** |
-| Library empty | "No images in project <name> yet." | none |
-| No jobs | "Jobs you start here or from an agent appear here. Jobs from another Photoshop version are on the On Scenario tab." | **On Scenario** |
-| No document open (Edit, Enhance) | "Open or create a document to use this lane." | **New document** |
-| Hidden source layer | "Layer "x" is hidden. Show it to use it as the source." | **Show layer** |
-| Unsupported color mode (only for modes M4 finds imaging cannot convert, section 5.4) | "This lane can't read this document's color mode." | **Make RGB copy** |
+| Model no longer available | "This model is no longer available to this key." | the Model chip |
+| No document open | The context card reads "No document open"; Create image is the action | none |
+| Hidden source layer | "Layer "x" is hidden. Show it to use it as the source." | none |
 | 32-bit document | "32-bit documents are not supported yet. Convert a copy to 16-bit." | none |
 | Photoshop busy | "Photoshop is busy. Placing when it is free." | none |
-| Blocked | "Scenario blocked this request (content policy)." | **Details** |
-| Failed or Canceled | Scenario's failure text, then "Refunded by Scenario", or "Charged N CU, no refund on failure" when the job carries `disableRefund` (section 2.5) | **Copy error**, **Edit and retry** |
-| Download failed 3 times | "Download stopped after 3 attempts." | **Resume download** |
+| Blocked | "Scenario blocked this request (content policy)." | **Details** in Jobs |
+| Failed or Canceled | Scenario's failure text, then "Refunded by Scenario", or "Charged N CU, no refund on failure" when the job carries `disableRefund` (section 2.5) | **Copy error** in Jobs |
+| Download failed 3 times | "Download stopped after 3 attempts." | **Resume download** in Jobs |
 | Result expired on Scenario | "This result is no longer available on Scenario." | **Details** |
 | Result on an undeclared host (section 2.10) | "Stored on a host this plugin can't reach." | **Open on Scenario** |
-| Agent port in use | "Agent connection unavailable: another program uses port 9890." | **Copy diagnostics** |
+| Agent port in use | "Agent connection unavailable: another program uses port 9890." (under Settings > Connect an AI agent > Details) | **Copy diagnostics** |
 | A second Photoshop links to the helper (`plugin_busy`) | "Agents are connected to another Photoshop." | **Copy diagnostics** |
-| Port held by a program without the token | "The program on port 9890 is not the Scenario helper." | **Copy diagnostics** |
-| Client with an old pairing token | "A client tried to connect with an old pairing token. Copy its setup again." | **Connect a client** |
+| Client with an old pairing token | "An agent tried an old pairing token." | **Connect an AI agent** |
 | No project name from the API | Header shows "Scenario project ....7KQ2" (last 4 of the key) | none |
 
-Under every error: **Report a problem**, which opens the repository's issue form in the browser with nothing attached (it needs a GitHub account), and **Get help**, which opens Scenario's help center.
-
-Loading: skeleton rows in lists, text next to every progress bar ("Uploading selection", "Generating 1 of 4", "Downloading 2 of 4"). No spinner without words.
+Loading: text next to every progress bar ("Uploading", "Queued on Scenario", "Generating 2 takes", "Downloading", "Placing in the document"). No spinner without words.
 
 ### 3.14 Settings
 
@@ -678,7 +676,7 @@ Loading: skeleton rows in lists, text next to every progress bar ("Uploading sel
 |---|---|
 | Account | Projects with a saved key (name, key shown as its last 4 characters), **Add a key for another project**, **Test connection**, **Sign out** (removes the key from this computer; it stays valid until deleted on app.scenario.com) |
 | Spending | **Confirm above N CU** (default 100), **No-spend mode** (refuses paid calls and agent uploads), and the note "A key can carry its own CU cap, set on app.scenario.com." |
-| Results | Output Folder (with "Choose a folder to keep a copy of job records that survives Photoshop upgrades"), **Place when ready**, **Leave prompts out of documents**, **Leave prices out of documents**, mask feather (0 to 8 px, default 2) |
+| Results | Output Folder, **Place when ready**, **Leave prompts out of documents**, **Leave prices out of documents**, mask feather (0 to 8 px, default 2) |
 | Agents | Connection status, **Agents may modify the document**, **Agents may run Photoshop commands**, **Agents read the active document only**, Agent spending, **Connect a client**, **Activity log**, **Reset pairing token** |
 | Updates | **Check for updates** (on; at most once a day) |
 | Diagnostics | **Run self-test** (free, section 12.2), **Copy diagnostics**: shows the text before copying; versions, OS, switch states, job counts per status and the last 20 error types; never prompts, document or project names, ids, paths, keys or tokens |
@@ -688,28 +686,27 @@ Loading: skeleton rows in lists, text next to every progress bar ("Uploading sel
 
 | Screen | Wireframe section |
 |---|---|
-| First run, sign-in states, ready banner | 1 |
-| Main view, Image lane, minimum width, no document, Projects view | 2 |
-| Enhance lane: Upscale, Expand, Remove BG | 3 |
-| Model picker | 4 |
-| Trained lane | 5 |
-| Library lane | 6 |
-| Prompt bar labels | 7 |
-| Selection edit, progress, takes, special cases | 8 |
+| First run, sign-in states | 1 |
+| Creation panel: header, context card and chips per context, at 280, 320 and 360 px | 2 |
+| Finishing actions: Upscale, Extend canvas, Remove background | 3 |
+| Model menu and the full model list | 4 |
+| Style chip | 5 |
+| Composer: refs row, document references, chips, button labels | 7 |
+| Selection edit, progress, Takes card, Refine, special cases | 8 |
 | Details | 9 |
-| Price confirmation, agent spend card, agent upload card | 10 |
-| Jobs, Resolve Unknown, On Scenario | 11 |
+| Confirm card, price changed after upload, agent approval card | 10 |
+| Jobs, Resolve Unknown | 11 |
 | Errors and empty states | 12 |
-| Settings, Settings > Agents, proposal card, agent banner | 13 |
+| Settings, Settings > Agents | 13 |
 | Connect a client | 14 |
 
 ### 3.16 Visual language
 
-- Spectrum UXP widgets (`sp-button`, `sp-action-button`, `sp-textfield`, `sp-picker`, `sp-checkbox`, `sp-progressbar`), with Photoshop's theme variables so the panel follows the four interface brightness settings (documented).
-- 8 px grid; 12 px body text, 11 px labels.
-- No animation (UXP has no CSS transitions). State changes are immediate and labeled.
-- Cards and notices are inline banners in the panel's flow, never overlays near a text field. Mask thumbnails are drawn as RGB.
-- Original icons that read in dark themes (Marketplace rule, documented). Black-and-white Scenario mark.
+- Native to Photoshop 2026: colors come from the host theme variables (background, text, secondary text, border, hover), with raised fields and cards as a translucent black over the background and hairline borders, so the panel follows the four interface brightness themes. One accent, Photoshop's blue, for the action button, focus and the selected chip; green for the agent dot and kept states, amber for warnings.
+- 12 px body, 11 px secondary, 13 px semibold titles, nothing larger. Spacing 4, 8, 12, 16; panel padding 12 px. Radius 8 for cards, 6 for chips and thumbnails; the action button 32 px high, fully rounded.
+- Icons 16 px outline, one stroke weight, drawn in the text color. The Scenario mark is monochrome. No banners.
+- Chips, menus, popovers and buttons are plain elements styled by the panel, because in UXP 9.4 `sp-picker` does not show its value and `sp-action-button` with an icon and a label stacks them. The prompt is an `sp-textarea`; the model list keeps Spectrum widgets.
+- No animation (UXP has no CSS transitions). State changes are immediate and labeled. Thumbnails are cropped to cover their box by the panel (UXP has no `object-fit`).
 
 ---
 
@@ -1239,6 +1236,7 @@ One schema, shared with the skills: namespace `https://scenario.com/ns/photoshop
 
 - **Reading.** The plugin also reads the older snake_case keys some layers carry (`asset_id` or `asset`, `job_id`, `model` or `model_id`, `date`, `cost` or `cost_cu`). Other keys under the namespace are kept and ignored: the skills add `scenario:source`, `scenario:factor` (upscales) and `scenario:printSize` (mockups), and a later schema may add more. A "Scenario layer" is a layer whose metadata has `scenario:assetId` or one of its older names. `remove_scenario_layers` trusts this metadata, which any PSD can carry; the removal is undoable.
 - **Writing.** The packet is built with UXP's `xmp` module or with every value XML-escaped. Values read back from a shared PSD are shown as plain text only.
+- **Document references** (section 3.7) live in the document's own packet (`XMPMetadataAsUTF8` of the document), under the same namespace: one attribute, `scenario:references`, a JSON list of `{ "role", "layer_id", "name" }` with the role one of Character, Set, Style or Product, at most 8 entries, one per layer. Writing it keeps every other field of the packet; an empty list removes the attribute.
 - **Never written**: credentials, signed links, team or project ids, local file paths.
 - A shared PSD carries these fields, so prompts and prices travel with it unless the settings leave them out. A unit test serializes the metadata and the layer names with both settings on and searches them for the prompt text and the prices.
 
@@ -1466,7 +1464,7 @@ Item 3 is the one that can hold the plan: if no mode matches, M3 waits. Every ot
 | Lanes in v1 | Image, Edit, Enhance (Upscale, Expand, Remove BG), Trained, Library, plus Jobs and Details | They cover use cases 1 to 9 and 11 to 15. Layer decomposition, Workflows, Video, Vectorize, Segment and Maps need their own landing designs and tests |
 | Price label | `Generate (N CU)`, as in the Blender plugin | One habit across the Scenario plugins |
 | Version numbers | First public release 0.1.0; 1.0.0 set deliberately | Matches the Blender and Godot plugins' pre-1.0 releases while Windows is untested |
-| Panel width | 320 px docked by default, 280 px minimum | Five lane tabs fit at 64 px each, and the panel shares a dock column with Layers; icons below 320 px |
+| Panel width | 320 px docked by default, 280 px minimum | The panel shares a dock column with Layers; action chips wrap to a second row at narrow widths |
 | Startup code | `loadEvent: "startup"` | Jobs resume and agents connect without the panel open (verified live (27.11)) |
 | Update check | GitHub releases API, once a day, can be turned off | Lets people learn about fixes without a marketplace; sends only a request to GitHub |
 | Skills | Not bundled; a copy command for `npx skills add scenario-labs/skills` | Skills ship on their own cycle, and the plugin cannot write client skill folders |

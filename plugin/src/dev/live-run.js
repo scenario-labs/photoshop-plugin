@@ -518,8 +518,64 @@ function start(app, hostRequire, o) {
   }
 
   if (ps && lfs && o.poll !== false) host.timers.setTimeout(tick, POLL_MS);
+  // The panel's dev loop (dev/ui-loop.js) drives the real panel on a
+  // document of its own: these make, inspect and close it.
+  async function select(docId, sel) {
+    return modal("Scenario dev: select", async function () {
+      var doc = findDoc(docId);
+      if (!doc) throw new Error("document is not open");
+      if (!sel) {
+        await play([{ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }], to: { _enum: "ordinal", _value: "none" } }]);
+        return null;
+      }
+      var shape = sel.shape === "ellipse" ? "ellipse" : "rectangle";
+      await play([{ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }], to: { _obj: shape, top: px(sel.top), left: px(sel.left), bottom: px(sel.top + sel.height), right: px(sel.left + sel.width) }, antiAlias: true }]);
+      return sel;
+    });
+  }
+
+  // The layers of a document it made, top first: names, kinds, visibility,
+  // masks, Scenario metadata; and the active History state's name.
+  async function inspect(docId) {
+    var doc = findDoc(docId);
+    if (!doc) throw new Error("document is not open");
+    var out = { document_id: docId, history: null, history_count: null, layers: [] };
+    try {
+      out.history = doc.activeHistoryState ? doc.activeHistoryState.name : null;
+      out.history_count = doc.historyStates ? doc.historyStates.length : null;
+    } catch (e) {
+      out.history = null;
+    }
+    async function walk(list, depth, parent) {
+      for (var i = 0; i < list.length; i++) {
+        var L = list[i];
+        var meta = null;
+        try {
+          meta = await host.scenarioLayer(docId, L.id);
+        } catch (e) {
+          meta = null;
+        }
+        var info = null;
+        try {
+          info = await host.layerInfo(docId, L.id);
+        } catch (e) {
+          info = null;
+        }
+        out.layers.push({ id: L.id, name: L.name, depth: depth, parent: parent, kind: String(L.kind || ""), visible: L.visible !== false, has_mask: info ? info.has_mask : null, bounds: info ? info.bounds : null, fields: meta ? meta.fields : {} });
+        if (L.layers && L.layers.length) await walk(L.layers, depth + 1, L.id);
+      }
+    }
+    await walk(doc.layers || [], 0, null);
+    return out;
+  }
+
   return {
     run: run,
+    makeDocument: makeDocument,
+    closeDocs: closeDocs,
+    select: select,
+    inspect: inspect,
+    composite: composite,
     stop: function () {
       stopped = true;
     },

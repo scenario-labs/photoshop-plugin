@@ -1,15 +1,13 @@
 "use strict";
-// The panel shell: icons, lane tabs (their bodies are ui/lanes.js), the
-// header's agent dot, and Settings > Connect an AI agent (link status and the
-// pairing token, the technical words under Details). Uses Spectrum UXP
-// widgets from index.html; this file only binds them. No overlays, no
-// animation.
+// The panel shell: icons, the header's agent status (icon, dot and the
+// agent's name, FLOWS v2), and Settings > Connect an AI agent (link status
+// and the pairing token, the technical words under Details). The creation
+// view itself is ui/create-view.js. No animation.
 
 var view = require("./view.js");
 var icons = require("./icons.js");
 
-// doc: the panel's document. actions: { copyToken(), resetToken(), token(),
-// onLane(id) (optional: a lane tab was chosen) }.
+// doc: the panel's document. actions: { copyToken(), resetToken(), token() }.
 function createPanel(doc, actions, version) {
   if (!doc || typeof doc.getElementById !== "function") return null;
   var byId = function (id) {
@@ -32,23 +30,6 @@ function createPanel(doc, actions, version) {
 
   icons.fill(doc);
 
-  function selectLane(id) {
-    var lane = null;
-    for (var i = 0; i < view.LANES.length; i++) if (view.LANES[i].id === id) lane = view.LANES[i];
-    if (!lane) return;
-    var buttons = doc.querySelectorAll ? doc.querySelectorAll("[data-lane]") : [];
-    for (var b = 0; b < buttons.length; b++) {
-      var on = buttons[b].getAttribute("data-lane") === id;
-      if (on) buttons[b].setAttribute("selected", "");
-      else buttons[b].removeAttribute("selected");
-      // The chosen tab keeps its label at narrow widths (styles.css).
-      buttons[b].className = on ? "tab on" : "tab";
-    }
-    // The lane bodies (ui/lanes.js) fill the rest; without them, a placeholder.
-    if (actions.onLane) actions.onLane(id);
-    else setText("lane-note", view.NOT_BUILT);
-  }
-
   function renderToken() {
     setText("token-value", view.maskToken(actions.token(), tokenShown));
     setText("token-show", tokenShown ? "Hide" : "Show");
@@ -61,7 +42,10 @@ function createPanel(doc, actions, version) {
     if (dot) dot.className = "dot " + d.dot;
     var headerDot = byId("agent-dot");
     if (headerDot) headerDot.className = "dot " + d.dot;
-    setTitle("agent-hit", d.headline);
+    // The header names the first connected agent (FLOWS v2: "Claude ●").
+    var name = d.names && d.names.length ? d.names[0] : "";
+    setText("agent-name", name.length > 14 ? name.slice(0, 13) + "\u2026" : name);
+    setTitle("agent-hit", name ? d.names.join(", ") + (d.names.length > 1 ? " are" : " is") + " connected" : d.headline);
     setText("link-headline", d.headline);
     setText("link-detail", d.detail);
   }
@@ -79,15 +63,6 @@ function createPanel(doc, actions, version) {
   function on(id, fn) {
     var el = byId(id);
     if (el) el.addEventListener("click", fn);
-  }
-
-  var laneButtons = doc.querySelectorAll ? doc.querySelectorAll("[data-lane]") : [];
-  for (var i = 0; i < laneButtons.length; i++) {
-    (function (btn) {
-      btn.addEventListener("click", function () {
-        selectLane(btn.getAttribute("data-lane"));
-      });
-    })(laneButtons[i]);
   }
 
   on("agents-details-toggle", function () {
@@ -147,18 +122,16 @@ function createPanel(doc, actions, version) {
   setText("agents-pair", view.AGENTS.pair);
   setText("agents-tech", view.AGENTS.tech);
   setText("version", "Scenario for Photoshop " + version);
-  // Each tab's tooltip says what the lane is for (icons only at narrow widths).
-  for (var t = 0; t < laneButtons.length; t++) {
-    for (var l = 0; l < view.LANES.length; l++) if (view.LANES[l].id === laneButtons[t].getAttribute("data-lane")) laneButtons[t].setAttribute("title", view.LANES[l].purpose);
-  }
   renderDetails();
-  selectLane("image");
   renderToken();
 
   return {
     renderLink: renderLink,
     renderToken: renderToken,
-    selectLane: selectLane,
+    // The last link state described (the agent popover's words).
+    link: function () {
+      return view.describeLink(lastLink);
+    },
     refresh: function () {
       renderToken();
       if (lastLink) renderLink(lastLink);

@@ -1,0 +1,1875 @@
+"use strict";
+// The creation panel's logic (FLOWS v2, SPEC 3), without the DOM: it reads
+// what Photoshop has (no document, a layer, a cut-out layer, a selection, a
+// Scenario takes group), offers the context's actions, keeps the composer's
+// choices, prices the selected action 400 ms after the last change, and on
+// Generate builds the request again from the document as it is, so a change
+// since the price check makes the quote mismatch and nothing is spent (SPEC
+// 6). Results land through the runner (jobs/runner.js); the Takes card
+// shows, keeps and refines them from the layers' own metadata, after a
+// restart too. ui/create-view.js draws model() and calls the actions here.
+//
+// o: { host, catalog, quotes, flow (lanes/flow.js), runner, ledger,
+//      references (capture/references.js), account() -> {id} | null,
+//      settings, jobsModel, session, timers, log, urls (ui/thumbs.js) }
+
+var actionsMod = require("./actions.js");
+var imageMod = require("./image.js");
+var docRefsMod = require("./doc-refs.js");
+var contextMod = require("../lanes/context.js");
+var commonMod = require("../lanes/common.js");
+var enhanceMod = require("../lanes/enhance.js");
+var map = require("../catalog/map.js");
+var trainedMod = require("../catalog/trained.js");
+var requests = require("../forms/requests.js");
+var price = require("../forms/price.js");
+var thumbs = require("../ui/thumbs.js");
+var pngMod = require("../util/png.js");
+var errorsMod = require("../scenario/errors.js");
+
+var A = actionsMod.ACTIONS;
+var TAKES_PRICE_MS = 2500;
+var DEBOUNCE_MS = 400;
+var PINS_FILE = "panel-pins.json";
+var RUNNING = ["uploading_inputs", "submitting", "queued", "generating", "cancel_requested", "succeeded", "downloading", "applying"];
+var FAILED = ["failed", "blocked", "canceled", "not_sent", "download_failed", "apply_failed", "uncertain"];
+var TARGETS = [
+  { key: "16:9", label: "16:9" },
+  { key: "4:5", label: "4:5" },
+  { key: "1:1", label: "1:1" },
+  { key: "9:16", label: "9:16" },
+  { key: "3:2", label: "3:2" },
+  { key: "+20", label: "+20%", sub: "Grows every side", sides: true }
+];
+var TAKES = [1, 2, 3, 4];
+var CHANGE = [
+  { label: "Subtle", at: 0.15 },
+  { label: "Light", at: 0.35 },
+  { label: "Balanced", at: 0.55 },
+  { label: "Strong", at: 0.75 },
+  { label: "Free", at: 0.95 }
+];
+
+var TEXT = {
+  need_prompt: "Fill in the prompt to see the price",
+  checking: "Checking the price",
+  sending: "Sending",
+  not_signed_in: "Sign in to see prices.",
+  alarm: "A price check created a job on Scenario. Price checks are stopped until Photoshop restarts.",
+  after_upload: "This model is priced once its files are uploaded.",
+  changed: "The document or the settings changed since the price check. Check the new price, then click again.",
+  replayed: "This price was already used: see Jobs.",
+  no_mask: "This run's layers have no mask to load as the selection.",
+  layers_gone: "This run's layers are no longer in the document.",
+  styles_note: "Trained styles are the project's trained models and run on the model they were trained on. Match an image uses a picture as the style reference, with any model.",
+  styles_note_image: "Match an image uses a picture as the style reference, with any model.",
+  base_note: "A trained style runs on the model it was trained on. Pick No style or Match an image in the Style chip to use another model.",
+  match_note: "The picture goes with the run as its style reference; the prompt and the chips stay in charge.",
+  ref_hint: "Selection, layer or file",
+  empty_mid: "Takes and recent runs on this document show here.",
+  declined: "Declined. The agent was told, and nothing was spent."
+};
+
+// Sent after the prompt when the Style chip is on Match an image; the style
+// picture is always the last reference image of the run.
+var STYLE_SENTENCE = "Use the last reference image for its style only (colors, rendering, texture), not for its content.";
+var QUALITY = [
+  ["high", "High"],
+  ["medium", "Medium"],
+  ["low", "Low"]
+];
+
+function invalid(text) {
+  return new errorsMod.ScenarioError("InvalidParameter", text);
+}
+
+function times(w, h) {
+  return Math.round(w) + " × " + Math.round(h);
+}
+
+function laneOf(id) {
+  var a = A[id];
+  if (!a || !a.family) return null;
+  if (a.family === "cutout") return "remove_background";
+  return a.family;
+}
+
+// A run's short name: its prompt, else what it was.
+function runName(prompt, kind) {
+  var p = String(prompt || "").trim();
+  if (p) return p.length > 60 ? p.slice(0, 57) + "..." : p;
+  return kind === "edit" ? "Edit" : "Image";
+}
+
+// The takes a layer's metadata describes (the results model): a Scenario
+// group holding takes, or one Scenario result layer outside a group.
+// meta: host.scenarioLayer(). Returns null for anything else.
+function takesOf(meta) {
+  if (!meta || !meta.fields) return null;
+  var f = meta.fields;
+  var gen = function (k) {
+    return k === "image" || k === "edit";
+  };
+  if (meta.group) {
+    var kids = (meta.children || []).filter(function (c) {
+      return c.fields && c.fields.assetId;
+    });
+    if (!f.jobId || !gen(f.kind) || !kids.length) return null;
+    return { group_id: meta.id, layer_id: null, job_id: f.jobId, kind: f.kind, name: meta.name, prompt: f.prompt || null, model_name: f.modelName || null, children: kids };
+  }
+  if (meta.parent || !f.assetId || !f.jobId || !gen(f.kind)) return null;
+  return { group_id: null, layer_id: meta.id, job_id: f.jobId, kind: f.kind, name: meta.name, prompt: f.prompt || null, model_name: f.modelName || null, children: [{ id: meta.id, name: meta.name, visible: true, fields: f }] };
+}
+
+// A layer with transparency (a cut-out subject): a pixel or smart object
+// layer with a mask, or one that covers less of the canvas than all of it.
+// Scenario results count only when they are cut-outs (Cut out subject).
+function isCutout(layer, doc, meta) {
+  if (!layer || !doc || layer.background) return false;
+  if (meta && meta.fields && meta.fields.assetId && meta.fields.kind !== "cutout") return false;
+  if (layer.kind !== "pixel" && layer.kind !== "smartObject") return false;
+  if (layer.has_mask) return true;
+  var b = layer.bounds;
+  if (!b || !(b.width > 0 && b.height > 0)) return false;
+  var x0 = Math.max(0, b.left);
+  var y0 = Math.max(0, b.top);
+  var x1 = Math.min(doc.width, b.left + b.width);
+  var y1 = Math.min(doc.height, b.top + b.height);
+  var area = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+  return area < 0.97 * doc.width * doc.height;
+}
+
+// raw: lanes/context.read(); meta: the active layer's Scenario metadata.
+function classify(raw, meta) {
+  if (!raw || !raw.doc) return { kind: "none", run: null };
+  if (raw.selection || raw.selection_raw) return { kind: "selection", run: null };
+  var run = takesOf(meta);
+  if (run) return { kind: "takes", run: run };
+  if (isCutout(raw.layer, raw.doc, meta)) return { kind: "cutout", run: null };
+  return { kind: "layer", run: null };
+}
+
+function badgeOf(list) {
+  list = list || [];
+  for (var i = 0; i < list.length; i++) if (/misaligned|Changed outside|Unchanged inside/.test(list[i])) return { tone: "warn", text: "May not line up" };
+  for (var j = 0; j < list.length; j++) if (/may be unchanged/.test(list[j])) return { tone: "warn", text: "Part unchanged" };
+  for (var k = 0; k < list.length; k++) if (/Seam ok/.test(list[k])) return { tone: "ok", text: "Edges ok" };
+  return null;
+}
+
+function needsConfirm(q, limit) {
+  if (q.price_kind === "from") return true;
+  var compare = q.price_kind === "range" && q.cu_cost_max !== null && q.cu_cost_max !== undefined ? price.toThousandths(q.cu_cost_max) : price.toThousandths(q.cu_cost);
+  return compare > limit;
+}
+
+function createController(o) {
+  var log = o.log || function () {};
+  var timers = o.timers || { setTimeout: setTimeout, clearTimeout: clearTimeout };
+  var urls = o.urls || thumbs.createUrls(null);
+  var listeners = [];
+  var st = {
+    active: false,
+    raw: null,
+    meta: null,
+    ctx: { kind: "none", run: null },
+    key: "",
+    action: "create",
+    keepAction: false,
+    prompt: "",
+    takes: {},
+    models: {},
+    style: null,
+    styleRef: null,
+    size: imageMod.DEFAULT_SIZE,
+    target: "16:9",
+    factor: null,
+    change: 2,
+    adv: {},
+    refs: [],
+    drefs: [],
+    drefsDoc: null,
+    drefOff: {},
+    price: { state: "idle" },
+    seq: 0,
+    timer: null,
+    sending: false,
+    confirm: null,
+    note: "",
+    latest: {},
+    done: {},
+    card: null,
+    startFrom: null,
+    pins: {},
+    styles: null,
+    agent: null,
+    reading: null,
+    again: false,
+    schemaCache: {}
+  };
+
+  function emit() {
+    for (var i = 0; i < listeners.length; i++) {
+      try {
+        listeners[i]();
+      } catch (e) {
+        log("panel: a view failed to draw (" + ((e && e.message) || e) + ")");
+      }
+    }
+  }
+
+  function docId() {
+    return st.raw && st.raw.doc ? st.raw.doc.id : null;
+  }
+
+  function layerName() {
+    if (st.raw && st.raw.layer) return st.raw.layer.name;
+    return "the canvas";
+  }
+
+  function takesFor(id, n) {
+    if (n) return n;
+    if (st.takes[id]) return st.takes[id];
+    return (A[id] && A[id].takes) || 1;
+  }
+
+  function defaultModel(lane) {
+    var d = map.defaults(lane);
+    return d ? d.model_id : null;
+  }
+
+  function modelFor(id) {
+    var lane = laneOf(id);
+    if (!lane) return null;
+    if (st.style && st.style.lane_ok && A[id].family === "edit" && A[id].chips.indexOf("style") >= 0) return st.style.base_model_id;
+    return st.models[lane] || defaultModel(lane);
+  }
+
+  function styleApplies(id) {
+    return !!(st.style && !st.style.match && A[id] && A[id].family === "edit" && A[id].chips.indexOf("style") >= 0);
+  }
+
+  // Match an image: the style picture goes with every action that has the
+  // Style chip and takes reference images.
+  function matchOn(id) {
+    return !!(st.style && st.style.match && st.styleRef && A[id] && (A[id].chips || []).indexOf("style") >= 0 && (A[id].refs || A[id].autoRef));
+  }
+
+  function promptOf(id) {
+    var t = actionsMod.promptFor(id, st.prompt);
+    if (t && matchOn(id)) t = t + " " + STYLE_SENTENCE;
+    return t;
+  }
+
+  // GPT Image 2.5 and other models with a Low / Medium / High quality
+  // input: Medium unless the person picks another level (Advanced).
+  function qualityOf(schema) {
+    var q = schema ? commonMod.param(schema, "quality") : null;
+    if (!q || !q.enum) return null;
+    for (var i = 0; i < QUALITY.length; i++) if (q.enum.indexOf(QUALITY[i][0]) < 0) return null;
+    return st.adv.quality || "medium";
+  }
+
+  function schemaFor(modelId) {
+    if (!modelId) return Promise.reject(invalid("No model for this action."));
+    return o.catalog.schema(modelId).then(function (s) {
+      st.schemaCache[modelId] = s;
+      return s;
+    });
+  }
+
+  // ---- the run the Takes card acts on ----
+
+  function recordOf(run) {
+    if (!run || !o.ledger) return null;
+    if (run.local_id) return o.ledger.get(run.local_id);
+    if (run.job_id && typeof o.ledger.findByJobId === "function") return o.ledger.findByJobId(run.job_id) || null;
+    return null;
+  }
+
+  function cardRun() {
+    if (st.ctx.kind === "takes") return st.ctx.run;
+    return st.card;
+  }
+
+  function maskLayerOf(run) {
+    return run ? run.group_id || run.layer_id : null;
+  }
+
+  function shownChild(run) {
+    if (!run || !run.children.length) return null;
+    for (var i = 0; i < run.children.length; i++) if (run.children[i].visible) return { i: i, child: run.children[i] };
+    return { i: 0, child: run.children[0] };
+  }
+
+  function wasMasked(rec) {
+    return !!(rec && rec.lane === "edit" && rec.target && rec.target.kind === "selection");
+  }
+
+  // ---- reading Photoshop ----
+
+  async function readContext() {
+    var raw = await contextMod.read(o.host);
+    var meta = null;
+    if (raw.doc && raw.layer && typeof o.host.scenarioLayer === "function") meta = await o.host.scenarioLayer(raw.doc.id, raw.layer.id);
+    var ctx = classify(raw, meta);
+    // The document's latest run from this panel: its Takes card shows in
+    // every context of the document until the person closes it.
+    var card = null;
+    if (raw.doc && ctx.kind !== "takes") {
+      var lid = st.latest[raw.doc.id];
+      var rec = lid && o.ledger ? o.ledger.get(lid) : null;
+      if (rec && !st.done[lid]) {
+        if (rec.state === "applied" && rec.placement && typeof o.host.scenarioLayer === "function") {
+          var at = rec.placement.group_id || (rec.placement.layer_ids || [])[0];
+          var m = at ? await o.host.scenarioLayer(raw.doc.id, at) : null;
+          card = takesOf(m);
+          if (card) card.local_id = lid;
+          else card = { local_id: lid, other: true, children: [] };
+        } else card = { local_id: lid, other: true, children: [] };
+      }
+    }
+    if (ctx.run) {
+      var r = recordOf(ctx.run);
+      if (r) ctx.run.local_id = r.local_id;
+    }
+    return { raw: raw, meta: meta, ctx: ctx, card: card };
+  }
+
+  function keyOf(raw, ctx) {
+    if (!raw || !raw.doc) return "none";
+    var s = raw.selection || raw.selection_raw;
+    return [raw.doc.id, ctx.kind, raw.layer ? raw.layer.id : "-", ctx.run ? maskLayerOf(ctx.run) : "-", s ? [s.left, s.top, s.width, s.height].join(",") : "-", raw.doc.width, raw.doc.height].join("|");
+  }
+
+  function contextKind(raw, ctx) {
+    return (raw && raw.doc ? raw.doc.id : "-") + "|" + ctx.kind + "|" + (raw && raw.layer ? raw.layer.id : "-");
+  }
+
+  async function refresh() {
+    if (st.reading) {
+      st.again = true;
+      return st.reading;
+    }
+    st.reading = (async function () {
+      do {
+        st.again = false;
+        var got;
+        try {
+          got = await readContext();
+        } catch (e) {
+          log("panel: context read failed (" + ((e && e.message) || e) + ")");
+          got = { raw: { doc: null }, meta: null, ctx: { kind: "none", run: null }, card: null };
+        }
+        var before = contextKind(st.raw, st.ctx);
+        var prevKey = st.key;
+        st.raw = got.raw;
+        st.meta = got.meta;
+        st.ctx = got.ctx;
+        st.card = got.card;
+        st.key = keyOf(got.raw, got.ctx);
+        if (contextKind(got.raw, got.ctx) !== before) {
+          if (st.keepAction) st.keepAction = false;
+          else {
+            st.action = actionsMod.CONTEXTS[got.ctx.kind][0];
+            st.startFrom = null;
+            st.prompt = "";
+          }
+          st.confirm = st.confirm && st.confirm.kind === "changed" ? st.confirm : null;
+        }
+        await loadDocRefs();
+        if (st.key !== prevKey || st.price.state === "idle") schedule();
+        emit();
+        refreshThumb();
+      } while (st.again);
+      st.reading = null;
+    })();
+    return st.reading;
+  }
+
+  // ---- the context card's picture of a layer or a selection ----
+  // Read once per document, layer and selection box (96 px on the long side,
+  // one read in a modal scope), kept as a blob link; the icon shows until it
+  // is ready or when the read fails.
+  var THUMB_SIDE = 96;
+  var thumb = { key: null, url: null, size: null };
+
+  function thumbKey() {
+    var c = st.ctx;
+    var raw = st.raw;
+    if (!raw || !raw.doc || (c.kind !== "layer" && c.kind !== "cutout" && c.kind !== "selection")) return null;
+    var b = thumbBounds();
+    if (!b) return null;
+    return [raw.doc.id, c.kind === "selection" ? "visible" : raw.layer && raw.layer.id, b.left, b.top, b.width, b.height].join(":");
+  }
+
+  function thumbBounds() {
+    var raw = st.raw;
+    var b = st.ctx.kind === "selection" ? raw.selection || raw.selection_raw : raw.layer && raw.layer.bounds;
+    if (!b) return null;
+    var left = Math.max(0, b.left);
+    var top = Math.max(0, b.top);
+    var right = Math.min(raw.doc.width, b.left + b.width);
+    var bottom = Math.min(raw.doc.height, b.top + b.height);
+    if (!(right - left >= 1 && bottom - top >= 1)) return null;
+    return { left: left, top: top, width: right - left, height: bottom - top };
+  }
+
+  async function refreshThumb() {
+    var key = thumbKey();
+    if (!key || key === thumb.key || typeof o.host.readPixels !== "function") return;
+    thumb.key = key;
+    try {
+      var sel = st.ctx.kind === "selection";
+      var px = await o.host.readPixels({ document_id: st.raw.doc.id, layer_id: sel ? null : st.raw.layer.id, bounds: thumbBounds(), long_side: THUMB_SIDE, exact: true });
+      if (thumb.key !== key) return;
+      var url = urls.fromBytes(pngMod.encodePng({ width: px.width, height: px.height, channels: px.components, data: px.data }), "image/png");
+      if (thumb.url) urls.release(thumb.url);
+      thumb.url = url;
+      thumb.size = { width: px.width, height: px.height };
+      emit();
+    } catch (e) {
+      if (thumb.key === key) thumb.key = null;
+    }
+  }
+
+  function thumbNow() {
+    var key = thumbKey();
+    return key && key === thumb.key && thumb.url ? thumb : null;
+  }
+
+  async function loadDocRefs() {
+    var id = docId();
+    if (id === st.drefsDoc) return;
+    st.drefsDoc = id;
+    st.drefs = [];
+    st.drefOff = {};
+    if (id === null || typeof o.host.documentReferences !== "function") return;
+    try {
+      st.drefs = await o.host.documentReferences(id);
+    } catch (e) {
+      st.drefs = [];
+    }
+  }
+
+  // ---- composer arguments ----
+
+  function drefsOn() {
+    var a = A[st.action];
+    if (!a || !a.refs) return [];
+    return st.drefs.filter(function (r) {
+      return !st.drefOff[r.layer_id];
+    });
+  }
+
+  function takeRefNeeded(id) {
+    if (id !== "more_like") return false;
+    return wasMasked(recordOf(cardRun()));
+  }
+
+  function refCount(id) {
+    var a = A[id];
+    if (!a) return 0;
+    var n = a.refs ? drefsOn().length + st.refs.length : 0;
+    if (a.autoRef) n++;
+    if (takeRefNeeded(id)) n++;
+    if (matchOn(id)) n++;
+    return n;
+  }
+
+  // The context a run reads: the document as it is, or, for the takes
+  // actions, the shown take (Upscale kept take, More like this) or the
+  // selection the run was made in (More like this on a selection edit).
+  async function contextFor(id) {
+    var raw = st.raw;
+    var run = cardRun();
+    if (!run || (id !== "more_like" && id !== "upscale_kept")) return raw;
+    var shown = shownChild(run);
+    var rec = recordOf(run);
+    if (id === "more_like" && wasMasked(rec) && rec.target.selection) {
+      var s = rec.target.selection;
+      var sel = { left: s[0], top: s[1], width: s[2], height: s[3] };
+      return { doc: raw.doc, selection: sel, selection_raw: sel, layer: raw.layer };
+    }
+    var info = shown && typeof o.host.layerInfo === "function" ? await o.host.layerInfo(raw.doc.id, shown.child.id) : null;
+    return { doc: raw.doc, selection: null, selection_raw: null, layer: info || raw.layer };
+  }
+
+  function expandOptions(raw) {
+    var t = st.target;
+    var opts = { anchor: st.adv.anchor || "center", overlap: commonMod.DEFAULT_OVERLAP };
+    if (t === "+20" && raw && raw.doc) {
+      var w = Math.round(raw.doc.width * 0.2);
+      var h = Math.round(raw.doc.height * 0.2);
+      opts.mode = "sides";
+      opts.sides = { left: w, top: h, right: w, bottom: h };
+    } else {
+      opts.mode = "aspect";
+      opts.ratio = t;
+    }
+    return opts;
+  }
+
+  async function flowArgs(id, n, factor, modelId) {
+    var a = A[id];
+    var lane = laneOf(id);
+    var model = modelId || modelFor(id);
+    var ctx = await contextFor(id);
+    var prompt = promptOf(id);
+    var args = { model_id: model, context: ctx, references: refCount(id), options: {} };
+    var schema = st.schemaCache[model] || null;
+    if (!schema && model) {
+      try {
+        schema = await schemaFor(model);
+      } catch (e) {
+        schema = null;
+      }
+    }
+    var quality = qualityOf(schema);
+    if (a.family === "edit") {
+      args.tool = styleApplies(id) && !modelId ? "trained_edit" : "edit";
+      var sample = a.sample === "layer" ? "layer" : st.adv.sample === "layer" ? "layer" : "visible";
+      if (id === "more_like" && !ctx.selection) sample = "layer";
+      args.options = { prompt: prompt, takes: takesFor(id, n), sample: sample, margin: st.adv.margin || "auto" };
+      if (quality && args.tool === "edit") args.options.quality = quality;
+      if (a.expect) args.options.expect = a.expect;
+      if (args.tool === "trained_edit") {
+        args.trained = { model_id: st.style.id, kind: st.style.kind, scale: st.style.scale };
+        if (st.style.route === "image_strength") args.trained.strength = CHANGE[st.change].at;
+      }
+    } else if (a.family === "expand") {
+      args.tool = "expand";
+      args.options = expandOptions(ctx);
+      args.options.prompt = prompt;
+      args.options.takes = takesFor(id, n);
+      if (quality) args.options.quality = quality;
+    } else if (a.family === "upscale") {
+      args.tool = "upscale";
+      args.options = { source: a.source, factor: factor || st.factor || undefined, lands: a.source === "selection" ? "box" : "new_document" };
+    } else if (a.family === "cutout") {
+      args.tool = "remove_background";
+      args.options = { source: a.source, lands: a.lands || st.adv.lands || "mask" };
+    }
+    args.lane = lane;
+    return args;
+  }
+
+  function imageOptions(id, refs, n, schema) {
+    var a = A[id];
+    return { action: id, size: st.size, prompt: promptOf(id), takes: takesFor(id, n), references: refs, insert: a.insert || null, quality: qualityOf(schema) };
+  }
+
+  // Short words for a blocked view, from the prototype where it has them.
+  function friendly(reason, id) {
+    if (reason === commonMod.TEXT.nothing_grows && A[id] && A[id].family === "expand") return "Already " + st.target + ", pick another target";
+    return reason || "Not available here";
+  }
+
+  // ---- the price check ----
+
+  function setPrice(p) {
+    st.price = p;
+    emit();
+  }
+
+  async function check(seq) {
+    if (seq !== st.seq) return;
+    var id = st.action;
+    var a = A[id];
+    if (!a || !a.family) {
+      setPrice({ state: "none" });
+      return;
+    }
+    if (a.prompt === "req" && !String(st.prompt).trim()) {
+      setPrice({ state: "need_prompt" });
+      return;
+    }
+    if (o.account && !o.account()) {
+      setPrice({ state: "unavailable", reason: TEXT.not_signed_in });
+      return;
+    }
+    if (o.quotes.stopped && o.quotes.stopped()) {
+      setPrice({ state: "unavailable", reason: TEXT.alarm });
+      return;
+    }
+    setPrice({ state: "checking", action: id });
+    var out;
+    try {
+      if (a.family === "image") out = await priceImage(id);
+      else {
+        var p = await o.flow.price(await flowArgs(id));
+        out = { state: p.state, quote: p.quote, reason: p.reason, view: p.view, schema: p.schema };
+      }
+    } catch (e) {
+      out = { state: e && e.afterUpload ? "after_upload" : "unavailable", reason: (e && e.message) || String(e) };
+      log("panel: price check " + ((e && e.type) || "error"));
+    }
+    if (seq !== st.seq) return;
+    if (out.state === "ready") setPrice({ state: "ready", action: id, quote: out.quote, label: out.quote.label, view: out.view, schema: out.schema });
+    else if (out.state === "blocked") setPrice({ state: "blocked", action: id, reason: friendly(out.reason, id), view: out.view, schema: out.schema });
+    else if (out.state === "after_upload") setPrice({ state: "after_upload", action: id, reason: TEXT.after_upload, view: out.view, schema: out.schema });
+    else if (out.state === "not_signed_in") setPrice({ state: "unavailable", action: id, reason: TEXT.not_signed_in });
+    else if (out.state === "alarm") setPrice({ state: "unavailable", action: id, reason: TEXT.alarm });
+    else setPrice({ state: "unavailable", action: id, reason: out.reason || "Price unavailable", view: out.view, schema: out.schema });
+  }
+
+  async function priceImage(id, n, modelId) {
+    var schema = await schemaFor(modelId || modelFor(id));
+    var v = imageMod.imageView(schema, st.raw, imageOptions(id, refCount(id), n, schema));
+    if (v.blocked) return { state: "blocked", reason: v.blocked, view: v, schema: schema };
+    var req;
+    try {
+      req = requests.build(schema, v.request);
+    } catch (e) {
+      return { state: "blocked", reason: (e && e.message) || String(e), view: v, schema: schema };
+    }
+    try {
+      var q = await o.quotes.estimate(req);
+      return { state: "ready", quote: q, view: v, schema: schema };
+    } catch (e) {
+      if (e && e.afterUpload) return { state: "after_upload", view: v, schema: schema };
+      if (e && e.type === "DryRunCreatedJob") return { state: "alarm" };
+      return { state: "unavailable", reason: (e && e.message) || String(e), view: v, schema: schema };
+    }
+  }
+
+  // The price of each choice of a chip menu, Takes (counts) or Upscale
+  // (factors): free price checks, at most TAKES_PRICE_MS; a choice that does
+  // not answer in time shows none.
+  async function optionPrices(id, values, kind, current) {
+    var a = A[id];
+    var out = {};
+    if (!a || !a.family || (a.prompt === "req" && !String(st.prompt).trim())) return out;
+    if ((o.account && !o.account()) || (o.quotes.stopped && o.quotes.stopped())) return out;
+    var jobs = values.map(function (v) {
+      if (v === current && st.price.state === "ready" && st.price.action === id) {
+        out[v] = st.price.label;
+        return Promise.resolve();
+      }
+      var n = kind === "takes" ? v : null;
+      var f = kind === "upsize" ? v : null;
+      var m = kind === "model" ? v || defaultModel(laneOf(id)) : null;
+      var run = a.family === "image" ? priceImage(id, n, m) : flowArgs(id, n, f, m).then(function (args) {
+        return o.flow.price(args);
+      });
+      return run.then(
+        function (p) {
+          if (p && p.state === "ready" && p.quote) out[v] = p.quote.label;
+        },
+        function () {
+          // no price for this count
+        }
+      );
+    });
+    var timer = null;
+    await Promise.race([
+      Promise.all(jobs),
+      new Promise(function (resolve) {
+        timer = timers.setTimeout(resolve, TAKES_PRICE_MS);
+      })
+    ]);
+    if (timer) timers.clearTimeout(timer);
+    return out;
+  }
+
+  // The price of each More entry in this context, with its own default
+  // model and settings (free price checks, kept until the context changes;
+  // an entry that needs a prompt shows one only when the prompt is filled).
+  var morePrices = { key: null, prices: {} };
+  async function actionPrices(ids) {
+    if (morePrices.key !== st.key) morePrices = { key: st.key, prices: {} };
+    var cache = morePrices.prices;
+    if ((o.account && !o.account()) || (o.quotes.stopped && o.quotes.stopped())) return cache;
+    var jobs = ids.map(function (id) {
+      var a = A[id];
+      if (cache[id] !== undefined || !a || !a.family) return Promise.resolve();
+      if (a.prompt === "req" && !String(st.prompt).trim()) return Promise.resolve();
+      var run = a.family === "image" ? priceImage(id) : flowArgs(id).then(function (args) {
+        return o.flow.price(args);
+      });
+      return run.then(
+        function (p) {
+          cache[id] = p && p.state === "ready" && p.quote ? p.quote.label : "";
+        },
+        function () {
+          cache[id] = "";
+        }
+      );
+    });
+    var timer = null;
+    await Promise.race([
+      Promise.all(jobs),
+      new Promise(function (resolve) {
+        timer = timers.setTimeout(resolve, TAKES_PRICE_MS);
+      })
+    ]);
+    if (timer) timers.clearTimeout(timer);
+    return cache;
+  }
+
+  function schedule() {
+    st.seq++;
+    if (st.timer) timers.clearTimeout(st.timer);
+    st.timer = null;
+    if (!st.active) return;
+    var seq = st.seq;
+    var a = A[st.action];
+    // Nothing to price: the button says so at once.
+    if (!a || !a.family) {
+      st.price = { state: "none" };
+      return;
+    }
+    if (a.prompt === "req" && !String(st.prompt).trim()) {
+      st.price = { state: "need_prompt" };
+      return;
+    }
+    if (st.price.state !== "checking") st.price = { state: "checking", action: st.action };
+    st.timer = timers.setTimeout(function () {
+      st.timer = null;
+      check(seq);
+    }, DEBOUNCE_MS);
+  }
+
+  function changed() {
+    schedule();
+    emit();
+  }
+
+  // ---- Generate ----
+
+  async function refFromTake(run, modelId) {
+    var rec = recordOf(run);
+    var shown = shownChild(run);
+    if (!rec || !shown) throw invalid("The shown take's file is not on this computer.");
+    var out = null;
+    var asset = shown.child.fields && shown.child.fields.assetId;
+    for (var i = 0; i < (rec.outputs || []).length; i++) if (rec.outputs[i].asset_id === asset) out = rec.outputs[i];
+    if (!out || !out.path || typeof o.host.readDataBinary !== "function") throw invalid("The shown take's file is not on this computer.");
+    var bytes = await o.host.readDataBinary(out.path);
+    if (!bytes) throw invalid("The shown take's file could not be read.");
+    var png = /\.png$/i.test(out.path);
+    return { id: "take-" + asset.slice(-8), bytes: bytes, ext: png ? "png" : "jpg", mime: png ? "image/png" : "image/jpeg", width: out.width, height: out.height, source: "take", label: "Take " + (shown.i + 1), reduced: false, document_id: docId() };
+  }
+
+  async function collectRefs(id, modelId) {
+    var a = A[id];
+    var out = [];
+    var d = docId();
+    if (a.refs) {
+      var on = drefsOn();
+      for (var i = 0; i < on.length; i++) {
+        var r = await o.references.capture("layer", d, modelId, null, on[i].layer_id);
+        r.label = on[i].role + ": " + on[i].name;
+        out.push(r);
+      }
+    }
+    if (a.autoRef) out.push(await o.references.capture("layer", d, modelId, null, null));
+    if (takeRefNeeded(id)) out.push(await refFromTake(cardRun(), modelId));
+    if (a.refs) for (var k = 0; k < st.refs.length; k++) out.push(st.refs[k]);
+    if (matchOn(id)) out.push(st.styleRef);
+    return out;
+  }
+
+  function limit() {
+    return o.settings && typeof o.settings.confirmAbove === "function" ? o.settings.confirmAbove() : 100000;
+  }
+
+  function confirmFor(q, id) {
+    var t = price.toThousandths(q.cu_cost);
+    var lim = price.exactString(limit());
+    var text;
+    if (q.price_kind === "from") text = "This costs from " + price.display(t) + " CU. The charge can be higher; Scenario gives no upper bound for this model.";
+    else if (q.price_kind === "range") text = "This costs " + q.label + "; " + price.display(price.toThousandths(q.cu_cost_max)) + " CU is above your confirm limit of " + lim + " CU.";
+    else text = "This costs " + q.label + ", above your confirm limit of " + lim + " CU.";
+    return { kind: "threshold", quote: q, action: id, text: text, detail: q.no_refund ? "No refund if it fails." : "", ok: buttonLabel(id) + " · " + q.label };
+  }
+
+  // After a run that is not masked to a selection, its new group or layer
+  // is selected once it lands, so the next chip works on the result, not on
+  // the hidden source (FLOWS v2, changes after review 13). Masked runs keep
+  // the selection; a mask on the layer and a new document select nothing.
+  function selectsResult(id) {
+    var a = A[id];
+    if (!a || !a.family) return false;
+    if (a.family === "upscale") return false;
+    if (a.family === "cutout") return a.lands === "new_layer" || st.adv.lands === "new_layer";
+    if (a.family === "image") return !!docId();
+    if (a.family === "edit") return !(st.raw && (st.raw.selection || st.raw.selection_raw));
+    return true;
+  }
+
+  function go() {
+    if (st.sending || st.confirm || st.price.state !== "ready" || st.price.action !== st.action) return Promise.resolve(null);
+    if (!o.runner) return Promise.resolve(null);
+    var q = st.price.quote;
+    if (needsConfirm(q, limit())) {
+      st.confirm = confirmFor(q, st.action);
+      emit();
+      return Promise.resolve(null);
+    }
+    return run(q, st.action);
+  }
+
+  async function run(q, id) {
+    st.sending = true;
+    st.note = "";
+    emit();
+    var a = A[id];
+    var d = docId();
+    try {
+      var modelId = modelFor(id);
+      var refs = await collectRefs(id, modelId);
+      var out;
+      if (a.family === "image") {
+        var raw = await contextMod.read(o.host);
+        var schema = await schemaFor(modelId);
+        var v = imageMod.imageView(schema, raw, imageOptions(id, refs.length, null, schema));
+        if (v.blocked) throw invalid(v.blocked);
+        var req = requests.build(schema, v.request);
+        out = await o.runner.start({ req: req, quote: q, refs: refs, model_name: schema.name, document_title: raw.doc ? raw.doc.title : null, mask: null });
+      } else {
+        var args = await flowArgs(id);
+        args.refs = refs;
+        if (id === "more_like" && args.context.selection) {
+          // The capture reads the selection: the run's own, from its mask.
+          await o.host.selectionFromMask(d, maskLayerOf(cardRun()));
+        }
+        out = await o.flow.generate(args, q);
+      }
+      if (out.record && d !== null) {
+        st.latest[d] = out.record.local_id;
+        delete st.done[out.record.local_id];
+      }
+      if (out.record && selectsResult(id)) selectAfter[out.record.local_id] = true;
+      if (out.record && d === null) st.latest.none = out.record.local_id;
+      if (out.replayed) st.note = TEXT.replayed;
+      else if (out.state === "awaiting_approval") st.confirm = { kind: "changed", local_id: out.record.local_id, text: "Price changed after upload. Now " + out.price + " CU (was " + out.was + " CU). Nothing was spent.", ok: "Approve · " + out.price + " CU" };
+      else if (out.state !== "queued" && out.record && out.record.error) st.note = out.record.error;
+      if (id === "more_like") st.keepAction = false;
+    } catch (e) {
+      var type = e && e.type;
+      st.note = type === "QuoteMismatch" || type === "QuoteExpired" || type === "QuoteUsed" ? TEXT.changed : (e && e.message) || String(e);
+      log("panel: generate " + (type || "error"));
+    } finally {
+      st.sending = false;
+      // A used quote never spends twice: the next click needs a new price.
+      schedule();
+      emit();
+      refresh();
+    }
+    return true;
+  }
+
+  function confirmOk() {
+    var c = st.confirm;
+    if (!c) return Promise.resolve(null);
+    st.confirm = null;
+    if (c.kind === "threshold") return run(c.quote, c.action);
+    if (c.kind === "changed") {
+      st.sending = true;
+      emit();
+      return o.runner.approve(c.local_id).then(
+        function (out) {
+          st.sending = false;
+          if (out && out.state === "awaiting_approval" && out.changed) st.confirm = { kind: "changed", local_id: c.local_id, text: "Price changed again. Now " + out.price + " CU. Nothing was spent.", ok: "Approve · " + out.price + " CU" };
+          else st.note = out && out.state !== "queued" && out.record ? out.record.error || "" : "";
+          changed();
+        },
+        function (e) {
+          st.sending = false;
+          st.note = (e && e.message) || String(e);
+          changed();
+        }
+      );
+    }
+    if (c.kind === "agent") return Promise.resolve(c.approve ? c.approve() : null).then(emit);
+    return Promise.resolve(null);
+  }
+
+  function confirmCancel() {
+    var c = st.confirm;
+    st.confirm = null;
+    if (c && c.kind === "changed" && o.runner) o.runner.decline(c.local_id).then(emit, emit);
+    emit();
+  }
+
+  // ---- the Takes card ----
+
+  async function showTake(i) {
+    var run = cardRun();
+    var d = docId();
+    if (!run || !run.group_id || !run.children[i]) return;
+    try {
+      await o.host.showTake(d, run.group_id, run.children[i].id);
+    } catch (e) {
+      st.note = (e && e.message) || String(e);
+    }
+    await refresh();
+  }
+
+  async function keep() {
+    var run = cardRun();
+    var shown = shownChild(run);
+    if (!run || !run.group_id || !shown || run.children.length < 2) return;
+    try {
+      await o.host.keepTake(docId(), run.group_id, shown.child.id);
+    } catch (e) {
+      st.note = (e && e.message) || String(e);
+    }
+    await refresh();
+  }
+
+  // Refine: keep the shown take, then the composer starts from it: Replace
+  // inside on the same selection for a selection edit, else Make versions of the
+  // kept layer, with an empty prompt.
+  async function refine() {
+    var run = cardRun();
+    var shown = shownChild(run);
+    if (!run || !shown) return;
+    var d = docId();
+    var rec = recordOf(run);
+    try {
+      if (run.group_id && run.children.length > 1) await o.host.keepTake(d, run.group_id, shown.child.id);
+      st.startFrom = { n: Number(shown.child.fields.take) || shown.i + 1 };
+      st.keepAction = true;
+      st.prompt = "";
+      if (wasMasked(rec)) {
+        await o.host.selectionFromMask(d, maskLayerOf(run));
+        if (rec.target.layer_id) await o.host.selectLayer(d, rec.target.layer_id).catch(function () {});
+        st.action = "replace";
+      } else {
+        await o.host.selectLayer(d, shown.child.id);
+        st.action = "versions";
+      }
+    } catch (e) {
+      st.keepAction = false;
+      st.note = (e && e.message) || String(e);
+    }
+    await refresh();
+    changed();
+  }
+
+  function closeCard() {
+    var c = st.card;
+    if (c && c.local_id) st.done[c.local_id] = true;
+    st.card = null;
+    emit();
+  }
+
+  async function placeCard() {
+    var c = st.card;
+    if (!c || !c.local_id) return;
+    try {
+      await o.runner.place(c.local_id, {});
+    } catch (e) {
+      st.note = (e && e.message) || String(e);
+    }
+    await refresh();
+  }
+
+  async function openRecent(localId) {
+    var rec = o.ledger ? o.ledger.get(localId) : null;
+    var pl = rec && rec.placement;
+    var at = pl ? pl.group_id || (pl.layer_ids || [])[0] : null;
+    if (!at) {
+      st.note = TEXT.layers_gone;
+      emit();
+      return;
+    }
+    try {
+      await o.host.selectLayer(docId(), at);
+    } catch (e) {
+      st.note = TEXT.layers_gone;
+    }
+    await refresh();
+  }
+
+  // ---- composer changes ----
+
+  function selectAction(id) {
+    if (!A[id]) return;
+    if (A[id].special === "refine") {
+      refine();
+      return;
+    }
+    if (id !== st.action) {
+      st.action = id;
+      st.confirm = st.confirm && st.confirm.kind === "changed" ? st.confirm : null;
+      if (A[id].prompt === "none") st.prompt = "";
+    }
+    changed();
+  }
+
+  function setPrompt(text) {
+    var before = String(st.prompt).trim() !== "";
+    st.prompt = String(text || "");
+    var now = st.prompt.trim() !== "";
+    var a = A[st.action];
+    // An empty prompt shows its words at once; typing reprices after 400 ms.
+    if (a && a.prompt === "req" && before !== now) changed();
+    else {
+      schedule();
+      if (a && a.prompt !== "req") emit();
+      else emit();
+    }
+  }
+
+  function choose(kind, value) {
+    var id = st.action;
+    var lane = laneOf(id);
+    if (kind === "takes") st.takes[id] = Number(value) || 1;
+    else if (kind === "model") {
+      if (lane) {
+        if (value) st.models[lane] = value;
+        else delete st.models[lane];
+      }
+      if (A[id].family === "edit" && st.style && !st.style.match) st.style = null;
+    } else if (kind === "style") {
+      // Match an image: the picture comes next (menu "stylesrc"); until
+      // then nothing changes.
+      if (value === "match") return;
+      st.style = value || null;
+      dropStyleRef();
+    } else if (kind === "stylesrc") {
+      return pickStyle(value);
+    } else if (kind === "size") st.size = value;
+    else if (kind === "target") st.target = value;
+    else if (kind === "upsize") st.factor = value;
+    else if (kind === "change") st.change = Math.max(0, Math.min(CHANGE.length - 1, Number(value) || 0));
+    else if (kind === "adv") {
+      st.adv[value.name] = value.value;
+    }
+    changed();
+  }
+
+  function togglePin(id) {
+    st.pins = actionsMod.togglePin(st.pins, st.ctx.kind, id);
+    if (o.host && typeof o.host.writeDataText === "function") o.host.writeDataText(PINS_FILE, JSON.stringify(st.pins));
+    emit();
+  }
+
+  function toggleDocRef(layerId) {
+    if (st.drefOff[layerId]) delete st.drefOff[layerId];
+    else st.drefOff[layerId] = true;
+    changed();
+  }
+
+  async function addRef(source) {
+    var id = st.action;
+    var modelId = modelFor(id);
+    st.note = "";
+    try {
+      var r = source === "file" ? await o.references.chooseFile(modelId) : await o.references.capture(source, docId(), modelId, null, null);
+      if (r) {
+        r.url = urls.fromBytes(r.bytes, r.mime);
+        st.refs.push(r);
+      }
+    } catch (e) {
+      st.note = (e && e.message) || String(e);
+    }
+    changed();
+  }
+
+  function dropStyleRef() {
+    if (st.styleRef && st.styleRef.url) urls.release(st.styleRef.url);
+    st.styleRef = null;
+  }
+
+  // Match an image: captures the style picture from the document or a file,
+  // then puts the Style chip on it.
+  async function pickStyle(source) {
+    var modelId = modelFor(st.action);
+    st.note = "";
+    try {
+      var r = source === "file" ? await o.references.chooseFile(modelId) : await o.references.capture(source, docId(), modelId, null, null);
+      if (r) {
+        dropStyleRef();
+        r.url = urls.fromBytes(r.bytes, r.mime);
+        r.style = true;
+        r.label = "Style · " + r.label;
+        st.styleRef = r;
+        st.style = { match: true, name: "Match an image" };
+      }
+    } catch (e) {
+      st.note = (e && e.message) || String(e);
+    }
+    changed();
+  }
+
+  function removeRef(refId) {
+    if (st.styleRef && st.styleRef.id === refId) {
+      dropStyleRef();
+      st.style = null;
+      changed();
+      return;
+    }
+    st.refs = st.refs.filter(function (r) {
+      if (r.id === refId && r.url) urls.release(r.url);
+      return r.id !== refId;
+    });
+    changed();
+  }
+
+  // Pins the active layer as a document reference with a role, in the
+  // document's metadata.
+  async function pinDocRef(role) {
+    var d = docId();
+    var L = st.raw && st.raw.layer;
+    if (d === null || !L) return;
+    var list = st.drefs.filter(function (r) {
+      return r.layer_id !== L.id;
+    });
+    list.push({ role: role, layer_id: L.id, name: L.name });
+    try {
+      st.drefs = await o.host.setDocumentReferences(d, list);
+    } catch (e) {
+      st.note = "Document references could not be saved in this document: " + ((e && e.message) || e);
+    }
+    changed();
+  }
+
+  async function unpinDocRef(layerId) {
+    var d = docId();
+    if (d === null) return;
+    var list = st.drefs.filter(function (r) {
+      return r.layer_id !== layerId;
+    });
+    try {
+      st.drefs = await o.host.setDocumentReferences(d, list);
+    } catch (e) {
+      st.note = (e && e.message) || String(e);
+    }
+    changed();
+  }
+
+  // ---- styles (the project's trained models that can edit) ----
+
+  async function loadStyles() {
+    if (st.styles) return st.styles;
+    st.styles = [];
+    try {
+      await o.catalog.ensure();
+      var rows = o.catalog.rows().filter(function (r) {
+        return !map.isBase(r) && !map.hidden(r) && r.project;
+      });
+      if (rows.length) {
+        var bases = await o.catalog.baseSchemas();
+        for (var i = 0; i < rows.length; i++) {
+          var dv = trainedMod.derive(rows[i], bases);
+          if (!dv.supported || !dv.edit_route) continue;
+          var base = null;
+          for (var b = 0; b < bases.length; b++) if (bases[b].model_id === dv.base_model_ids[0]) base = bases[b];
+          st.styles.push({ id: rows[i].id, name: rows[i].name, thumb: thumbs.modelThumb(rows[i]), kind: dv.trained_kind, scale: dv.default_scale, base_model_id: dv.base_model_ids[0], route: dv.edit_route, lane_ok: true });
+        }
+      }
+    } catch (e) {
+      log("panel: styles unavailable (" + ((e && e.message) || e) + ")");
+    }
+    emit();
+    return st.styles;
+  }
+
+  // ---- the render model ----
+
+  function buttonLabel(id, v) {
+    var a = A[id];
+    if (!a || !a.button) return a ? a.label : "";
+    return a.button(takesFor(id), v ? viewFacts(v) : viewFacts(st.price.view));
+  }
+
+  // What the labels need from a priced view: sizes and the factor.
+  function viewFacts(v) {
+    if (!v) return { factor: st.factor || "2x" };
+    var out = { factor: (v.controls && v.controls.factor) || st.factor || "2x" };
+    if (v.sizes && v.sizes.output) out.out = v.sizes.output;
+    if (v.sizes && v.sizes.to) out.to = v.sizes.to;
+    if (v.lane === "image" && v.out) out.out = v.out;
+    return out;
+  }
+
+  function runProgress(rec) {
+    if (!rec || RUNNING.indexOf(rec.state) < 0) return null;
+    var takes = rec.parameters && rec.parameters.numOutputs ? Number(rec.parameters.numOutputs) : (rec.outputs || []).length || 1;
+    var words = {
+      uploading_inputs: "Uploading",
+      submitting: "Sending to Scenario",
+      queued: "Queued on Scenario",
+      generating: "Generating " + actionsMod.plural(takes, "take"),
+      cancel_requested: "Canceling",
+      succeeded: "Downloading",
+      downloading: "Downloading",
+      applying: "Placing in the document"
+    };
+    var at = { uploading_inputs: 0.08, submitting: 0.14, queued: 0.2, generating: 0.25, cancel_requested: 0.9, succeeded: 0.85, downloading: 0.88, applying: 0.95 }[rec.state];
+    if (rec.state === "generating" && typeof rec.progress === "number") at = 0.25 + Math.max(0, Math.min(1, rec.progress)) * 0.6;
+    return { label: words[rec.state] || "Working", at: at };
+  }
+
+  function latestRecord() {
+    var d = docId();
+    var lid = d === null ? st.latest.none : st.latest[d];
+    return lid && o.ledger ? o.ledger.get(lid) : null;
+  }
+
+  function outputFor(rec, assetId) {
+    if (!rec) return null;
+    for (var i = 0; i < (rec.outputs || []).length; i++) if (rec.outputs[i].asset_id === assetId) return rec.outputs[i];
+    return null;
+  }
+
+  function thumbOf(rec, assetId) {
+    var out = outputFor(rec, assetId);
+    return out && out.state === "saved" ? thumbs.resultThumb(out.path) : null;
+  }
+
+  function sizeOfOut(out) {
+    return out && out.width > 0 && out.height > 0 ? { width: out.width, height: out.height } : null;
+  }
+
+  function ctxModel() {
+    var c = st.ctx;
+    var raw = st.raw || {};
+    var a = A[st.action] || {};
+    var facts = viewFacts(st.price.action === st.action ? st.price.view : null);
+    var n = takesFor(st.action);
+    var L = layerName();
+    var land = a.land ? a.land(L, n, facts) : "";
+    var out = { kind: c.kind, icon: "file", thumb: null, count: null, title: "", detail: land, running: false, progress: null, checker: false };
+    if (c.kind === "none") {
+      out.icon = "file";
+      out.title = "No document open";
+    } else if (c.kind === "selection") {
+      var s = raw.selection || raw.selection_raw;
+      out.icon = "selection";
+      out.title = "Selection " + times(s.width, s.height) + " on " + L;
+      var ts = thumbNow();
+      if (ts) {
+        out.thumb = ts.url;
+        out.thumb_size = ts.size;
+      }
+      if (st.startFrom && st.action === "replace") out.detail = "Starting from take " + st.startFrom.n + " · lands inside the selection";
+    } else if (c.kind === "takes") {
+      var r = c.run;
+      var sh = shownChild(r);
+      var rec = recordOf(r);
+      var kept = r.group_id ? r.children.length === 1 : true;
+      out.icon = "image";
+      out.thumb = sh ? thumbOf(rec, sh.child.fields.assetId) : null;
+      out.thumb_size = sh ? sizeOfOut(outputFor(rec, sh.child.fields.assetId)) : null;
+      out.count = r.children.length > 1 ? r.children.length : null;
+      var name = runName(r.prompt, r.kind);
+      out.title = (r.group_id ? (kept ? "Kept take" : r.children.length + " takes") : "1 take") + " · " + name;
+      if (st.action === "compare") out.detail = kept ? "Take " + (Number(sh.child.fields.take) || 1) + " kept in the group" : "Showing take " + (Number(sh.child.fields.take) || sh.i + 1) + " · click a take to compare";
+    } else {
+      var lay = raw.layer;
+      var lw = lay && lay.bounds ? lay.bounds.width : raw.doc.width;
+      var lh = lay && lay.bounds ? lay.bounds.height : raw.doc.height;
+      out.icon = "layer";
+      out.checker = c.kind === "cutout";
+      out.title = lay ? lay.name + " · Layer " + times(lw, lh) : (raw.doc.title || "Document") + " · Canvas " + times(raw.doc.width, raw.doc.height);
+      if (st.startFrom && st.action === "versions") out.detail = "Starting from take " + st.startFrom.n + " · " + land.charAt(0).toLowerCase() + land.slice(1);
+      var mf = st.meta && st.meta.fields;
+      if (mf && mf.assetId && mf.jobId && o.ledger && typeof o.ledger.findByJobId === "function") {
+        var lr = o.ledger.findByJobId(mf.jobId);
+        out.thumb = thumbOf(lr, mf.assetId);
+        out.thumb_size = sizeOfOut(outputFor(lr, mf.assetId));
+      }
+      var tl = out.thumb ? null : thumbNow();
+      if (tl) {
+        out.thumb = tl.url;
+        out.thumb_size = tl.size;
+      }
+    }
+    var latest = latestRecord();
+    var pr = runProgress(latest);
+    if (pr) {
+      out.running = true;
+      out.progress = pr.at;
+      out.detail = pr.label;
+    }
+    return out;
+  }
+
+  function chipsModel() {
+    var kind = st.ctx.kind;
+    var list = actionsMod.chipsFor(kind, st.pins);
+    var extra = null;
+    if (st.action && list.indexOf(st.action) < 0 && A[st.action]) {
+      if (list.length < actionsMod.MAX_CHIPS) list = list.concat([st.action]);
+      else extra = st.action;
+    }
+    var chips = list.map(function (id) {
+      return { id: id, label: A[id].label, on: st.action === id };
+    });
+    var groups = actionsMod.moreFor(kind, st.pins, st.action);
+    var more = groups.length ? { label: extra ? A[extra].label : "More", on: !!extra } : null;
+    return { chips: chips, more: more };
+  }
+
+  function cardModel() {
+    var run = cardRun();
+    if (!run) return null;
+    var rec = recordOf(run);
+    if (run.other) {
+      // A run that has not landed as takes (failed, waiting, or an
+      // Enhance result): one line and its own buttons.
+      if (!rec) return null;
+      if (RUNNING.indexOf(rec.state) >= 0) return null;
+      var words = { ready: "Ready to place", awaiting_approval: "Waiting for your approval", applied: "Placed" };
+      var line = words[rec.state] || (FAILED.indexOf(rec.state) >= 0 ? rec.error || "Did not finish" : "");
+      var first = (rec.outputs || [])[0];
+      return {
+        kind: "single",
+        local_id: rec.local_id,
+        title: runName(rec.parameters && rec.parameters.prompt, rec.lane),
+        meta: rec.state === "applied" ? "Placed" : "",
+        sub: [rec.model_name, rec.cu_charged || rec.cu_quoted ? (rec.cu_charged || rec.cu_quoted) + " CU" : null].filter(Boolean).join(" · "),
+        thumb: first && first.state === "saved" ? thumbs.resultThumb(first.path) : null,
+        thumb_size: sizeOfOut(first),
+        line: rec.placement && rec.placement.notes && rec.placement.notes.length ? rec.placement.notes.join(" ") : line,
+        tone: FAILED.indexOf(rec.state) >= 0 ? "warn" : "ok",
+        place: rec.state === "ready",
+        done: true
+      };
+    }
+    var sh = shownChild(run);
+    var kept = run.group_id ? run.children.length === 1 && (!rec || (rec.outputs || []).length > 1) : false;
+    var badges = rec && rec.placement && rec.placement.badges ? rec.placement.badges : [];
+    var crop = tileCrop(rec);
+    var takes = run.children.map(function (c, i) {
+      var idx = (Number(c.fields.take) || i + 1) - 1;
+      return { i: i, n: idx + 1, on: !!sh && sh.i === i, thumb: thumbOf(rec, c.fields.assetId), size: sizeOfOut(outputFor(rec, c.fields.assetId)), crop: crop, badge: badgeOf(badges[idx]), name: c.name };
+    });
+    var cu = rec ? rec.cu_charged || rec.cu_quoted : null;
+    return {
+      kind: "takes",
+      local_id: rec ? rec.local_id : null,
+      title: runName(run.prompt, run.kind),
+      meta: kept ? "Kept" : takes.length > 1 ? takes.length + " takes" : "1 take",
+      sub: [run.model_name, cu ? cu + " CU" : null].filter(Boolean).join(" · "),
+      takes: takes,
+      keep: !kept && takes.length > 1 && run.group_id ? "Keep take " + (sh ? takes[sh.i].n : 1) : null,
+      clickable: !!run.group_id && takes.length > 1,
+      by: rec && rec.origin && rec.origin.kind === "agent" ? String(rec.origin.client_name || "Agent") : null,
+      done: st.ctx.kind !== "takes"
+    };
+  }
+
+  // An edit inside a selection: its tiles show the selection (with a little
+  // of what surrounds it), not the whole capture, as fractions of the take.
+  function tileCrop(rec) {
+    var t = rec && rec.lane === "edit" && rec.target;
+    if (!t || !t.selection || !t.box) return null;
+    var b = t.box;
+    var s = t.selection;
+    if (!(b[2] > 0 && b[3] > 0)) return null;
+    var pad = Math.round(Math.max(s[2], s[3]) * 0.1);
+    var l = Math.max(b[0], s[0] - pad);
+    var tp = Math.max(b[1], s[1] - pad);
+    var r = Math.min(b[0] + b[2], s[0] + s[2] + pad);
+    var bt = Math.min(b[1] + b[3], s[1] + s[3] + pad);
+    if (!(r > l && bt > tp)) return null;
+    if (r - l >= b[2] * 0.95 && bt - tp >= b[3] * 0.95) return null;
+    return { x: (l - b[0]) / b[2], y: (tp - b[1]) / b[3], w: (r - l) / b[2], h: (bt - tp) / b[3] };
+  }
+
+  function recentModel() {
+    if (!o.ledger || docId() === null) return [];
+    var current = cardRun();
+    var currentId = current ? current.local_id || (recordOf(current) || {}).local_id : null;
+    var d = docId();
+    var out = [];
+    var all = o.ledger.all();
+    for (var i = 0; i < all.length && out.length < 8; i++) {
+      var r = all[i];
+      if (r.state !== "applied" || !r.placement || r.local_id === currentId) continue;
+      var here = r.placement.document_id === d && r.session === o.session;
+      if (!here && o.runner && typeof o.runner.whereFor === "function") {
+        var w = o.runner.whereFor(r);
+        here = w.kind === "active" && w.document_id === d;
+      }
+      if (!here) continue;
+      var first = (r.outputs || [])[0];
+      out.push({ local_id: r.local_id, title: runName(r.parameters && r.parameters.prompt, r.lane), thumb: first && first.state === "saved" ? thumbs.resultThumb(first.path) : null, size: sizeOfOut(first), lane: r.lane });
+    }
+    return out;
+  }
+
+  function goModel() {
+    var a = A[st.action];
+    var p = st.price;
+    var current = p.action === st.action;
+    var label = a.label;
+    var g = { label: label, cu: "", enabled: false, title: "", reason: "" };
+    if (st.sending) {
+      g.label = TEXT.sending;
+      return g;
+    }
+    if (p.state === "need_prompt" || (a.prompt === "req" && !String(st.prompt).trim())) {
+      g.label = TEXT.need_prompt;
+      return g;
+    }
+    g.label = buttonLabel(st.action, current ? p.view : null);
+    if (p.state === "checking" || !current) {
+      g.cu = "· …";
+      g.title = TEXT.checking;
+      return g;
+    }
+    if (p.state === "ready") {
+      g.cu = "· " + p.label;
+      g.enabled = !st.confirm && !!o.runner && !(o.runner.pausedFor && o.runner.pausedFor() > 0);
+      g.title = g.label + " · " + p.label;
+      if (o.runner && o.runner.pausedFor && o.runner.pausedFor() > 0) g.reason = "Not sent: Scenario asked to wait " + o.runner.pausedFor() + " s.";
+      if (p.quote && p.quote.no_refund) g.reason = g.reason || "No refund if it fails.";
+      return g;
+    }
+    var reason = p.reason || "Price unavailable";
+    if (reason.length <= 40) {
+      g.label = reason;
+    } else {
+      g.reason = reason;
+    }
+    g.title = reason;
+    return g;
+  }
+
+  function chipModel(kind) {
+    var id = st.action;
+    var p = st.price.action === id ? st.price : {};
+    var schema = p.schema || st.schemaCache[modelFor(id)] || null;
+    if (kind === "style") {
+      if (st.style && st.style.match) return { kind: kind, thumb: st.styleRef ? st.styleRef.url : null, icon: "style", value: "Match an image", title: "Style: Match an image" + (st.styleRef ? ", " + st.styleRef.label : "") };
+      if (!styleApplies(id) && st.style) return { kind: kind, icon: "style", value: "No style", title: "Style" };
+      return st.style ? { kind: kind, thumb: st.style.thumb, icon: "style", value: st.style.name, title: "Style: " + st.style.name } : { kind: kind, icon: "style", value: "No style", title: "Style" };
+    }
+    if (kind === "model") {
+      var row = schema ? schema.row : null;
+      var name = schema ? schema.name : o.catalog && o.catalog.find(modelFor(id)) ? o.catalog.find(modelFor(id)).name : "Model";
+      return { kind: kind, thumb: row ? thumbs.modelThumb(row) : null, mono: monoOf(name), value: name, title: "Model: " + name };
+    }
+    if (kind === "takes") {
+      if (schema && !schema.takes_input) return null;
+      return { kind: kind, icon: "takes", value: actionsMod.plural(takesFor(id), "take"), title: "Takes" };
+    }
+    if (kind === "size") {
+      var v = p.view;
+      var key = v && v.size_key ? v.size_key : st.size;
+      var dims = v && v.out ? times(v.out.width, v.out.height) : "";
+      return { kind: kind, icon: "ratio", value: key, key_text: dims, title: "Size" };
+    }
+    if (kind === "target") {
+      var t = TARGETS.filter(function (x) {
+        return x.key === st.target;
+      })[0];
+      return { kind: kind, icon: "expand", value: t ? t.label : st.target, title: "Extend to" };
+    }
+    if (kind === "upsize") {
+      var f = viewFacts(p.view);
+      return { kind: kind, icon: "upscale", value: actionsMod.factorLabel(f), key_text: f.out ? times(f.out.width, f.out.height) : "", title: "Upscale factor" };
+    }
+    if (kind === "change") {
+      if (!(styleApplies(id) && st.style.route === "image_strength")) return null;
+      return { kind: kind, icon: "slider", key_text: "Change", value: CHANGE[st.change].label, title: "Change amount", key_first: true };
+    }
+    return null;
+  }
+
+  function monoOf(name) {
+    var p = String(name || "?")
+      .replace(/[^A-Za-z0-9 .]/g, "")
+      .split(/[ .]+/)
+      .filter(Boolean);
+    return ((p[0] || "?").charAt(0) + (p[1] ? p[1].charAt(0) : "")).toUpperCase();
+  }
+
+  function refsModel() {
+    var a = A[st.action];
+    if (!a || (!a.refs && !a.autoRef)) return null;
+    var p = st.price.action === st.action ? st.price : {};
+    var schema = p.schema || st.schemaCache[modelFor(st.action)] || null;
+    if (schema && a.family === "image" && !requests.referenceInput(schema)) return null;
+    if (schema && a.family === "edit") {
+      var ci = commonMod.fileInput(schema, schema.capture_input_name);
+      if (!ci || !ci.multiple) return null;
+    }
+    var items = [];
+    if (a.autoRef && st.raw && st.raw.layer) items.push({ id: "auto", label: st.raw.layer.name + ", for light and perspective", url: null, icon: "layer", removable: false });
+    if (takeRefNeeded(st.action)) items.push({ id: "take", label: "The shown take", url: null, icon: "image", removable: false });
+    var drefs = a.refs
+      ? st.drefs.map(function (r) {
+          return { layer_id: r.layer_id, role: r.role, name: r.name, on: !st.drefOff[r.layer_id], title: "Document reference · " + r.role + ": " + r.name + ". Travels with the PSD. Click to leave it out of this run." };
+        })
+      : [];
+    if (matchOn(st.action)) items.push({ id: st.styleRef.id, label: st.styleRef.label + ", sent at " + times(st.styleRef.width, st.styleRef.height), url: st.styleRef.url || null, width: st.styleRef.width, height: st.styleRef.height, icon: "style", removable: true, role: "Style" });
+    if (a.refs) {
+      for (var i = 0; i < st.refs.length; i++) items.push({ id: st.refs[i].id, label: st.refs[i].label + ", sent at " + times(st.refs[i].width, st.refs[i].height), url: st.refs[i].url || null, width: st.refs[i].width, height: st.refs[i].height, icon: st.refs[i].source === "file" ? "file" : st.refs[i].source === "selection" ? "selection" : st.refs[i].source === "visible" ? "visible" : "layer", removable: true });
+    }
+    var count = items.length + drefs.length;
+    return {
+      drefs: drefs,
+      items: items,
+      add: a.refs,
+      add_label: count ? "" : "Reference",
+      hint: drefs.length ? "" : st.refs.length === 1 ? st.refs[0].label : st.refs.length > 1 ? st.refs.length + " references" : items.length ? "" : TEXT.ref_hint
+    };
+  }
+
+  function composerModel() {
+    var a = A[st.action] || {};
+    var c = { action: st.action, note: null, refs: null, prompt: null, none: null, chips: [], go: null, confirm: st.confirm, agent: st.agent, message: st.note || null, gear: false };
+    if (a.note) {
+      c.note = a.note(cardModelLite());
+      return c;
+    }
+    c.refs = refsModel();
+    if (a.prompt === "none") c.none = a.none;
+    else c.prompt = { placeholder: a.placeholder || "", value: st.prompt };
+    var chips = (a.chips || []).map(chipModel).filter(Boolean);
+    c.chips = chips;
+    c.go = goModel();
+    var gp = st.price.action === st.action ? st.price : {};
+    c.gear = advancedFor(st.action, gp.schema || st.schemaCache[modelFor(st.action)] || null).length > 0;
+    return c;
+  }
+
+  function cardModelLite() {
+    var run = cardRun();
+    if (!run) return null;
+    var sh = shownChild(run);
+    return { kept: run.group_id ? run.children.length === 1 : true, shown_n: sh ? Number(sh.child.fields.take) || sh.i + 1 : 1 };
+  }
+
+  function headerModel() {
+    var h = o.jobsModel ? o.jobsModel.header() : { badge: null, attention: false, tooltip: "Jobs", running: 0 };
+    var total = o.ledger ? o.ledger.all().length : 0;
+    return { jobs: total, running: h.running > 0, attention: !!h.attention, title: h.tooltip };
+  }
+
+  function model() {
+    var ch = chipsModel();
+    var card = cardModel();
+    var recent = recentModel();
+    return {
+      header: headerModel(),
+      ctx: ctxModel(),
+      chips: ch.chips,
+      more: ch.more,
+      card: card,
+      recent: recent,
+      empty_mid: !card && !recent.length && st.ctx.kind !== "none" ? TEXT.empty_mid : null,
+      composer: composerModel()
+    };
+  }
+
+  // ---- menus (the popovers' contents) ----
+
+  function advancedFor(id, schema) {
+    var a = A[id];
+    if (!a || !a.family) return [];
+    var rows = [];
+    var q = qualityOf(schema) && !styleApplies(id) ? [{ name: "quality", label: "Quality", value: qualityOf(schema), options: QUALITY }] : [];
+    if (a.family === "edit")
+      rows = q.concat([
+        { name: "margin", label: "Context margin", value: st.adv.margin || "auto", options: [["auto", "Auto"], ["64", "64 px"], ["none", "None"]] },
+        { name: "sample", label: "The model sees", value: a.sample === "layer" || id === "more_like" ? "layer" : st.adv.sample || "visible", options: a.sample === "layer" ? [["layer", "This layer"]] : [["visible", "All visible"], ["layer", "Current layer"]] }
+      ]);
+    else if (a.family === "image") rows = q;
+    else if (a.family === "expand") rows = q.concat([{ name: "anchor", label: "Original at", value: st.adv.anchor || "center", options: [["center", "Center"], ["top", "Top"], ["bottom", "Bottom"], ["center-left", "Left"], ["center-right", "Right"]] }]);
+    else if (a.family === "cutout" && !a.lands) rows = [{ name: "lands", label: "Lands as", value: st.adv.lands || "mask", options: [["mask", "Mask on the layer"], ["new_layer", "New masked layer"]] }];
+    return rows;
+  }
+
+  async function menu(kind) {
+    var id = st.action;
+    var a = A[id] || {};
+    var lane = laneOf(id);
+    var p = st.price.action === id ? st.price : {};
+    var schema = p.schema || st.schemaCache[modelFor(id)] || null;
+    // A chip menu opened before the first price check (an empty prompt)
+    // still lists the model's own choices.
+    if (!schema && kind !== "more" && kind !== "addref" && modelFor(id)) {
+      try {
+        schema = await schemaFor(modelFor(id));
+      } catch (e) {
+        schema = null;
+      }
+    }
+    if (kind === "more") {
+      var mg = actionsMod.moreFor(st.ctx.kind, st.pins, st.action);
+      var ids = [];
+      for (var gi = 0; gi < mg.length; gi++) for (var ii = 0; ii < mg[gi].items.length; ii++) ids.push(mg[gi].items[ii].id);
+      var mp = await actionPrices(ids);
+      for (var gj = 0; gj < mg.length; gj++) for (var ij = 0; ij < mg[gj].items.length; ij++) mg[gj].items[ij].right = mp[mg[gj].items[ij].id] || "";
+      return { title: null, groups: mg };
+    }
+    if (kind === "takes") {
+      var max = schema && schema.takes_max ? schema.takes_max : 4;
+      var counts = TAKES.filter(function (n) {
+        return n <= max;
+      });
+      var priced = await optionPrices(id, counts, "takes", takesFor(id));
+      return {
+        title: "Takes",
+        items: counts.map(function (n) {
+          return { value: n, label: actionsMod.plural(n, "take"), sub: n === 1 ? "One result" : n + " results to compare", right: priced[n] || "", checked: takesFor(id) === n };
+        })
+      };
+    }
+    if (kind === "size") {
+      var sizes = schema ? imageMod.presets(schema) : [];
+      var cur = p.view && p.view.size_key ? p.view.size_key : st.size;
+      return {
+        title: "Size",
+        items: sizes.map(function (s) {
+          return { value: s.key, label: s.key, sub: s.label, checked: s.key === cur };
+        })
+      };
+    }
+    if (kind === "target") {
+      var sidesOk = schema ? schema.expand_route === "mask" : true;
+      return {
+        title: "Extend to",
+        items: TARGETS.filter(function (t) {
+          return !t.sides || sidesOk;
+        }).map(function (t) {
+          return { value: t.key, label: t.sides ? "+20% each side" : t.label, sub: t.sub || "", checked: st.target === t.key };
+        })
+      };
+    }
+    if (kind === "upsize") {
+      var fp = schema ? commonMod.param(schema, "upscaleFactor") : null;
+      var values = fp && fp.enum ? fp.enum.filter(function (v) {
+        return /^\d+(\.\d+)?x$/.test(v);
+      }) : ["2x"];
+      var curF = (p.view && p.view.controls && p.view.controls.factor) || st.factor || "2x";
+      var read = p.view && p.view.sizes ? p.view.sizes.read : null;
+      var fprices = await optionPrices(id, values, "upsize", curF);
+      return {
+        title: "Upscale",
+        items: values.map(function (v) {
+          var f = parseFloat(v);
+          return { value: v, label: actionsMod.factorLabel({ factor: v }), sub: read ? times(read.width * f, read.height * f) : "", right: fprices[v] || "", checked: v === curF };
+        })
+      };
+    }
+    if (kind === "change") {
+      return {
+        title: "Change amount",
+        items: CHANGE.map(function (c, i) {
+          return { value: i, label: c.label, sub: i === 0 ? "Stays close to the layer" : i === CHANGE.length - 1 ? "May redraw the whole layer" : "", checked: st.change === i };
+        })
+      };
+    }
+    if (kind === "style") {
+      var on = st.style && (st.style.match || styleApplies(id)) ? st.style : null;
+      var sgroups = [
+        {
+          title: "Style",
+          items: [
+            { value: null, label: "No style", sub: "The model's own look", checked: !on, icon: "style" },
+            { value: "match", label: "Match an image", sub: on && on.match && st.styleRef ? st.styleRef.label : "Style from a picture, any model", thumb: on && on.match && st.styleRef ? st.styleRef.url : null, checked: !!(on && on.match), icon: "image", next: true }
+          ]
+        }
+      ];
+      // Trained styles run on edit actions, on the base they were trained on.
+      if (a.family === "edit") {
+        var styles = await loadStyles();
+        var titems = [];
+        for (var s = 0; s < styles.length; s++) titems.push({ value: styles[s], label: styles[s].name, sub: "Trained style", thumb: styles[s].thumb, checked: !!on && on.id === styles[s].id });
+        if (titems.length) sgroups.push({ title: "Trained styles", items: titems });
+      }
+      return { title: null, groups: sgroups, note: a.family === "edit" ? TEXT.styles_note : TEXT.styles_note_image };
+    }
+    if (kind === "stylesrc") {
+      var sraw = st.raw || {};
+      var src = [];
+      if (sraw.doc && (sraw.selection || sraw.selection_raw)) src.push({ value: "selection", label: "Selection", sub: "What is inside the marching ants" });
+      if (sraw.doc) src.push({ value: "layer", label: "Layer", sub: "The active layer" }, { value: "visible", label: "All visible", sub: "The document as it looks now" });
+      src.push({ value: "file", label: "File…", sub: "An image on this computer" });
+      return { title: "Match an image", items: src, note: TEXT.match_note };
+    }
+    if (kind === "model" && styleApplies(id)) {
+      var base = st.style.base_model_id;
+      var baseRow = o.catalog.find(base);
+      var bp = await optionPrices(id, [null], "model_trained", null);
+      return {
+        title: null,
+        groups: [{ title: "Trained style base", items: [{ value: null, label: baseRow ? baseRow.name : schema && schema.model_id === base ? schema.name : base, sub: st.style.name + " is trained on it", thumb: baseRow ? thumbs.modelThumb(baseRow) : null, right: bp[null] || (st.price.state === "ready" && st.price.action === id ? st.price.label : ""), checked: true }] }],
+        note: TEXT.base_note
+      };
+    }
+    if (kind === "model") {
+      var rec = defaultModel(lane);
+      var recRow = o.catalog.find(rec);
+      var groups = [{ title: "Recommended for " + a.label, items: [{ value: null, label: recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec, thumb: recRow ? thumbs.modelThumb(recRow) : null, tag: "Recommended", checked: !st.models[lane] && !styleApplies(id) }] }];
+      try {
+        await o.catalog.ensure();
+      } catch (e) {
+        // the catalog list is optional here
+      }
+      var rows = o.catalog.rows();
+      var tool = lane === "image" || lane === "edit" ? null : lane;
+      var tab = map.laneTab(lane);
+      var ids = map.picks(rows, tab);
+      var cat = [];
+      for (var r = 0; r < rows.length && cat.length < 8; r++) {
+        var row = rows[r];
+        if (row.id === rec || map.hidden(row) || !map.isBase(row)) continue;
+        var lanes = map.lanesOf(row);
+        if (lanes.indexOf(tool || lane) < 0) continue;
+        if (ids.length && ids.indexOf(row.id) < 0 && cat.length >= ids.length) continue;
+        cat.push({ value: row.id, label: row.name, thumb: thumbs.modelThumb(row), checked: st.models[lane] === row.id });
+      }
+      if (cat.length) groups.push({ title: "Catalog · can " + a.label.toLowerCase(), items: cat });
+      // Each model's price for this document and these settings.
+      var mvals = [];
+      for (var mg2 = 0; mg2 < groups.length; mg2++) for (var mi2 = 0; mi2 < groups[mg2].items.length; mi2++) mvals.push(groups[mg2].items[mi2].value);
+      var mprices = await optionPrices(id, mvals, "model", st.models[lane] || null);
+      for (var mg3 = 0; mg3 < groups.length; mg3++) for (var mi3 = 0; mi3 < groups[mg3].items.length; mi3++) groups[mg3].items[mi3].right = mprices[groups[mg3].items[mi3].value] || "";
+      return { title: null, groups: groups, all: true, lane: lane, note: "Prices are price checks for this document and these settings." };
+    }
+    if (kind === "adv") {
+      var nm = schema ? schema.name : "";
+      return { title: "Advanced" + (nm ? " · " + nm : ""), rows: advancedFor(id, schema) };
+    }
+    if (kind === "addref") {
+      var raw = st.raw || {};
+      var add = [];
+      if (raw.doc && (raw.selection || raw.selection_raw)) add.push({ value: "selection", label: "Selection", sub: "What is inside the marching ants" });
+      if (raw.doc) add.push({ value: "layer", label: "Layer", sub: "The active layer" }, { value: "visible", label: "All visible", sub: "The document as it looks now" });
+      add.push({ value: "file", label: "File…", sub: "An image on this computer" });
+      var groups2 = [{ title: "Add a reference", items: add }];
+      if (raw.doc && raw.layer) {
+        groups2.push({
+          title: "Pin the layer as a document reference",
+          items: docRefsMod.ROLES.map(function (role) {
+            return { value: "pin:" + role, label: role, sub: "Shows first in every action, travels with the PSD" };
+          })
+        });
+      }
+      return { title: null, groups: groups2 };
+    }
+    return { title: null, items: [] };
+  }
+
+  // ---- startup ----
+
+  if (o.host && typeof o.host.readDataText === "function") {
+    Promise.resolve(o.host.readDataText(PINS_FILE)).then(
+      function (text) {
+        try {
+          var v = text ? JSON.parse(text) : null;
+          if (v && typeof v === "object") {
+            for (var k in v) if (Array.isArray(v[k])) st.pins[k] = v[k].filter(function (x) {
+              return actionsMod.inMore(k, x);
+            });
+          }
+        } catch (e) {
+          // no pins yet
+        }
+        emit();
+      },
+      function () {}
+    );
+  }
+  if (o.ledger && typeof o.ledger.onChange === "function") {
+    o.ledger.onChange(function (rec) {
+      var latest = latestRecord();
+      if (rec && latest && rec.local_id === latest.local_id && rec.state === "applied") refresh();
+      else emit();
+    });
+  }
+  // Runs whose group is selected once it lands (actions with selectGroup).
+  var selectAfter = {};
+  async function selectLanded(localId) {
+    delete selectAfter[localId];
+    var rec = o.ledger ? o.ledger.get(localId) : null;
+    var pl = rec && rec.placement;
+    var at = pl ? pl.group_id || (pl.layer_ids || [])[0] : null;
+    if (!at || pl.document_id !== docId() || typeof o.host.selectLayer !== "function") return;
+    try {
+      await o.host.selectLayer(pl.document_id, at);
+    } catch (e) {
+      log("panel: select the landed group failed");
+    }
+  }
+  if (o.runner && typeof o.runner.onEvent === "function") {
+    o.runner.onEvent(function (ev) {
+      if (ev && ev.type === "placed") {
+        if (selectAfter[ev.local_id]) selectLanded(ev.local_id).then(refresh);
+        else refresh();
+      } else emit();
+    });
+  }
+
+  return {
+    model: model,
+    menu: menu,
+    onChange: function (fn) {
+      listeners.push(fn);
+    },
+    activate: function () {
+      if (st.active) return refresh();
+      st.active = true;
+      if (o.catalog && typeof o.catalog.ensure === "function") o.catalog.ensure().catch(function () {});
+      st.price = { state: "idle" };
+      return refresh();
+    },
+    documentChanged: function () {
+      return refresh();
+    },
+    refresh: refresh,
+    selectAction: selectAction,
+    setPrompt: setPrompt,
+    choose: choose,
+    togglePin: togglePin,
+    toggleDocRef: toggleDocRef,
+    addRef: addRef,
+    removeRef: removeRef,
+    pinDocRef: pinDocRef,
+    unpinDocRef: unpinDocRef,
+    go: go,
+    confirmOk: confirmOk,
+    confirmCancel: confirmCancel,
+    showTake: showTake,
+    keep: keep,
+    refine: refine,
+    moreLike: function () {
+      st.keepAction = st.ctx.kind !== "takes";
+      selectAction("more_like");
+    },
+    closeCard: closeCard,
+    placeCard: placeCard,
+    openRecent: openRecent,
+    // F5: an agent's request to spend, shown above the composer until it
+    // is approved or declined. req: { client_name, what, prompt, model_name,
+    // cu, approve(), decline() }. Agent spending runs through the agent
+    // link (M6); until then nothing calls this, so the card never shows.
+    showAgentRequest: function (req) {
+      st.agent = req || null;
+      emit();
+    },
+    agentDecision: function (yes) {
+      var req = st.agent;
+      st.agent = null;
+      if (req) {
+        if (yes && typeof req.approve === "function") req.approve();
+        if (!yes && typeof req.decline === "function") req.decline();
+        if (!yes) st.note = TEXT.declined;
+      }
+      emit();
+    },
+    // The model chosen in the full model list (ui/picker.js).
+    chooseModel: function (row) {
+      if (!row || !row.id) return false;
+      choose("model", row.id);
+      return true;
+    },
+    state: function () {
+      return { action: st.action, kind: st.ctx.kind, prompt: st.prompt, price: st.price, sending: st.sending, confirm: st.confirm, note: st.note, latest: st.latest, active: st.active, key: st.key, pins: st.pins, refs: st.refs.length, drefs: st.drefs.slice() };
+    },
+    TEXT: TEXT
+  };
+}
+
+module.exports = { createController: createController, classify: classify, takesOf: takesOf, isCutout: isCutout, badgeOf: badgeOf, needsConfirm: needsConfirm, TEXT: TEXT, DEBOUNCE_MS: DEBOUNCE_MS, TARGETS: TARGETS, CHANGE: CHANGE };

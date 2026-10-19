@@ -10,7 +10,9 @@
 //   trained: { model_id, kind: "lora" | "composition", scale, strength }
 //            (trained_edit only),
 //   options: the view options (lanes/edit.js, lanes/enhance.js), prompt
-//   included, context (optional: a context already read) }
+//   included, context (optional: a context already read), references (how
+//   many reference images the Edit lane sends, for the price) or refs (the
+//   references themselves, at Generate) }
 //
 // The money contract stays with the runner and the quotes: Generate is
 // built from the document as it is at the click, so a document, selection
@@ -64,6 +66,10 @@ function createFlow(o) {
     var ctx = a.context || (await context());
     var schema = await o.catalog.schema(modelId);
     var view = viewFor(tool, schema, ctx, a);
+    // References go with the capture in the Edit lane (the panel's refs
+    // row): priced by count, uploaded at Generate.
+    var refCount = a.refs ? a.refs.length : a.references || 0;
+    if (view.request && lane === "edit" && refCount) view.request.references = refCount;
     var req = null;
     if (!view.blocked) {
       try {
@@ -113,7 +119,7 @@ function createFlow(o) {
     if (!o.runner || !o.capture) throw invalid("Generate needs a secure random source; prices still show.");
     var spec = p.view.capture;
     var cap = await o.capture[spec.kind](spec.spec);
-    var out = await o.runner.start({ req: p.req, quote: quote, refs: [], capture: cap, model_name: p.schema.name, document_title: p.context.doc ? p.context.doc.title : null });
+    var out = await o.runner.start({ req: p.req, quote: quote, refs: p.lane === "edit" && a.refs ? a.refs : [], capture: cap, model_name: p.schema.name, document_title: p.context.doc ? p.context.doc.title : null });
     out.view = p.view;
     return out;
   }

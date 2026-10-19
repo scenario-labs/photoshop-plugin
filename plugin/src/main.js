@@ -27,7 +27,9 @@ var catalogMod = require("./catalog/catalog.js");
 var assetsMod = require("./scenario/assets.js");
 var quotesMod = require("./forms/quotes.js");
 var catalogToolsMod = require("./bridge/catalog-tools.js");
-var lanesMod = require("./ui/lanes.js");
+var controllerMod = require("./panel/controller.js");
+var createViewMod = require("./ui/create-view.js");
+var mapMod = require("./catalog/map.js");
 var pickerMod = require("./ui/picker.js");
 var ledgerMod = require("./jobs/ledger.js");
 var runnerMod = require("./jobs/runner.js");
@@ -39,6 +41,7 @@ var devLive = require("./dev/live-run.js");
 var devHooks = require("./dev/test-hooks.js");
 var jobsModelMod = require("./jobs/view-model.js");
 var jobsViewMod = require("./ui/jobs-view.js");
+var jobsTextMod = require("./ui/jobs-text.js");
 var menuMod = require("./ui/menu.js");
 var thumbsMod = require("./ui/thumbs.js");
 var API = require("../../shared/scenario-api.json");
@@ -118,7 +121,8 @@ function boot(env) {
   var standIns = assetsMod.createStandIns({ client: client, host: host, account: accounts.current, log: logger.log });
   var panel = null;
   var accountPanel = null;
-  var lanes = null;
+  var controller = null;
+  var createView = null;
   var picker = null;
   var link = null;
   var diagnostics = null;
@@ -145,7 +149,7 @@ function boot(env) {
           show: function () {
             if (panel) panel.refresh();
             // Price checks start when the panel is first shown, never at launch.
-            if (lanes) lanes.activate();
+            if (controller) controller.activate();
           },
           menuItems: menuMod.items(),
           invokeMenu: function (id) {
@@ -333,11 +337,6 @@ function boot(env) {
         await pairing.reset();
         logger.log("pairing token reset");
         link.restart("Pairing token reset. Agent clients need the new token.");
-      },
-      onLane: function (id) {
-        if (!lanes) return;
-        lanes.select(id);
-        lanes.activate();
       }
     };
     panel = panelMod.createPanel(env.document, panelActions, VERSION);
@@ -346,31 +345,11 @@ function boot(env) {
       host: host,
       log: logger.log,
       onChoose: function (row) {
-        var lane = lanes ? lanes.choose(row) : null;
-        if (lane && panel) panel.selectLane(lane);
+        if (controller) controller.chooseModel(row);
       },
       onClose: function () {
-        if (lanes) lanes.restore();
+        if (createView) createView.render();
       }
-    });
-    lanes = lanesMod.createLanes(env.document, {
-      catalog: catalog,
-      quotes: quotes,
-      host: host,
-      account: accounts.current,
-      timers: host.timers,
-      log: logger.log,
-      openPicker: function (tab, tool) {
-        if (picker) picker.open(tab, tool);
-      },
-      runner: runner,
-      references: references,
-      ledger: ledger,
-      settings: settings,
-      openJobs: function () {
-        if (jobsView) jobsView.open();
-      },
-      urls: thumbsMod.createUrls(env.global)
     });
     diagnostics = diagnosticsMod.createDiagnostics({ version: VERSION, build: flags.BUILD, host: host, settings: settings, auth: auth, link: link, errors: errors, jobs: ledger });
     accountPanel = accountPanelMod.createAccountPanel(env.document, {
@@ -397,9 +376,53 @@ function boot(env) {
           return host.clipboardWrite(redactor.apply(text));
         },
         timers: host.timers,
-        log: logger.log
+        log: logger.log,
+        popover: true
       });
     }
+    // The creation panel (FLOWS v2): the controller reads Photoshop and runs
+    // the actions on the lanes' logic; the view draws it.
+    controller = controllerMod.createController({
+      host: host,
+      catalog: catalog,
+      quotes: quotes,
+      flow: flow,
+      runner: runner,
+      ledger: ledger,
+      references: references,
+      account: accounts.current,
+      settings: settings,
+      jobsModel: jobsModel,
+      session: session,
+      timers: host.timers,
+      log: logger.log,
+      urls: thumbsMod.createUrls(env.global)
+    });
+    createView = createViewMod.createCreateView(env.document, controller, {
+      log: logger.log,
+      openPicker: function (lane) {
+        if (picker) picker.open(mapMod.laneTab(lane || "image"), lane);
+      },
+      openSettings: function () {
+        if (accountPanel) accountPanel.menuHandlers.agents();
+      },
+      jobsMenu: ledger
+        ? function () {
+            return { title: jobsTextMod.TEXT.pop_title, rows: jobsTextMod.popRows(ledger.all(), 6), empty: jobsTextMod.TEXT.pop_empty, note: jobsTextMod.TEXT.pop_note, all: jobsTextMod.TEXT.pop_all, all_sub: jobsTextMod.TEXT.pop_all_sub };
+          }
+        : null,
+      openJobs: function () {
+        if (jobsView) jobsView.open();
+      },
+      agentMenu: function () {
+        var d = panel ? panel.link() : { names: [] };
+        var names = d.names || [];
+        return {
+          title: "Agent",
+          text: names.length ? names.join(", ") + (names.length > 1 ? " are" : " is") + " connected through the Scenario MCP. It can read the document and propose runs; spending waits for your approval." : d.headline && d.dot === "warn" ? d.headline + "." : "No agent connected. Connect Claude or another client through the Scenario MCP to let it propose runs here."
+        };
+      }
+    });
     var menuHandlers = {};
     if (accountPanel) {
       for (var mk in accountPanel.menuHandlers) menuHandlers[mk] = accountPanel.menuHandlers[mk];
@@ -410,13 +433,14 @@ function boot(env) {
     menu = menuMod.createMenu(menuHandlers);
     accounts.onChange(function () {
       if (accountPanel) accountPanel.refresh();
-      if (lanes) lanes.refresh();
+      if (controller) controller.refresh();
       // Jobs waiting for their project's key continue.
       if (runner) runner.resume();
     });
-    // Document, canvas and selection changes reprice the Image lane.
+    // Document, layer, canvas and selection changes update the context card
+    // and reprice the selected action.
     if (typeof host.onDocumentEvents === "function" && !host.onDocumentEvents(function () {
-      if (lanes) lanes.documentChanged();
+      if (controller) controller.documentChanged();
     })) {
       logger.log("document events unavailable");
     }
@@ -436,7 +460,8 @@ function boot(env) {
       catalog: catalog,
       quotes: quotes,
       standIns: standIns,
-      lanes: lanes,
+      controller: controller,
+      createView: createView,
       picker: picker,
       catalogTools: catalogTools,
       accountPanel: accountPanel,

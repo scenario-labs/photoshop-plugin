@@ -87,10 +87,10 @@ test("panel page: local resources only, one script at the end of the body", () =
   assert.ok(html.indexOf("<script") > html.lastIndexOf("</section>"), "after every view");
   assert.ok(!/(src|href)="(https?:)?\/\//.test(html), "nothing loaded from the network");
   assert.ok(!/\son[a-z]+=/i.test(html), "no inline event handlers");
-  for (const id of ["link-dot", "link-headline", "link-detail", "token-value", "token-show", "token-copy", "token-reset", "token-note", "version", "lane-note", "lane-source", "target-chip", "model-thumb", "refs-menu", "jobs-badge"]) {
+  for (const id of ["link-dot", "link-headline", "link-detail", "token-value", "token-show", "token-copy", "token-reset", "token-note", "version", "ctx-title", "acts", "mid-card", "refs", "prompt", "cchips", "go", "pop", "jobs-badge"]) {
     assert.ok(html.includes(`id="${id}"`), `#${id} exists`);
   }
-  for (const lane of view.LANES) assert.ok(html.includes(`data-lane="${lane.id}"`), `lane ${lane.id} has a button`);
+  assert.ok(!html.includes("data-lane="), "no lane tabs: the actions follow the context");
   const css = fs.readFileSync(path.join(ROOT, "plugin", "styles.css"), "utf8");
   assert.ok(!/url\(\s*["']?https?:/.test(css), "no remote CSS resources");
   assert.ok(!/@keyframes|animation\s*:/.test(css), "no animation");
@@ -165,8 +165,6 @@ test("panel wording: every link phase has a headline, the token is masked by def
   assert.equal(view.maskToken(token, false), "....wxyz");
   assert.equal(view.maskToken(token, true), token);
   assert.equal(view.maskToken(null, true), "Not created yet");
-  assert.equal(view.LANES.map((l) => l.label).join(","), "Image,Edit,Enhance,Trained,Library");
-  assert.match(view.NOT_BUILT, /not available in this version/i);
 });
 
 test("errors.json lists exactly the types of MCP.md section 8", () => {

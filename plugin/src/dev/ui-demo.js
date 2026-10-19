@@ -2,9 +2,8 @@
 // DEVELOPMENT BUILDS ONLY. Release bundles replace this module with a stub
 // whose hook() returns null (plugin/scripts/build.js), and a test checks it.
 //
-// Sample states for looking at the panel without spending anything or
-// touching a document: reference chips, a results tray, Jobs rows, a confirm
-// card, a sign-in error. Each one is drawn by the panel's own render code,
+// Sample states for pictures of the panel made for the docs, never left on
+// the live panel: Jobs rows, a sign-in error, a project name. Each one is drawn by the panel's own render code,
 // which hands its render functions to hook() when it is built. Sample
 // pictures arrive as base64 in the command (test/live/ui-dev.js) and are
 // written under "dev-demo/" in the plugin's data folder; nothing is added to
@@ -67,33 +66,7 @@ function record(spec, outputs, n) {
 // ctx: { host, app, doc }
 async function run(what, args, ctx) {
   args = args || {};
-  var lanes;
   switch (what) {
-    case "refs": {
-      lanes = need("lanes");
-      var keep = lanes.st.refs.map(function (r) {
-        return r.id;
-      });
-      for (var k = 0; k < keep.length; k++) lanes.dropRef(keep[k]);
-      var images = args.images || [];
-      for (var i = 0; i < images.length; i++) {
-        var im = images[i];
-        lanes.st.refs.push({ id: "demo-ref-" + (i + 1), bytes: bytesOf(im), mime: im.mime || "image/png", width: im.width || 1024, height: im.height || 1024, label: im.label || "File", reduced: !!im.reduced });
-      }
-      lanes.renderRefs();
-      lanes.setRefsMenu(!!args.menu);
-      return { refs: lanes.st.refs.length };
-    }
-    case "tray": {
-      lanes = need("lanes");
-      if (!args.state) {
-        lanes.renderTrayRecord(null);
-        return { tray: false };
-      }
-      var outs = await writeTakes(ctx.host, args.images || [], "take");
-      lanes.renderTrayRecord(record(args, outs, 1));
-      return { tray: outs.length };
-    }
     case "jobs": {
       var jobs = need("jobs");
       if (ctx.app.jobsView) ctx.app.jobsView.open();
@@ -105,12 +78,6 @@ async function run(what, args, ctx) {
       }
       jobs.renderList(list);
       return { rows: list.length };
-    }
-    case "confirm": {
-      lanes = need("lanes");
-      if (!args.text) lanes.clearConfirm();
-      else lanes.showConfirm({ kind: "demo", text: args.text, detail: args.detail || "", ok: args.ok || "Generate" });
-      return { confirm: !!args.text };
     }
     case "failure": {
       var acc = need("account");

@@ -249,10 +249,10 @@ function createPicker(doc, o) {
     st.tab = map.TABS.indexOf(tab) >= 0 ? tab : "image";
     st.chip = tool && map.CHIPS[st.tab].indexOf(tool) >= 0 ? tool : "all";
     st.shown = PAGE;
-    // The picker takes the main view's place: tabs, body and prompt bar hide.
-    show("lane-tabs", false);
-    show("main-scroll", false);
-    show("main-foot", false);
+    // The picker takes the main view's place: context, middle and composer hide.
+    show("sc-top", false);
+    show("mid", false);
+    show("composer", false);
     show("view-picker", true, "flex");
     var sc = byId("picker-scroll");
     if (sc) sc.scrollTop = 0;
@@ -263,9 +263,9 @@ function createPicker(doc, o) {
   function close() {
     st.open = false;
     show("view-picker", false);
-    show("lane-tabs", true, "flex");
-    show("main-scroll", true, "block");
-    show("main-foot", true, "block");
+    show("sc-top", true, "flex");
+    show("mid", true, "flex");
+    show("composer", true, "flex");
     if (o.onClose) o.onClose();
   }
 

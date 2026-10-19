@@ -7,6 +7,8 @@ var utf8 = require("./util/utf8.js");
 var b64 = require("./util/base64url.js");
 var pixelsMod = require("./capture/pixels.js");
 var sha = require("./util/sha256.js");
+var xmpMod = require("./util/xmp.js");
+var docRefsMod = require("./panel/doc-refs.js");
 
 function toBytes(v) {
   if (v && v.buffer && typeof v.byteLength === "number") return new Uint8Array(v.buffer, v.byteOffset || 0, v.byteLength);
@@ -49,6 +51,7 @@ function createHost(hostRequire, g) {
   var lfs = uxp && uxp.storage && uxp.storage.localFileSystem;
   var DATA = "plugin-data:/";
   var SRGB = "sRGB IEC61966-2.1";
+  var EVENT_COALESCE_MS = 80;
 
   function modal(name, fn, opts) {
     if (!ps || !ps.core || typeof ps.core.executeAsModal !== "function") return Promise.reject(new Error("this Photoshop offers no modal scope"));
@@ -125,6 +128,44 @@ function createHost(hostRequire, g) {
     }
   }
 
+  async function metaOf(docId, layerId) {
+    try {
+      var r = await play([{ _obj: "get", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "layer", _id: layerId }, { _ref: "document", _id: docId }] }]);
+      return xmpMod.parse(r && r[0] ? r[0].XMPMetadataAsUTF8 : null);
+    } catch (e) {
+      return {};
+    }
+  }
+
+  // The document, which must be the active one (changes go to the front
+  // document only).
+  function activeDoc(docId) {
+    var doc = findDoc(docId);
+    if (!doc) throw new Error("the document was closed");
+    var active = ps.app.activeDocument;
+    if (!active || active.id !== doc.id) throw new Error("the document is not the active one");
+    return doc;
+  }
+
+  // Runs fn as one History state named `name`; a failure rolls it back.
+  async function inOneState(ctx, doc, name, fn) {
+    var hc = ctx && ctx.hostControl;
+    var sid = hc ? await hc.suspendHistory({ documentID: doc.id, name: name }) : null;
+    try {
+      await fn();
+      if (hc) await hc.resumeHistory(sid, true);
+    } catch (e) {
+      if (hc) {
+        try {
+          await hc.resumeHistory(sid, false);
+        } catch (e2) {
+          // nothing more to undo
+        }
+      }
+      throw e;
+    }
+  }
+
   async function layerInfo(d, l) {
     var kind = String(l.kind || "pixel");
     var background = !!l.isBackgroundLayer;
@@ -180,6 +221,10 @@ function createHost(hostRequire, g) {
 
   // Selects the layer a result goes above: the insert point, or the top of
   // its clipping chain (SPEC 3.8), or the top of the document.
+  // Selects the layer the takes are placed above. insert.below: the takes
+  // go under the layer instead: above the layer below it, or, when it is
+  // the bottom layer, above it and moved under it after (the returned
+  // { move_below: layer }).
   async function selectInsertPoint(doc, insert, notes) {
     var target = null;
     if (insert && insert.layer_id) {
@@ -191,13 +236,22 @@ function createHost(hostRequire, g) {
       var list = parent.layers || [];
       var at = -1;
       for (var i = 0; i < list.length; i++) if (list[i].id === target.id) at = i;
+      if (insert.below && at >= 0) {
+        if (list[at + 1] && !list[at + 1].isClippingMask) {
+          await selectLayers(doc.id, [list[at + 1].id]);
+          return null;
+        }
+        await selectLayers(doc.id, [target.id]);
+        return { move_below: target };
+      }
       while (at > 0 && list[at - 1] && list[at - 1].isClippingMask) at--;
       if (at >= 0) target = list[at];
       await selectLayers(doc.id, [target.id]);
-      return;
+      return null;
     }
     var top = doc.layers && doc.layers[0];
     if (top) await selectLayers(doc.id, [top.id]);
+    return null;
   }
 
   var ANCHOR = { tl: "TOPLEFT", br: "BOTTOMRIGHT" };
@@ -320,6 +374,8 @@ function createHost(hostRequire, g) {
       await setXmp(doc, target.id, c.xmp);
     }
     await putMask(doc, target.id, { left: mb.left, top: mb.top, width: mb.width, height: mb.height, data: mask.data });
+    // Inside the same History state as the placement.
+    if (c.drop_selection) await play([{ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }], to: { _enum: "ordinal", _value: "none" } }]);
     return target;
   }
 
@@ -516,6 +572,15 @@ function createHost(hostRequire, g) {
       }
     },
 
+    // A binary file of the data folder as bytes, or null.
+    readDataBinary: async function (name) {
+      if (!fs) return null;
+      try {
+        return toBytes(await fs.readFile(DATA + name));
+      } catch (e) {
+        return null;
+      }
+    },
     readDataText: async function (name) {
       if (!fs) return null;
       try {
@@ -681,6 +746,115 @@ function createHost(hostRequire, g) {
         return null;
       }
     },
+    // The Scenario metadata of a layer (SPEC 9.2) and, for a group, of each
+    // layer in it, top first. Read only (batchPlay get of each XMP). Resolves
+    // { id, name, visible, group, parent ({ id, name } of the group holding
+    // it, or null), fields, children: [{ id, name, visible, fields }] }, or
+    // null when the layer is gone.
+    scenarioLayer: async function (docId, layerId) {
+      var d = findDoc(docId);
+      if (!d) return null;
+      try {
+        var l = findLayer(d, layerId);
+        if (!l) return null;
+        var parent = null;
+        try {
+          parent = l.parent && l.parent.id !== undefined && l.parent.layers ? { id: l.parent.id, name: String(l.parent.name || "") } : null;
+        } catch (e) {
+          parent = null;
+        }
+        var out = { id: l.id, name: String(l.name || ""), visible: l.visible !== false, group: false, parent: parent, fields: await metaOf(d.id, l.id), children: [] };
+        var kids = String(l.kind || "") === "group" && l.layers ? l.layers : null;
+        if (kids) {
+          out.group = true;
+          for (var i = 0; i < kids.length; i++) out.children.push({ id: kids[i].id, name: String(kids[i].name || ""), visible: kids[i].visible !== false, fields: await metaOf(d.id, kids[i].id) });
+        }
+        return out;
+      } catch (e) {
+        return null;
+      }
+    },
+    // Shows one take of a Scenario group in the document and hides the
+    // others (the Takes card), as one History state.
+    showTake: function (docId, groupId, layerId) {
+      return modal("Scenario: Show take", async function (ctx) {
+        var doc = activeDoc(docId);
+        var group = findLayer(doc, groupId);
+        if (!group || !group.layers) throw new Error("the takes group is gone");
+        await inOneState(ctx, doc, "Scenario: Show take", async function () {
+          if (group.visible === false) group.visible = true;
+          for (var i = 0; i < group.layers.length; i++) {
+            var on = group.layers[i].id === layerId;
+            if ((group.layers[i].visible !== false) !== on) group.layers[i].visible = on;
+          }
+        });
+        return true;
+      });
+    },
+    // Keeps one take of a Scenario group and removes the other take layers
+    // from it, as one History state. Their files stay in the data folder.
+    keepTake: function (docId, groupId, layerId) {
+      return modal("Scenario: Keep take", async function (ctx) {
+        var doc = activeDoc(docId);
+        var group = findLayer(doc, groupId);
+        if (!group || !group.layers) throw new Error("the takes group is gone");
+        var keep = null;
+        for (var k = 0; k < group.layers.length; k++) if (group.layers[k].id === layerId) keep = group.layers[k];
+        if (!keep) throw new Error("this take is no longer in the group");
+        var removed = 0;
+        await inOneState(ctx, doc, "Scenario: Keep take", async function () {
+          var others = group.layers.filter(function (x) {
+            return x.id !== layerId;
+          });
+          for (var i = 0; i < others.length; i++) {
+            await deleteLayer(doc, others[i]);
+            removed++;
+          }
+          if (keep.visible === false) keep.visible = true;
+          if (group.visible === false) group.visible = true;
+        });
+        return removed;
+      });
+    },
+    // Makes a layer the active one (no History state).
+    selectLayer: function (docId, layerId) {
+      return modal("Scenario: Select layer", async function () {
+        activeDoc(docId);
+        await selectLayers(docId, [layerId]);
+        return true;
+      });
+    },
+    // Loads a layer's mask as the selection (Refine and More like this on
+    // a selection edit: the same selection again).
+    selectionFromMask: function (docId, layerId) {
+      return modal("Scenario: Load selection", async function () {
+        activeDoc(docId);
+        await play([{ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }], to: { _ref: [{ _ref: "channel", _enum: "channel", _value: "mask" }, { _ref: "layer", _id: layerId }] } }]);
+        return true;
+      });
+    },
+    // The document references kept in a document's metadata (SPEC 9.2
+    // namespace): [{ role, layer_id, name }]. Read only.
+    documentReferences: async function (docId) {
+      if (!findDoc(docId)) return [];
+      try {
+        var r = await play([{ _obj: "get", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "document", _id: docId }] }]);
+        return docRefsMod.read(r && r[0] ? r[0].XMPMetadataAsUTF8 : null);
+      } catch (e) {
+        return [];
+      }
+    },
+    // Writes them into the document's metadata, keeping every other field
+    // of its packet. Resolves the list as written.
+    setDocumentReferences: function (docId, refs) {
+      return modal("Scenario: Document references", async function () {
+        activeDoc(docId);
+        var r = await play([{ _obj: "get", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "document", _id: docId }] }]);
+        var packet = docRefsMod.write(r && r[0] ? r[0].XMPMetadataAsUTF8 : null, refs);
+        await play([{ _obj: "set", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "document", _id: docId }], to: { _obj: "document", XMPMetadataAsUTF8: packet } }]);
+        return docRefsMod.read(packet);
+      });
+    },
     // Pixels as 8-bit sRGB, read at most at long_side on the long side, in
     // one modal scope; imaging needs one (verified live on 27.11).
     // req: { document_id, layer_id (none: all visible), bounds, long_side,
@@ -836,7 +1010,7 @@ function createHost(hostRequire, g) {
               placed.push(t);
               masked = true;
             } else {
-              await selectInsertPoint(doc, plan.insert, notes);
+              var after = await selectInsertPoint(doc, plan.insert, notes);
               for (var i = plan.takes.length - 1; i >= 0; i--) {
                 var take = plan.takes[i];
                 var layer = await placeFile(doc, take.path, take.fit, notes);
@@ -872,6 +1046,16 @@ function createHost(hostRequire, g) {
                   masked = true;
                 } catch (e) {
                   notes.push("Placed unmasked: the mask could not be applied.");
+                }
+              }
+              if (after && after.move_below) {
+                var moving = placed.length > 1 ? findLayer(doc, groupId) : placed[0];
+                var placement = ps.constants && ps.constants.ElementPlacement;
+                try {
+                  if (!moving || typeof moving.move !== "function" || !placement) throw new Error("no move");
+                  await moving.move(after.move_below, placement.PLACEAFTER);
+                } catch (e) {
+                  notes.push("Placed above the layer: it could not be moved under it.");
                 }
               }
             }
@@ -921,8 +1105,9 @@ function createHost(hostRequire, g) {
         return true;
       });
     },
-    // Calls fn() (coalesced at 200 ms) when the active document, the
-    // selection or the layers may have changed (SPEC 3.8).
+    // Calls fn() (coalesced over 80 ms, so the context card follows a change
+    // within 200 ms) when the active document, the selection or the layers
+    // may have changed (SPEC 3.8).
     onDocumentEvents: function (fn) {
       if (!ps || !ps.action || typeof ps.action.addNotificationListener !== "function") return false;
       var pending = null;
@@ -937,7 +1122,7 @@ function createHost(hostRequire, g) {
             pending = g.setTimeout(function () {
               pending = null;
               fn();
-            }, 200);
+            }, EVENT_COALESCE_MS);
           }
         );
         return true;

@@ -31,10 +31,12 @@ function display(t) {
   return stripZeros((cu / 1000000).toPrecision(3)) + "M";
 }
 
-// kind: exact | range | from. max: thousandths, for a range.
+// kind: exact | range | from. max: thousandths, for a range. An exact
+// price of nothing reads "Free".
 function label(kind, t, max) {
   if (kind === "range") return display(t) + " to " + display(max) + " CU";
   if (kind === "from") return "from " + display(t) + " CU";
+  if (t === 0) return "Free";
   return display(t) + " CU";
 }
 

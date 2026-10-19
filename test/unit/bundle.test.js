@@ -93,12 +93,9 @@ test("the release bundle boots in a fake UXP, links to a real owner and answers 
   panelDef.invokeMenu("about");
   assert.ok(ps.doc.shown("view-settings"));
   ps.doc.els.get("settings-back").click();
-  assert.equal(ps.doc.lanes[0].className, "tab on");
-  ps.doc.lanes[3].click();
-  assert.equal(ps.doc.lanes[3].className, "tab on");
-  assert.equal(ps.doc.text("lane-empty-title"), "Trained models");
-  assert.equal(ps.doc.lanes[3].getAttribute("selected"), "");
-  assert.equal(ps.doc.lanes[0].getAttribute("selected"), null);
+  // Not signed in: the creation panel waits, its button names what it needs.
+  assert.equal(ps.doc.text("go-label"), "Fill in the prompt to see the price");
+  assert.equal(ps.doc.lanes.length, 0, "no lane tabs");
   await sleep(400);
   const log = ps.files.get("scenario-link.log") || "";
   assert.ok(log.includes(`plugin ${manifest.version} (release) starting; random source: getRandomValues`));
