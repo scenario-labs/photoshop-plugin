@@ -35,7 +35,7 @@ Before sending, the plugin converts captured pixels to sRGB at 8 bits per channe
 | Destination | Purpose |
 |---|---|
 | `https://api.cloud.scenario.com` | Scenario's API: sign-in check, catalog, prices, uploads under 4 MB, generations, jobs, Library |
-| Scenario's upload storage (the host is listed in the plugin manifest) | Uploads of 4 MB and more, through upload links that Scenario signs |
+| Scenario's upload storage, once Scenario confirms its host as stable (it is then listed in the plugin manifest and here; until then every upload goes to Scenario's API and stays under 4 MB) | Uploads of 4 MB and more, through upload links that Scenario signs |
 | Scenario's download hosts (listed in the plugin manifest, which never allows all hosts) | Downloads of results and thumbnails, through signed links that expire |
 | `https://api.github.com` | Update check. GitHub receives an ordinary HTTPS request, which includes your IP address |
 | Your browser | Pages you open from the plugin, such as the API key page on app.scenario.com |

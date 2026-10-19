@@ -163,7 +163,7 @@ Any other `path` returns `UploadRefused` before anything is read. Files from dis
 
 | Tool | Blender | Inputs | Output | Side effects | Cost |
 |---|---|---|---|---|---|
-| `recover_local_job` | same (actions `retry_receipt` and `find_cloud_job` are not offered: see section 6) | `local_id`, `expected_revision`, `action` | `status`, `revision`, `actions`, `error` | `refresh` reads the job on Scenario now. `recover_download` checks the files on disk against the record, with no network call: `ready` when every file verifies, else `download_failed`. `resume` is the panel's **Resume download**: fresh signed links, complete files kept. `stop_download` is **Stop download**. `cancel` asks Scenario once to cancel a running job and reports the outcome; its charge follows section 3, Charges. `resume`, `stop_download` and `cancel` act only on jobs this client session started (`NotYourJob` otherwise, including jobs of an ended session, which belong to the person). An `uncertain` job returns `UncertainNeedsPerson` | Free |
+| `recover_local_job` | same (actions `retry_receipt` and `find_cloud_job` are not offered: see section 6; no `cancel`: Scenario refuses it on model jobs) | `local_id`, `expected_revision`, `action` | `status`, `revision`, `actions`, `error` | `refresh` reads the job on Scenario now. `recover_download` checks the files on disk against the record, with no network call: `ready` when every file verifies, else `download_failed`. `resume` is the panel's **Resume download**: fresh signed links, complete files kept. `stop_download` is **Stop download**. There is no `cancel` action in v1: Scenario refuses cancel on model jobs (measured live 2026-10-19). `resume` and `stop_download` act only on jobs this client session started (`NotYourJob` otherwise, including jobs of an ended session, which belong to the person). An `uncertain` job returns `UncertainNeedsPerson` | Free |
 | `recover_cloud_job` | same | `job_id` | `local_id`, `status`, `revision` | Adds a finished job of the current project to the ledger and downloads its results; never submits a generation; no document change. A job the ledger already holds returns its existing record, or `DocumentNotAllowed` under read scope when that record names another document | Free |
 | `cancel_prepared_job` | similar: returns `not_sent` where Blender's withdrawn job reads `canceled` | `local_id` of a job in `awaiting_approval` | `status: "not_sent"` | Withdraws the request, only for jobs this client session started (`NotYourJob` otherwise); nothing was sent to Scenario | Free |
 
@@ -246,7 +246,6 @@ New lanes in v1.1 (`vectorize`, `layers`, `segment`, `maps`, `video`) reuse `est
 | `job_status` | `job_get` |
 | `wait_for_job` | `jobs_wait` |
 | `list_generations` | `jobs_list` |
-| `recover_local_job(action: "cancel")` | `job_cancel` |
 | `upload_reference` | `upload_asset`, then `upload_asset_complete` |
 | `list_assets`, `list_collections` | catalog tools for assets and collections |
 | Document, capture and apply tools | none: they need the open document |
