@@ -233,7 +233,8 @@ test("quotes: single use, 120 s, approved_cost character for character, bound to
   await assert.rejects(app.quotes.redeem(q.quote_id, "2", { ...req, target: { kind: "new_document", width: 2048, height: 2048 } }), (e) => e.type === "QuoteMismatch");
   await assert.rejects(app.quotes.redeem("quote_000000000000000000000000", "2", req), (e) => e.type === "QuoteExpired");
   const ok = await app.quotes.redeem(q.quote_id, "2", { ...req, parameters: { height: 1024, width: 1024, quality: "low", prompt: "a lighthouse" } });
-  assert.deepEqual(ok, { kind: "exact", thousandths: 2000, max: null });
+  assert.deepEqual({ kind: ok.kind, thousandths: ok.thousandths, max: ok.max }, { kind: "exact", thousandths: 2000, max: null });
+  assert.match(ok.fingerprint, /^[0-9a-f]{64}$/);
   await assert.rejects(app.quotes.redeem(q.quote_id, "2", req), (e) => e.type === "QuoteUsed");
 
   const late = await app.quotes.estimate(req);

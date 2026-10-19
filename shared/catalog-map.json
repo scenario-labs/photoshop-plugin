@@ -45,12 +45,13 @@
     "trained": []
   },
   "models": {
-    "$comment": "Per-model facts the schema does not state. price_inputs: how a file input the person has not uploaded yet is priced (SPEC 6.1 step 3): count (stand-ins by count; the first `free` slots priced without a file), size (a blank stand-in at the source's size), any (one small blank stand-in), omit (left out). capture_input: the input that receives the capture when the schema has no image input. output_max_px: largest output side measured. All measured live on 2026-10-19 except where noted.",
+    "$comment": "Per-model facts the schema does not state. price_inputs: how a file input the person has not uploaded yet is priced (SPEC 6.1 step 3): count (stand-ins by count; the first `free` slots priced without a file), size (a blank stand-in at the source's size), any (one small blank stand-in), omit (left out). capture_input: the input that receives the capture when the schema has no image input. output_max_px: largest output side measured. input_formats: the file types a paid run took for image inputs (PNG only when absent; JPEG for opaque captures, SPEC 5.5). All measured live on 2026-10-19 except where noted.",
     "model_openai-gpt-image-2-5-flare": {
       "capture_input": "referenceImages",
       "price_inputs": { "referenceImages": { "rule": "count", "free": 1 }, "mask": { "rule": "omit" } },
       "mask_polarity": "alpha",
-      "expand_route": "mask"
+      "expand_route": "mask",
+      "input_formats": ["png", "jpeg"]
     },
     "model_topaz-image-upscale": {
       "price_inputs": { "image": { "rule": "size" } },

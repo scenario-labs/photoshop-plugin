@@ -68,4 +68,13 @@ function encodeStandard(bytes) {
   return out;
 }
 
-module.exports = { encode: encode, decode: decode, encodeStandard: encodeStandard };
+// Standard base64 (with or without padding, line breaks ignored) as given
+// by Photoshop's image encoder. Returns a Uint8Array, or null.
+function decodeStandard(text) {
+  if (typeof text !== "string") return null;
+  var clean = text.replace(/[\r\n\t ]/g, "").replace(/=+$/, "");
+  if (/[-_]/.test(clean)) return null;
+  return decode(clean.replace(/\+/g, "-").replace(/\//g, "_"));
+}
+
+module.exports = { encode: encode, decode: decode, encodeStandard: encodeStandard, decodeStandard: decodeStandard };

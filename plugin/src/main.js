@@ -16,6 +16,7 @@ var statusMod = require("./bridge/status.js");
 var panelMod = require("./ui/panel.js");
 var accountPanelMod = require("./ui/account-panel.js");
 var devImport = require("./dev/import-token.js");
+var devKeyImport = require("./dev/import-key.js");
 var redactMod = require("./util/redact.js");
 var accountsMod = require("./auth/accounts.js");
 var authMod = require("./auth/auth.js");
@@ -27,6 +28,11 @@ var quotesMod = require("./forms/quotes.js");
 var catalogToolsMod = require("./bridge/catalog-tools.js");
 var lanesMod = require("./ui/lanes.js");
 var pickerMod = require("./ui/picker.js");
+var ledgerMod = require("./jobs/ledger.js");
+var runnerMod = require("./jobs/runner.js");
+var downloadMod = require("./scenario/download.js");
+var referencesMod = require("./capture/references.js");
+var jobsViewMod = require("./ui/jobs-view.js");
 var API = require("../../shared/scenario-api.json");
 
 var VERSION = manifest.version;
@@ -68,8 +74,21 @@ function createLogger(host, consoleRef, redactor) {
   };
 }
 
+// This Photoshop start's marker: jobs carry it, so a result lands by itself
+// only in the session that started it (SPEC 6.4).
+function sessionMarker(random, now) {
+  if (random) {
+    var b = random.bytes(8);
+    var h = "";
+    for (var i = 0; i < b.length; i++) h += (b[i] < 16 ? "0" : "") + b[i].toString(16);
+    return h;
+  }
+  return "t" + now().toString(16);
+}
+
 // env: { hostRequire, global, document, console; tests also pass host,
-// clipboardClearMs and apiBaseUrl (a mock Scenario API) }
+// clipboardClearMs, apiBaseUrl (a mock Scenario API), downloadOrigins (the
+// mock CDN) and pollDelay }
 function boot(env) {
   var host = env.host || hostMod.createHost(env.hostRequire, env.global);
   var redactor = redactMod.createRedactor();
@@ -95,6 +114,10 @@ function boot(env) {
   var link = null;
   var diagnostics = null;
   var quotes = null;
+  var ledger = null;
+  var runner = null;
+  var references = null;
+  var jobsView = null;
 
   // UXP wants entrypoints declared during the first synchronous run.
   host.setupEntrypoints({
@@ -130,6 +153,38 @@ function boot(env) {
     }
   });
   var catalogTools = catalogToolsMod.createCatalogTools({ catalog: catalog, quotes: quotes, host: host, settings: settings });
+  var session = sessionMarker(random, host.timers.now);
+  // Paid generation needs a secure random source for the job ids; without
+  // one, prices still show and Generate stays off.
+  if (random) {
+    ledger = ledgerMod.createLedger({ host: host, random: random, now: host.timers.now, log: logger.log, session: session });
+    var downloader = downloadMod.createDownloader({
+      client: client,
+      fetch: host.fetch,
+      AbortController: host.AbortController,
+      timers: host.timers,
+      files: { writeBinary: host.writeDataBinary, rename: host.renameData, remove: host.removeData },
+      origins: env.downloadOrigins
+    });
+    runner = runnerMod.createRunner({
+      client: client,
+      quotes: quotes,
+      ledger: ledger,
+      catalog: catalog,
+      host: host,
+      downloader: downloader,
+      settings: settings,
+      account: accounts.current,
+      version: VERSION,
+      session: session,
+      log: logger.log,
+      timers: host.timers,
+      now: host.timers.now,
+      recordError: errors.record,
+      pollDelay: env.pollDelay
+    });
+    references = referencesMod.createReferences({ host: host, random: random, log: logger.log });
+  }
 
   var ready = (async function () {
     if (pairing && flags.DEV) {
@@ -147,11 +202,28 @@ function boot(env) {
         logger.log("pairing token unavailable: " + e.message);
       }
     }
+    if (ledger) {
+      try {
+        await ledger.load();
+        runner.resume();
+      } catch (e) {
+        logger.log("jobs unavailable: " + e.message);
+      }
+    }
     try {
       var acc = await accounts.load();
       logger.log(acc.signed_in ? "signed in (" + acc.count + " project(s) saved)" : "not signed in");
     } catch (e) {
       logger.log("saved keys unavailable: " + e.message);
+    }
+    if (flags.DEV) {
+      // Development builds only: a key pair left in the data folder goes
+      // through Save and test, then the file is removed.
+      try {
+        await devKeyImport.importKey(host, auth, logger.log);
+      } catch (e) {
+        logger.log("dev key import failed (" + ((e && e.type) || "Internal") + ")");
+      }
     }
 
     link = linkMod.createLink({
@@ -166,7 +238,7 @@ function boot(env) {
       catalogHash: catalogHash(),
       switches: settings.switches,
       handlers: {
-        scenario_status: statusMod.createStatusHandler(host, settings, VERSION, auth),
+        scenario_status: statusMod.createStatusHandler(host, settings, VERSION, auth, ledger),
         list_models: catalogTools.list_models,
         model_schema: catalogTools.model_schema,
         estimate_cost: catalogTools.estimate_cost
@@ -233,9 +305,16 @@ function boot(env) {
       log: logger.log,
       openPicker: function (tab, tool) {
         if (picker) picker.open(tab, tool);
+      },
+      runner: runner,
+      references: references,
+      ledger: ledger,
+      settings: settings,
+      openJobs: function () {
+        if (jobsView) jobsView.open();
       }
     });
-    diagnostics = diagnosticsMod.createDiagnostics({ version: VERSION, build: flags.BUILD, host: host, settings: settings, auth: auth, link: link, errors: errors });
+    diagnostics = diagnosticsMod.createDiagnostics({ version: VERSION, build: flags.BUILD, host: host, settings: settings, auth: auth, link: link, errors: errors, jobs: ledger });
     accountPanel = accountPanelMod.createAccountPanel(env.document, {
       auth: auth,
       version: VERSION,
@@ -250,10 +329,29 @@ function boot(env) {
         return redactor.apply(diagnostics.text());
       }
     });
+    if (ledger && accountPanel) {
+      jobsView = jobsViewMod.createJobsView(env.document, {
+        ledger: ledger,
+        runner: runner,
+        showView: accountPanel.showView,
+        homeView: accountPanel.homeView,
+        copyText: function (text) {
+          return host.clipboardWrite(redactor.apply(text));
+        },
+        timers: host.timers,
+        log: logger.log
+      });
+    }
     accounts.onChange(function () {
       if (accountPanel) accountPanel.refresh();
       if (lanes) lanes.refresh();
     });
+    // Document, canvas and selection changes reprice the Image lane.
+    if (typeof host.onDocumentEvents === "function" && !host.onDocumentEvents(function () {
+      if (lanes) lanes.documentChanged();
+    })) {
+      logger.log("document events unavailable");
+    }
 
     link.start();
     return {
@@ -274,6 +372,11 @@ function boot(env) {
       picker: picker,
       catalogTools: catalogTools,
       accountPanel: accountPanel,
+      ledger: ledger,
+      runner: runner,
+      references: references,
+      jobsView: jobsView,
+      session: session,
       diagnostics: diagnostics,
       errors: errors,
       redactor: redactor,

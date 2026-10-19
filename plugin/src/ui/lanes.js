@@ -1,15 +1,22 @@
 "use strict";
-// The lane bodies and the prompt bar (SPEC 3.2, 3.6, 3.7): the model card,
-// the lane's options, and the Generate button carrying the price. In this
-// build the button stays disabled ("Generation comes in the next build"):
-// it shows the price of what it would run, from a price check that runs
+// The lane bodies and the prompt bar (SPEC 3.2, 3.6, 3.7, 3.9): the model
+// card, the lane's options, the Image lane's references, the results tray,
+// and the Generate button carrying the price, from a price check that runs
 // 400 ms after the form stops changing. Price checks start once the panel
 // has been shown or the person used it, never at Photoshop's launch.
+//
+// Generate runs in the Image lane: a click on a priced button is the
+// approval, with an inline confirm above the confirm limit (100 CU by
+// default; M for a range; always for a `from` price). The request is built
+// again at the click, so a document, selection or setting changed since the
+// price check makes the quote mismatch: nothing is spent and the button
+// shows the new price. Other lanes show their price and stay disabled.
 
 var MAP = require("../../../shared/catalog-map.json");
 var map = require("../catalog/map.js");
 var requests = require("../forms/requests.js");
 var price = require("../forms/price.js");
+var jobsText = require("./jobs-text.js");
 
 var DEBOUNCE_MS = 400;
 var TAKES = [1, 2, 4];
@@ -21,7 +28,14 @@ var TEXT = {
   unavailable: "Price unavailable",
   after_upload: "Generate (price after upload)",
   after_upload_reason: "This model's price depends on a file no blank image can stand in for; it is priced once uploaded.",
-  not_built: "Generation comes in the next build.",
+  lane_later: "This lane generates in a later build. The Image lane generates now.",
+  sending: "Sending...",
+  sent: "Sent. The result lands here when it is ready.",
+  changed: "The document or the settings changed since the price check. Check the new price, then click again.",
+  selection_note: "Makes a new picture, masked to the selection. To change what is inside it, use Edit.",
+  adding: "Adding reference...",
+  no_refs: "This model takes no references.",
+  first_run_file: "first-run.json",
   no_refund: "No refund if it fails",
   no_document: "Open or create a document to use this lane.",
   alarm: "A price check created a job on Scenario. Price checks are stopped until Photoshop restarts.",
@@ -77,13 +91,18 @@ function shapeBox(doc, sizeInputs) {
   return { width: axis(doc.width), height: axis(doc.height) };
 }
 
+function sameBox(a, b) {
+  if (!a || !b) return a === b;
+  return a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height;
+}
+
 function param(schema, name) {
   for (var i = 0; i < schema.parameters.length; i++) if (schema.parameters[i].name === name) return schema.parameters[i];
   return null;
 }
 
 // o: { catalog, quotes, host, account() -> {id} | null, openPicker(tab, tool),
-//      log, timers }
+//      log, timers, runner, references, ledger, settings, openJobs() }
 function createLanes(doc, o) {
   if (!doc || typeof doc.getElementById !== "function") return null;
   var timers = o.timers || { setTimeout: setTimeout, clearTimeout: clearTimeout };
@@ -100,7 +119,16 @@ function createLanes(doc, o) {
     schemaFor: null,
     seq: 0,
     timer: null,
-    price: { state: "idle", label: null, reason: null, no_refund: false, quote: null }
+    price: { state: "idle", label: null, reason: null, no_refund: false, quote: null },
+    refs: [],
+    sending: false,
+    confirm: null,
+    selection: null,
+    signature: null,
+    latest: null,
+    note: "",
+    firstRun: { generated: false, meta_note: false },
+    shown: false
   };
 
   function byId(id) {
@@ -110,9 +138,10 @@ function createLanes(doc, o) {
     var el = byId(id);
     if (el) el.textContent = text || "";
   }
-  function show(id, on) {
+  // display: "block" for elements the stylesheet hides until shown (banners).
+  function show(id, on, display) {
     var el = byId(id);
-    if (el && el.style) el.style.display = on ? "" : "none";
+    if (el && el.style) el.style.display = on ? display || "" : "none";
   }
   function bind(id, type, fn) {
     var el = byId(id);
@@ -171,19 +200,35 @@ function createLanes(doc, o) {
     renderButton();
   }
 
+  function canGenerate() {
+    if (st.lane !== "image" || st.sending || st.confirm || st.price.state !== "ready") return false;
+    if (o.runner && o.runner.pausedFor() > 0) return false;
+    return !!o.runner;
+  }
+
   function renderButton() {
     var p = st.price;
     var label = TEXT.generate;
-    if (p.state === "checking") label = TEXT.checking;
+    if (st.sending) label = TEXT.sending;
+    else if (p.state === "checking") label = TEXT.checking;
     else if (p.state === "ready") label = TEXT.generate + " (" + p.label + ")";
     else if (p.state === "after_upload") label = TEXT.after_upload;
     else if (p.state === "unavailable") label = TEXT.unavailable;
     setText("generate", label);
     var btn = byId("generate");
-    if (btn) btn.setAttribute("disabled", "");
-    setText("generate-reason", p.state === "unavailable" || p.state === "after_upload" ? p.reason : "");
+    if (btn) {
+      if (canGenerate()) btn.removeAttribute("disabled");
+      else btn.setAttribute("disabled", "");
+    }
+    var reason = p.state === "unavailable" || p.state === "after_upload" ? p.reason : "";
+    var wait = o.runner ? o.runner.pausedFor() : 0;
+    if (!reason && wait > 0 && st.lane === "image") reason = "Not sent: Scenario asked to wait " + wait + " s.";
+    setText("generate-reason", reason);
     setText("generate-refund", p.no_refund ? TEXT.no_refund : "");
-    setText("generate-note", TEXT.not_built);
+    var noteText = st.note;
+    if (!noteText && st.lane !== "image" && st.lane !== "library") noteText = TEXT.lane_later;
+    setText("generate-note", noteText);
+    show("confirm-card", !!st.confirm);
   }
 
   // Which controls the lane shows.
@@ -200,6 +245,8 @@ function createLanes(doc, o) {
     show("model-card", hasForm);
     show("prompt-bar", hasForm);
     show("lane-source", hasForm);
+    show("refs-section", lane === "image" && !!refInput());
+    renderTray();
     show("size-row", false);
     show("factor-row", false);
     show("takes-row", false);
@@ -228,7 +275,8 @@ function createLanes(doc, o) {
   }
 
   // The lane's form for the current schema: options shown and the request.
-  function form(schema) {
+  // sel: the active document's selection bounds (Image lane), or null.
+  function form(schema, sel) {
     var k = key();
     var lane = k;
     var params = {};
@@ -259,8 +307,16 @@ function createLanes(doc, o) {
     var si = schema.size_inputs;
     if (lane === "image") {
       var box = d ? { width: d.width, height: d.height } : { width: 1024, height: 1024 };
-      out.target = d ? { kind: "canvas", document_id: d.id, box: [0, 0, d.width, d.height] } : { kind: "new_document", width: 1024, height: 1024 };
-      setText("lane-source", d ? "Target: canvas " + d.width + " x " + d.height : "Target: a new document");
+      if (d && sel) {
+        box = { width: sel.width, height: sel.height };
+        out.target = { kind: "selection", document_id: d.id, box: [sel.left, sel.top, sel.width, sel.height] };
+        setText("lane-source", "Target: selection " + sel.width + " x " + sel.height + ", lands masked to the selection");
+        setText("lane-note", TEXT.selection_note);
+      } else {
+        out.target = d ? { kind: "canvas", document_id: d.id, box: [0, 0, d.width, d.height] } : { kind: "new_document", width: 1024, height: 1024 };
+        setText("lane-source", d ? "Target: canvas " + d.width + " x " + d.height : "Target: a new document");
+        if (st.lane === "image") setText("lane-note", "");
+      }
       if (si.kind === "grid") {
         var sizes = si.sizes.filter(function (s) {
           return s.width >= (si.min || 1) && s.height >= (si.min || 1) && s.width <= (si.max || 16384) && s.height <= (si.max || 16384);
@@ -284,7 +340,13 @@ function createLanes(doc, o) {
         show("size-row", true);
         params[si.width_input] = chosen.width;
         params[si.height_input] = chosen.height;
+        // SPEC 3.8: with no document, the result opens as a new document at the Size preset.
+        if (out.target.kind === "new_document") {
+          out.target = { kind: "new_document", width: chosen.width, height: chosen.height };
+          setText("lane-source", "Target: a new document " + chosen.width + " x " + chosen.height);
+        }
       }
+      out.references = st.refs.length;
       return out;
     }
     if (!d) {
@@ -383,7 +445,22 @@ function createLanes(doc, o) {
     }
     if (seq !== st.seq) return;
     renderModel(schema);
-    var f = form(schema);
+    var sel = null;
+    if (st.lane === "image") {
+      var dsz = docSize();
+      if (dsz) {
+        try {
+          sel = await o.host.selectionBounds(dsz.id);
+        } catch (e) {
+          sel = null;
+        }
+      }
+      if (seq !== st.seq) return;
+      st.selection = sel;
+      st.signature = signatureOf(dsz, sel);
+    }
+    renderRefs();
+    var f = form(schema, sel);
     if (f.blocked) {
       setPrice({ state: "unavailable", label: null, reason: f.blocked, no_refund: schema.no_refund });
       return;
@@ -394,10 +471,10 @@ function createLanes(doc, o) {
     }
     setPrice({ state: "checking", label: null, reason: null, no_refund: schema.no_refund });
     try {
-      var req = requests.build(schema, { lane: f.lane, model_id: modelId, parameters: f.params, takes: f.takes, target: f.target, source_size: f.source });
+      var req = requests.build(schema, { lane: f.lane, model_id: modelId, parameters: f.params, takes: f.takes, target: f.target, source_size: f.source, references: f.references || 0 });
       var q = await o.quotes.estimate(req);
       if (seq !== st.seq) return;
-      setPrice({ state: "ready", label: q.label, reason: null, no_refund: q.no_refund, quote: q });
+      setPrice({ state: "ready", label: q.label, reason: null, no_refund: q.no_refund, quote: q, req: req, schema: schema });
     } catch (e) {
       if (seq !== st.seq) return;
       if (e && e.afterUpload) setPrice({ state: "after_upload", label: null, reason: TEXT.after_upload_reason, no_refund: schema.no_refund });
@@ -405,6 +482,304 @@ function createLanes(doc, o) {
       else setPrice({ state: "unavailable", label: null, reason: e && e.message ? e.message : String(e), no_refund: schema.no_refund });
       log("price check: " + ((e && e.type) || "Internal"));
     }
+  }
+
+  // ---- references (Image lane) ----
+
+  function refInput() {
+    var schema = st.schema && st.schemaFor === modelFor("image") ? st.schema : null;
+    return schema ? requests.referenceInput(schema) : null;
+  }
+
+  function renderRefs() {
+    var input = st.lane === "image" ? refInput() : null;
+    show("refs-section", !!input);
+    if (!input) return;
+    var max = input.multiple ? input.max || null : 1;
+    setText("refs-title", "REFERENCES (" + st.refs.length + (max ? " of " + max : "") + ")");
+    var full = max !== null && st.refs.length >= max;
+    var add = ["refs-add-selection", "refs-add-layer", "refs-add-visible", "refs-add-file"];
+    for (var i = 0; i < add.length; i++) {
+      var b = byId(add[i]);
+      if (!b) continue;
+      if (full || st.sending) b.setAttribute("disabled", "");
+      else b.removeAttribute("disabled");
+    }
+    var box = byId("refs-list");
+    if (!box || typeof doc.createElement !== "function") return;
+    while (box.firstChild) box.removeChild(box.firstChild);
+    for (var r = 0; r < st.refs.length; r++) {
+      (function (ref) {
+        var row = doc.createElement("div");
+        row.setAttribute("class", "row");
+        row.setAttribute("data-ref", ref.id);
+        var t = doc.createElement("sp-body");
+        t.setAttribute("size", "XS");
+        t.setAttribute("class", "grow");
+        t.textContent = ref.label + ", sent at " + ref.width + " x " + ref.height + (ref.reduced ? " · Input reduced" : "");
+        row.appendChild(t);
+        var x = doc.createElement("sp-action-button");
+        x.setAttribute("quiet", "");
+        x.textContent = "Remove";
+        x.addEventListener("click", function () {
+          st.refs = st.refs.filter(function (q) {
+            return q.id !== ref.id;
+          });
+          renderRefs();
+          changed();
+        });
+        row.appendChild(x);
+        box.appendChild(row);
+      })(st.refs[r]);
+    }
+  }
+
+  function addReference(source) {
+    activate();
+    if (!o.references) return;
+    var modelId = modelFor("image");
+    var input = refInput();
+    if (!input) {
+      setText("refs-note", TEXT.no_refs);
+      return;
+    }
+    setText("refs-note", TEXT.adding);
+    var d = docSize();
+    var work = source === "file" ? o.references.chooseFile(modelId) : o.references.capture(source, d ? d.id : null, modelId, null);
+    Promise.resolve(work).then(
+      function (ref) {
+        setText("refs-note", "");
+        if (!ref) return;
+        st.refs.push(ref);
+        renderRefs();
+        changed();
+      },
+      function (e) {
+        setText("refs-note", (e && e.message) || String(e));
+        log("reference: " + ((e && e.type) || "error"));
+      }
+    );
+  }
+
+  // ---- the results tray (SPEC 3.9) ----
+
+  function renderTray() {
+    var rec = st.latest && o.ledger ? o.ledger.get(st.latest) : null;
+    show("tray", !!rec && st.lane === "image");
+    if (!rec) return;
+    var t = jobsText.tray(rec);
+    setText("tray-status", t.status);
+    setText("tray-detail", t.detail);
+    setText("tray-badges", t.badges);
+    show("tray-place", t.place);
+    show("tray-open", t.open);
+  }
+
+  function trayAction(newDocument) {
+    if (!st.latest || !o.runner) return;
+    o.runner.place(st.latest, newDocument ? { new_document: true } : {}).then(
+      function () {
+        renderTray();
+      },
+      function (e) {
+        st.note = (e && e.message) || String(e);
+        renderButton();
+        renderTray();
+      }
+    );
+  }
+
+  // ---- banners (SPEC 3.12, 3.9) ----
+
+  function saveFirstRun() {
+    if (o.host && typeof o.host.writeDataText === "function") o.host.writeDataText(TEXT.first_run_file, JSON.stringify(st.firstRun));
+  }
+
+  function renderBanners() {
+    var signedIn = !!o.account();
+    setText("ready-banner-text", jobsText.TEXT.ready_banner);
+    show("ready-banner", signedIn && !st.firstRun.generated && !st.firstRun.ready_closed, "block");
+    setText("meta-banner-text", jobsText.TEXT.meta_banner);
+    show("meta-banner", !!st.firstRun.meta_due, "block");
+  }
+
+  // ---- Generate ----
+
+  function signatureOf(d, sel) {
+    if (!d) return "none";
+    return [d.id, d.width, d.height, sel ? [sel.left, sel.top, sel.width, sel.height].join(",") : "-"].join("|");
+  }
+
+  function thresholdFor() {
+    var limit = o.settings && typeof o.settings.confirmAbove === "function" ? o.settings.confirmAbove() : 100000;
+    return limit;
+  }
+
+  function confirmText(q, schema) {
+    var t = price.toThousandths(q.cu_cost);
+    var limitCu = price.exactString(thresholdFor());
+    var text;
+    if (q.price_kind === "from") text = "This generation costs from " + price.display(t) + " CU. The charge can be higher; Scenario gives no upper bound for this model.";
+    else if (q.price_kind === "range") text = "This generation costs " + q.label + "; " + price.display(price.toThousandths(q.cu_cost_max)) + " CU is above your confirm limit of " + limitCu + " CU.";
+    else text = "This generation costs " + q.label + ", above your confirm limit of " + limitCu + " CU.";
+    var detail = [schema ? schema.name : null, st.price.req && st.price.req.takes ? st.price.req.takes + " take" + (st.price.req.takes === 1 ? "" : "s") : null].filter(Boolean).join(" · ");
+    if (q.no_refund) detail += (detail ? ". " : "") + TEXT.no_refund;
+    return { text: text, detail: detail, ok: "Generate (" + q.label + ")" };
+  }
+
+  function needsConfirm(q) {
+    if (q.price_kind === "from") return true;
+    var compare = q.price_kind === "range" && q.cu_cost_max !== null ? price.toThousandths(q.cu_cost_max) : price.toThousandths(q.cu_cost);
+    return compare > thresholdFor();
+  }
+
+  function showConfirm(c) {
+    st.confirm = c;
+    setText("confirm-text", c.text);
+    setText("confirm-detail", c.detail || "");
+    setText("confirm-ok", c.ok);
+    renderButton();
+  }
+
+  function clearConfirm() {
+    st.confirm = null;
+    renderButton();
+  }
+
+  function onGenerate() {
+    activate();
+    if (!canGenerate()) return;
+    var q = st.price.quote;
+    if (needsConfirm(q)) {
+      var c = confirmText(q, st.price.schema);
+      c.kind = "threshold";
+      c.quote = q;
+      showConfirm(c);
+      return;
+    }
+    go(q);
+  }
+
+  async function go(q) {
+    st.sending = true;
+    st.note = "";
+    if (!st.firstRun.generated) {
+      st.firstRun.generated = true;
+      saveFirstRun();
+      renderBanners();
+    }
+    renderButton();
+    renderRefs();
+    try {
+      var schema = st.price.schema;
+      var d = docSize();
+      var sel = null;
+      if (d) {
+        try {
+          sel = await o.host.selectionBounds(d.id);
+        } catch (e) {
+          sel = null;
+        }
+      }
+      // The request as it is now: a change since the price check makes the
+      // quote mismatch, and nothing is spent.
+      var f = form(schema, sel);
+      var req = requests.build(schema, { lane: f.lane, model_id: schema.model_id, parameters: f.params, takes: f.takes, target: f.target, source_size: f.source, references: f.references || 0 });
+      var mask = null;
+      if (req.target && req.target.kind === "selection") {
+        try {
+          mask = await o.host.readSelectionMask(req.target.document_id);
+        } catch (e) {
+          mask = null;
+        }
+      }
+      var title = null;
+      if (d) {
+        var docs = o.host.listDocuments();
+        for (var i = 0; i < docs.length; i++) if (docs[i].id === d.id) title = docs[i].title;
+      }
+      var out = await o.runner.start({ req: req, quote: q, refs: st.refs.slice(), model_name: schema.name, document_title: title, mask: mask });
+      st.latest = out.record ? out.record.local_id : st.latest;
+      if (out.replayed) st.note = "This price was already used: see Jobs.";
+      else if (out.state === "awaiting_approval") {
+        showConfirm({ kind: "changed", local_id: out.record.local_id, text: "Price changed after upload. Now " + out.price + " CU (was " + out.was + " CU). Nothing was spent.", detail: "", ok: "Generate (" + out.price + " CU)" });
+      } else if (out.state === "queued") st.note = TEXT.sent;
+      else st.note = (out.record && out.record.error) || "";
+    } catch (e) {
+      var type = e && e.type;
+      st.note = type === "QuoteMismatch" || type === "QuoteExpired" || type === "QuoteUsed" ? TEXT.changed : (e && e.message) || String(e);
+      log("generate: " + (type || "error"));
+    } finally {
+      st.sending = false;
+      renderRefs();
+      renderTray();
+      // A used quote never spends twice: the next click needs a new price.
+      changed();
+    }
+  }
+
+  function onConfirmOk() {
+    var c = st.confirm;
+    if (!c) return;
+    if (c.kind === "threshold") {
+      clearConfirm();
+      go(c.quote);
+      return;
+    }
+    if (c.kind === "changed") {
+      st.sending = true;
+      renderButton();
+      o.runner.approve(c.local_id).then(
+        function (out) {
+          st.sending = false;
+          if (out && out.state === "awaiting_approval" && out.changed) {
+            showConfirm({ kind: "changed", local_id: c.local_id, text: "Price changed again. Now " + out.price + " CU. Nothing was spent.", detail: "", ok: "Generate (" + out.price + " CU)" });
+            return;
+          }
+          st.confirm = null;
+          st.note = out && out.state === "queued" ? TEXT.sent : (out && out.record && out.record.error) || "";
+          renderButton();
+          renderTray();
+          changed();
+        },
+        function (e) {
+          st.sending = false;
+          st.confirm = null;
+          st.note = (e && e.message) || String(e);
+          renderButton();
+          changed();
+        }
+      );
+    }
+  }
+
+  function onConfirmCancel() {
+    var c = st.confirm;
+    clearConfirm();
+    if (c && c.kind === "changed" && o.runner) {
+      o.runner.decline(c.local_id).then(function () {
+        renderTray();
+      });
+    }
+  }
+
+  // Photoshop notifications (coalesced by the host): reprice only when the
+  // target changed (document, canvas size or selection).
+  async function documentChanged() {
+    if (!st.active || st.lane !== "image") {
+      if (st.active && st.lane !== "trained" && st.lane !== "library") changed();
+      return;
+    }
+    var d = docSize();
+    var sel = null;
+    if (d) {
+      try {
+        sel = await o.host.selectionBounds(d.id);
+      } catch (e) {
+        sel = null;
+      }
+    }
+    if (signatureOf(d, sel) !== st.signature) changed();
   }
 
   // Runs the price check 400 ms after the last change.
@@ -441,6 +816,15 @@ function createLanes(doc, o) {
     if (st.active) return;
     st.active = true;
     if (o.catalog) o.catalog.ensure().catch(function () {});
+    // SPEC 3.7: the sample prompt is selected, so typing replaces it.
+    var el = byId("prompt");
+    if (el && el.value === TEXT.sample_prompt && typeof el.select === "function") {
+      try {
+        el.select();
+      } catch (e) {
+        // not every field can select
+      }
+    }
     changed();
   }
 
@@ -477,11 +861,85 @@ function createLanes(doc, o) {
     activate();
     changed();
   });
+  // SPEC 3.7: Cmd+Enter (Ctrl+Enter) generates when the button shows a current price.
+  bind("prompt", "keydown", function (ev) {
+    if (ev && ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) {
+      if (typeof ev.preventDefault === "function") ev.preventDefault();
+      onGenerate();
+    }
+  });
+  bind("generate", "click", onGenerate);
+  bind("confirm-ok", "click", onConfirmOk);
+  bind("confirm-cancel", "click", onConfirmCancel);
+  bind("refs-add-selection", "click", function () {
+    addReference("selection");
+  });
+  bind("refs-add-layer", "click", function () {
+    addReference("layer");
+  });
+  bind("refs-add-visible", "click", function () {
+    addReference("visible");
+  });
+  bind("refs-add-file", "click", function () {
+    addReference("file");
+  });
+  bind("tray-place", "click", function () {
+    trayAction(false);
+  });
+  bind("tray-open", "click", function () {
+    trayAction(true);
+  });
+  bind("tray-jobs", "click", function () {
+    if (o.openJobs) o.openJobs();
+  });
+  bind("ready-banner-close", "click", function () {
+    st.firstRun.ready_closed = true;
+    saveFirstRun();
+    renderBanners();
+  });
+  bind("meta-banner-close", "click", function () {
+    st.firstRun.meta_due = false;
+    saveFirstRun();
+    renderBanners();
+  });
+  if (o.ledger) {
+    o.ledger.onChange(function (rec) {
+      if (rec && rec.local_id === st.latest) renderTray();
+    });
+  }
+  if (o.runner) {
+    o.runner.onEvent(function (ev) {
+      if (ev.type === "placed" && !st.firstRun.meta_note) {
+        st.firstRun.meta_note = true;
+        st.firstRun.meta_due = true;
+        saveFirstRun();
+        renderBanners();
+      }
+      if (ev.local_id === st.latest) renderTray();
+    });
+  }
+  if (o.host && typeof o.host.readDataText === "function") {
+    Promise.resolve(o.host.readDataText(TEXT.first_run_file)).then(function (text) {
+      try {
+        var v = text ? JSON.parse(text) : null;
+        if (v && typeof v === "object") {
+          st.firstRun.generated = v.generated === true;
+          st.firstRun.ready_closed = v.ready_closed === true;
+          st.firstRun.meta_note = v.meta_note === true;
+          st.firstRun.meta_due = v.meta_due === true;
+        }
+      } catch (e) {
+        // a fresh first run
+      }
+      renderBanners();
+    });
+  }
 
   var promptEl = byId("prompt");
   if (promptEl && !promptEl.value) promptEl.value = TEXT.sample_prompt;
   renderLane();
   renderButton();
+  renderBanners();
 
   return {
     select: function (lane) {
@@ -494,7 +952,15 @@ function createLanes(doc, o) {
     },
     refresh: function () {
       st.schema = st.schemaFor === modelFor(key()) ? st.schema : null;
+      renderBanners();
       changed();
+    },
+    documentChanged: documentChanged,
+    references: function () {
+      return st.refs.slice();
+    },
+    latest: function () {
+      return st.latest;
     },
     // A model chosen in the picker: it becomes the lane's model.
     choose: function (row) {
@@ -520,7 +986,7 @@ function createLanes(doc, o) {
       return lane;
     },
     state: function () {
-      return { lane: st.lane, key: key(), model_id: modelFor(key()), active: st.active, price: st.price };
+      return { lane: st.lane, key: key(), model_id: modelFor(key()), active: st.active, price: st.price, sending: st.sending, confirm: st.confirm, note: st.note, latest: st.latest };
     }
   };
 }

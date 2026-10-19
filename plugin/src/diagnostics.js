@@ -23,7 +23,20 @@ function onOff(v) {
   return v ? "on" : "off";
 }
 
-// o: { version, build, host, settings, auth, link, errors }
+// Job counts by status, never prompts, titles or ids.
+function jobsLine(jobs) {
+  if (!jobs) return "none";
+  var c = jobs.counts();
+  var names = Object.keys(c).sort();
+  if (!names.length) return "none";
+  return names
+    .map(function (k) {
+      return k + " " + c[k];
+    })
+    .join(", ");
+}
+
+// o: { version, build, host, settings, auth, link, errors, jobs (the ledger) }
 function createDiagnostics(o) {
   return {
     text: function () {
@@ -40,7 +53,7 @@ function createDiagnostics(o) {
         "agent spending: " + spending.mode + ", no-spend " + onOff(o.settings.noSpend()),
         "agent link: " + (linkState ? linkState.phase : "none") + ", clients " + (linkState ? linkState.clients.length : 0),
         "account: " + (account.signed_in ? "signed in" : "not signed in") + ", keys saved " + saved,
-        "jobs: none in this build",
+        "jobs: " + jobsLine(o.jobs),
         "last errors: " + (errors.length ? errors.join(", ") : "none")
       ];
       return lines.join("\n");

@@ -8,12 +8,22 @@ body {
   font-size: var(--uxp-host-font-size);
 }
 
+/* One row at any panel width: the name, the dot, Jobs and Settings keep
+   their size and never wrap; only the project label shrinks, on one line,
+   ending with an ellipsis. UXP applies text-overflow to a block element, not
+   to a button's own label, hence the span inside the button. */
 .header {
   display: flex;
   flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--uxp-host-border-color);
+}
+
+.fixed {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .mark {
@@ -22,7 +32,29 @@ body {
 }
 
 .project {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Header buttons keep 4 px of side padding instead of the default, so the
+   project label has room at the minimum panel width. */
+.tight {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.project-label {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.help {
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--uxp-host-border-color);
 }
 
 /* Views and banners start hidden; the account panel shows one view at a
@@ -116,6 +148,16 @@ body {
   min-width: 56px;
   margin-right: 8px;
   align-self: center;
+}
+
+.tray {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--uxp-host-border-color);
+}
+
+.job-row {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--uxp-host-border-color);
 }
 
 .prompt-bar {

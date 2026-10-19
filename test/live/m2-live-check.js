@@ -89,7 +89,7 @@ async function main() {
     console.log(`   dev-pairing-token still present: ${fs.existsSync(tokenFile)}`);
     return stop(1);
   }
-  console.log(`3. Connected: plugin ${status.plugin_version}, Photoshop ${status.photoshop_version}, signed_in ${status.signed_in}, no_spend ${status.no_spend}, ${status.open_documents.length} open document(s)`);
+  console.log(`3. Connected: plugin ${status.plugin_version}, Photoshop ${status.photoshop_version}, signed_in ${status.signed_in}, project ${status.project_name === null ? "(none)" : JSON.stringify(status.project_name)}, no_spend ${status.no_spend}, ${status.open_documents.length} open document(s)`);
   if (!status.signed_in) {
     console.log("STOPPED: the plugin is not signed in. Sign in from the panel, then run this again.");
     return stop(3);

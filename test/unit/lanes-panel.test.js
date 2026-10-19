@@ -3,7 +3,7 @@
 // through main.js against the M2.0 fixture mock: the price on the Generate
 // button for the three families (M2 exit), the button's other labels, the
 // 400 ms debounce, the picker (tabs, chips, search, favorites, choosing a
-// model), and the button staying disabled in this build.
+// model), and Generate enabled only in the Image lane in this build.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -41,16 +41,17 @@ async function priced(doc, label) {
   await waitFor(() => button(doc) === label, { label: `button reads ${label}`, timeout: 4000 });
 }
 
-test("no price check before the panel is shown or used; the Generate button is disabled with the build note", async (t) => {
+test("no price check before the panel is shown or used; Generate is enabled once the Image lane shows a price", async (t) => {
   const { doc, mock, host } = await bootPanel(t);
   await sleep(lanesMod.DEBOUNCE_MS + 150);
   assert.equal(mock.requests.filter((r) => r.path !== "/v1/models" || r.query.pageSize !== "1").filter((r) => r.path !== "/v1/projects").length, 0, "only the sign-in reads");
   assert.equal(button(doc), "Generate");
   assert.equal(doc.byId("generate").getAttribute("disabled"), "");
-  assert.equal(doc.text("generate-note"), T.not_built);
+  assert.equal(doc.text("generate-note"), "");
   assert.equal(doc.byId("prompt").value, T.sample_prompt, "first run: a sample prompt");
   host.entrypoints.panels.scenarioPanel.show();
   await priced(doc, "Generate (2 CU)");
+  assert.equal(doc.byId("generate").getAttribute("disabled"), null, "the Image lane generates in this build");
 });
 
 test("M2 exit on the button: Image default 2 CU, Edit default (capture and mask pending) 3 CU, Remove BG 1 CU, Upscale by size", async (t) => {
@@ -94,7 +95,8 @@ test("M2 exit on the button: Image default 2 CU, Edit default (capture and mask 
   await priced(doc, "Generate (1 CU)");
   assert.equal(doc.text("lane-output"), "Mask at 50% of the layer's resolution");
   assert.equal(mock.uploads.length, 3, "the small stand-in is reused at any size");
-  assert.equal(doc.byId("generate").getAttribute("disabled"), "", "still disabled: generation comes next");
+  assert.equal(doc.byId("generate").getAttribute("disabled"), "", "other lanes generate in a later build");
+  assert.equal(doc.text("generate-note"), T.lane_later);
   assert.deepEqual(mock.violations, []);
   for (const r of mock.requests.filter((x) => x.path.startsWith("/v1/generate"))) assert.equal(r.search, "?dryRun=true");
   assert.equal(app.lanes.state().price.quote.cu_cost_exact, "1");
@@ -121,7 +123,7 @@ test("the other labels: Expand and Trained show why there is no price, Library h
   assert.equal(doc.text("generate-reason"), T.no_document);
   lane(doc, "image").click();
   await priced(doc, "Generate (2 CU)");
-  assert.equal(doc.text("lane-source"), "Target: a new document");
+  assert.equal(doc.text("lane-source"), "Target: a new document 1024 x 1024");
 });
 
 test("the form: an empty prompt has no price; takes and the 400 ms debounce; one price check per pause", async (t) => {

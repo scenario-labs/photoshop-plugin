@@ -188,11 +188,7 @@ function createQuotes(o) {
     try {
       run = await checkPrice(schema, params, req, acc);
     } catch (err) {
-      if (err && err.type === "DryRunCreatedJob") {
-        stopped = { job_id: err.jobId || null, at: now() };
-        log("price check created a job: price checks stopped for the session");
-        if (o.onAlarm) o.onAlarm(err.jobId || null);
-      }
+      if (err && err.type === "DryRunCreatedJob") alarm(err.jobId || null);
       throw err;
     }
     var t = price.toThousandths(run.answer.cost);
@@ -256,12 +252,50 @@ function createQuotes(o) {
       q.used = false;
       throw new errorsMod.ScenarioError("QuoteMismatch", "The request differs from what the quote priced (model, parameters, inputs, target or project).");
     }
-    return { kind: q.kind, thousandths: q.thousandths, max: q.max };
+    return { kind: q.kind, thousandths: q.thousandths, max: q.max, fingerprint: q.fingerprint, issued_at: q.issued_at };
+  }
+
+  // The fingerprint a request would carry (SPEC 6.2 step 2: the in-flight
+  // block runs before the quote checks).
+  async function fingerprintFor(req) {
+    var acc = o.account();
+    if (!acc) throw new errorsMod.ScenarioError("NotSignedIn", "No Scenario key is saved in the plugin.");
+    return fingerprint(acc, req, paramsOf(await o.catalog.schema(req.model_id), req));
+  }
+
+  // The parameters a redeemed request sends: as priced, with takes as the
+  // model's take count input. File inputs the lane fills are added by the
+  // caller once uploaded.
+  async function bodyFor(req) {
+    return paramsOf(await o.catalog.schema(req.model_id), req);
+  }
+
+  function alarm(jobId) {
+    if (!stopped) stopped = { job_id: jobId || null, at: now() };
+    log("price check created a job: price checks stopped for the session");
+    if (o.onAlarm) o.onAlarm(jobId || null);
+  }
+
+  // The second price check of SPEC 6.1 step 3, with the real asset ids.
+  // Resolves the price in thousandths.
+  async function recheck(modelId, body) {
+    if (stopped) throw new errorsMod.ScenarioError("DryRunCreatedJob", "Price checks are stopped for this session: a price check created a job on Scenario.");
+    try {
+      var answer = await priceChecks.priceCheck(o.client, modelId, body);
+      return price.toThousandths(answer.cost);
+    } catch (err) {
+      if (err && err.type === "DryRunCreatedJob") alarm(err.jobId || null);
+      throw err;
+    }
   }
 
   return {
     estimate: estimate,
     redeem: redeem,
+    fingerprintFor: fingerprintFor,
+    bodyFor: bodyFor,
+    recheck: recheck,
+    alarm: alarm,
     stopped: function () {
       return stopped;
     },

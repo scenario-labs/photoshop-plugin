@@ -1,15 +1,19 @@
 "use strict";
 // The plugin's answer to scenario_status. signed_in and project_name come
-// from the auth module (never the key, the secret or the project id). There
-// is no job ledger and no agent settings screen yet, so those fields report
-// the defaults the spec sets: every agent switch off, spending "ask each
-// time", no unknown jobs.
+// from the auth module (never the key, the secret or the project id);
+// uncertain_jobs counts the ledger's Unknown jobs. There is no settings
+// screen yet, so the settings report the defaults the spec sets: every agent
+// switch off, spending "ask each time", no-spend off, and the person's
+// confirm limit at 100 CU.
 
 var DEFAULT_SWITCHES = {
   agents_may_modify: false,
   agents_may_run_commands: false,
   active_document_only: false
 };
+
+// SPEC 3.7: Generate asks for confirmation above this price (thousandths of a CU).
+var CONFIRM_ABOVE = 100000;
 
 var DEFAULT_SPENDING = {
   mode: "ask",
@@ -39,6 +43,10 @@ function createSettings() {
     },
     noSpend: function () {
       return false;
+    },
+    // The person's confirm limit, in thousandths of a CU.
+    confirmAbove: function () {
+      return CONFIRM_ABOVE;
     },
     // SPEC 2.6, Client sessions: when a session ends (it leaves the clients
     // list, or the link drops), the allowance granted to it ends too and the
@@ -72,7 +80,8 @@ var SIGNED_OUT = {
 // host: { listDocuments() -> [{id, title}], activeDocumentId() -> id|null,
 //         photoshopVersion() -> string|null, osName() -> string|null }
 // account: { status() -> {signed_in, project_name} }; signed out when omitted.
-function createStatusHandler(host, settings, pluginVersion, account) {
+// jobs: the ledger ({count(state)}); no Unknown jobs when omitted.
+function createStatusHandler(host, settings, pluginVersion, account, jobs) {
   account = account || SIGNED_OUT;
   return function scenarioStatus() {
     var acc = { signed_in: false, project_name: null };
@@ -115,9 +124,9 @@ function createStatusHandler(host, settings, pluginVersion, account) {
       open_documents: visible.map(function (d) {
         return { id: d.id, title: String(d.title) };
       }),
-      uncertain_jobs: 0
+      uncertain_jobs: jobs ? jobs.count("uncertain") : 0
     };
   };
 }
 
-module.exports = { createSettings: createSettings, createStatusHandler: createStatusHandler };
+module.exports = { createSettings: createSettings, createStatusHandler: createStatusHandler, CONFIRM_ABOVE: CONFIRM_ABOVE };

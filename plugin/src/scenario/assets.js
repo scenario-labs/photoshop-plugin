@@ -11,6 +11,7 @@
 //   asset id is kept in the plugin data file stand-ins.json, by account.
 
 var MAP = require("../../../shared/catalog-map.json");
+var API = require("../../../shared/scenario-api.json");
 var errorsMod = require("./errors.js");
 var png = require("../util/png.js");
 var b64 = require("../util/base64url.js");
@@ -22,13 +23,28 @@ function validAssetId(id) {
   return typeof id === "string" && ASSET_ID.test(id);
 }
 
-// Uploads PNG bytes. Resolves { asset_id, width, height }.
+// Uploads image bytes (PNG for stand-ins). Resolves { asset_id, width, height }.
 async function uploadPng(client, bytes, name) {
   var res = await client.request("POST", "/assets", { body: { image: b64.encodeStandard(bytes), name: name, hide: true } });
   var asset = res.body && res.body.asset;
   if (!asset || !validAssetId(asset.id)) throw new errorsMod.ScenarioError("Internal", "Scenario's upload answer had no asset id.");
   var meta = asset.metadata || {};
   return { asset_id: asset.id, width: typeof meta.width === "number" ? meta.width : null, height: typeof meta.height === "number" ? meta.height : null };
+}
+
+// Uploads an image file (PNG or JPEG bytes) through the base64 route, which
+// takes files under 4,000,000 bytes only (SPEC 5.5); larger files are
+// refused here, before anything is sent. A 413 from Scenario reads as the
+// same refusal.
+async function uploadImage(client, bytes, name) {
+  if (!bytes || !bytes.length) throw new errorsMod.ScenarioError("InvalidParameter", "The image is empty.");
+  if (bytes.length >= API.uploads.max_file_bytes) throw new errorsMod.ScenarioError("InvalidParameter", "The image is over Scenario's 4 MB upload limit.");
+  try {
+    return await uploadPng(client, bytes, name);
+  } catch (err) {
+    if (err && err.status === 413) throw new errorsMod.ScenarioError("InvalidParameter", "Scenario refused the upload as too large (413).", { status: 413, scenarioMessage: err.scenarioMessage });
+    throw err;
+  }
 }
 
 function parse(text) {
@@ -110,4 +126,4 @@ function createStandIns(o) {
   return { get: get, forget: forget, isStandIn: isStandIn, small: MAP.stand_ins.small_px };
 }
 
-module.exports = { uploadPng: uploadPng, createStandIns: createStandIns, validAssetId: validAssetId, FILE: FILE };
+module.exports = { uploadPng: uploadPng, uploadImage: uploadImage, createStandIns: createStandIns, validAssetId: validAssetId, FILE: FILE };

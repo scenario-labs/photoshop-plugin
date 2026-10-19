@@ -4,6 +4,17 @@ This page describes what the Scenario plugin for Adobe Photoshop and its local S
 
 Status: written against the v1 specification ([docs/spec/SPEC.md](docs/spec/SPEC.md)). It is checked against the released build before each release. It sits at the root of the repository so the panel's About link points to one short path.
 
+## In the current development build (0.3.1)
+
+This build does less than the release described below. Each line is marked *tested automated* (Node test suite with a mock of Scenario's API and a fake Photoshop) or *not tested* in Photoshop.
+
+- **Sent to Scenario's API** (`https://api.cloud.scenario.com`), with your key and secret as HTTP Basic: the sign-in reads; the model list and schemas; price checks (prompt, model, settings; a blank stand-in image where a price needs one); and, when you click **Generate** in the Image lane, the paid request (prompt, model, settings) and the references you added, uploaded through the API only, each under 4,000,000 bytes as sent, named `photoshop-reference-<date>-<id>.png` or `.jpg`. A reference is the selection's rectangle from all visible layers, the active layer, all visible, or a PNG or JPEG file you chose with its EXIF, XMP, IPTC and text metadata removed. Captures are converted to 8-bit sRGB; no other pixels leave your document. Then job status and result records while a job runs. *Tested automated*; *not tested* in Photoshop.
+- **Downloaded** from Scenario's CDN (`https://cdn.cloud.scenario.com`, the only download host this build accepts, before and after redirects) through signed links kept in memory only, without your key or cookies. *Tested automated*.
+- **Not in this build**: uploads to any other host (every upload goes to Scenario's API), agent generation and agent uploads, the update check, the Output Folder setting, the Leave prompts out and Leave prices out settings (the metadata always holds the prompt and prices), the agent activity log, and the 7-day log and capture rotation below.
+- **Stored in the plugin data folder**: the model list cache, favorites, the stand-ins' asset ids, `first-run.json` (which first-run notes were shown), `scenario-link.log` (the last 200 lines; no keys, tokens, prompts or document titles), the job records in `jobs/` (prompt and settings, model, job and asset ids, prices quoted and charged, the target document's title and the position used, file paths relative to the data folder), and the downloaded results in `Scenario/<kind>/<date>/`. Captures are kept in memory until they are sent, never written to disk. *Tested automated*.
+- **Development builds only**: a `dev-api-key` file that a developer puts in the plugin data folder is read once at startup, its key and secret go through the same Save and test as the panel, and the file is deleted whether or not Scenario accepts them. Release builds never read it. *Tested automated*.
+- **Stored in your documents**: each result layer carries the metadata described under "Provenance in your documents", and its name starts with the first words of the prompt. *Tested automated*.
+
 ## What leaves your machine, and when
 
 | What | When | Sent to |

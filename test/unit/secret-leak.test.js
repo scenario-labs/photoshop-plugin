@@ -69,7 +69,7 @@ test("the key, the secret and the project listing never reach logs, files, the h
   doc.paste("signin-key", `${good.key}\n${good.secret}`);
   doc.byId("signin-save").click();
   await waitFor(() => doc.shown("view-main"), { label: "signed in" });
-  assert.equal(doc.text("project"), "Leak check");
+  assert.equal(doc.text("project-label"), "Leak check");
   const signedIn = await o.callOwn("scenario_status", {});
   assert.equal(signedIn.signed_in, true);
   assert.equal(signedIn.project_name, "Leak check");

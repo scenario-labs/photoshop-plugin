@@ -8,7 +8,7 @@
 var view = require("./account-view.js");
 var split = require("../auth/split.js");
 
-var VIEWS = ["signin", "main", "projects", "settings"];
+var VIEWS = ["signin", "main", "projects", "settings", "jobs"];
 var STATUS_ACTIONS = ["enter_again", "create_key", "open_plans", "copy_admin_request", "copy_error", "retry"];
 var CONFIRM_MS = 5000;
 
@@ -83,8 +83,13 @@ function createAccountPanel(doc, actions) {
     return auth.current() ? "main" : "signin";
   }
 
+  // The label sits in its own span so that a long project name stays on one
+  // line and ends with an ellipsis (styles.css); the full name is the tooltip.
   function renderHeader() {
-    setText("project", view.projectLabel(auth.current()));
+    var label = view.projectLabel(auth.current());
+    setText("project-label", label);
+    var el = byId("project");
+    if (el && el.setAttribute) el.setAttribute("title", label);
   }
 
   function renderSignInMode() {
@@ -364,10 +369,11 @@ function createAccountPanel(doc, actions) {
     var T = view.TEXT;
     setText("signin-disclosure", T.disclosure);
     setText("signin-plan", T.plan);
-    setText("signin-step1", "1. " + T.create_key_help);
+    setText("signin-help-title", T.no_key_title);
+    setText("signin-step1", T.create_key_help);
     setText("signin-admins", T.admins_only);
     setText("signin-no-account", T.no_account);
-    setText("signin-step2", "2. " + T.paste);
+    setText("signin-step2", T.paste);
     setText("signin-storage", T.storage_note);
     setText("projects-note", T.projects_note);
     setText("settings-signout-note", T.sign_out_note);
@@ -482,6 +488,7 @@ function createAccountPanel(doc, actions) {
   return {
     refresh: refresh,
     showView: showView,
+    homeView: homeView,
     view: function () {
       return st.view;
     }

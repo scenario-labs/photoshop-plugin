@@ -8,6 +8,7 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 const clientMod = require("../../plugin/src/scenario/client.js");
 const errorsMod = require("../../plugin/src/scenario/errors.js");
+const paidMod = require("../../plugin/src/scenario/paid.js");
 const API = require("../../shared/scenario-api.json");
 const errorsJson = require("../../shared/errors.json");
 const { createRedactor } = require("../../plugin/src/util/redact.js");
@@ -100,8 +101,12 @@ test("reads retry after 429 (Retry-After) and 503; other errors and paid calls d
   assert.equal(mock.requests.filter((q) => q.path === "/v1/projects").length, 1, "500 is not retried");
   await assert.rejects(c.request("POST", "/uploads", { body: { a: 1 }, paid: true }), (e) => e.type === "RateLimited");
   assert.equal(mock.requests.filter((q) => q.path === "/v1/uploads").length, 1, "a paid call is never retried");
-  // This build sends nothing to /generate but price checks (scenario/dry-run.js).
-  await assert.rejects(c.request("POST", "/generate/custom/model_x", { body: { a: 1 }, paid: true }), (e) => e.type === "Internal" && /only price checks/.test(e.message));
+  // /generate takes a price check (scenario/dry-run.js) or the paid request
+  // with the marker from scenario/paid.js and no query; anything else is
+  // refused before sending.
+  await assert.rejects(c.request("POST", "/generate/custom/model_x", { body: { a: 1 }, paid: true }), (e) => e.type === "Internal" && e.beforeSend === true && /must be a price check or the paid request/.test(e.message));
+  await assert.rejects(c.request("POST", "/generate/custom/model_x", { body: { a: 1 }, paid: paidMod.PAID_REQUEST, query: { dryRun: "true" } }), (e) => e.type === "Internal" && e.beforeSend === true, "the paid request carries no query");
+  await assert.rejects(c.request("POST", "/generate/custom/model_x", { body: { a: 1 }, paid: { kind: "paid generation" } }), (e) => e.type === "Internal", "an equal copy of the marker is not the marker");
   await assert.rejects(c.request("POST", "/generate/custom/model_x", { body: {}, priceCheck: true, query: { dryRun: "true" } }), (e) => e.type === "Internal", "an equal copy of the constant is not the constant");
   assert.equal(mock.requests.filter((q) => q.path.startsWith("/v1/generate")).length, 0, "refused before anything is sent");
   // Retry-After as an HTTP date, and the cap.

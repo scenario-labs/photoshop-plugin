@@ -14,6 +14,22 @@
     "rate_limit_max_wait_s": 30,
     "server_error_wait_s": 1
   },
+  "paid": {
+    "$comment": "SPEC 6.1 items 8 and 9: the paid request is sent once, never retried, and times out after 60 s; a 429 pauses paid requests for Retry-After, else pause_default_s.",
+    "timeout_ms": 60000,
+    "pause_default_s": 60
+  },
+  "downloads": {
+    "$comment": "SPEC 6.4 item 3: results are fetched only from these origins, which are also in the plugin manifest, without any Authorization header. A result link on any other host stops the download (ResultUnreachable). Measured live 2026-10-19: result links are signed cdn.cloud.scenario.com links that answer 302 to the same host, then the file.",
+    "origins": ["https://cdn.cloud.scenario.com"]
+  },
+  "uploads": {
+    "$comment": "SPEC 5.5: uploads go through POST /v1/assets as base64 only, so a file must stay under max_file_bytes; the request body cap is about 6 MiB (413 Request Too Long above it, measured live 2026-10-19). Captures that do not fit are read again with the long side 10% smaller, at most reduce_steps times.",
+    "max_file_bytes": 4000000,
+    "reduce_step": 0.9,
+    "reduce_steps": 12,
+    "min_long_side_px": 256
+  },
   "roles_that_cannot_generate": {
     "$comment": "Inferred from Scenario's description of the Reader role (read-only); a Reader key's dry run was not measured. Custom roles are not judged.",
     "roles": ["reader"]

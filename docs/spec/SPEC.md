@@ -1237,7 +1237,7 @@ One schema, shared with the skills: namespace `https://scenario.com/ns/photoshop
 | `scenario:origin` | `person` or `agent:<client name>`, at most 64 characters |
 | `scenario:pluginVersion` | Plugin version, or the skills pack version when a skill placed the layer |
 
-- **Reading.** The plugin also reads the older snake_case keys some layers carry (`asset_id` or `asset`, `job_id`, `model` or `model_id`, `date`, `cost` or `cost_cu`). A "Scenario layer" is a layer whose metadata has `scenario:assetId` or one of its older names. `remove_scenario_layers` trusts this metadata, which any PSD can carry; the removal is undoable.
+- **Reading.** The plugin also reads the older snake_case keys some layers carry (`asset_id` or `asset`, `job_id`, `model` or `model_id`, `date`, `cost` or `cost_cu`). Other keys under the namespace are kept and ignored: the skills add `scenario:source`, `scenario:factor` (upscales) and `scenario:printSize` (mockups), and a later schema may add more. A "Scenario layer" is a layer whose metadata has `scenario:assetId` or one of its older names. `remove_scenario_layers` trusts this metadata, which any PSD can carry; the removal is undoable.
 - **Writing.** The packet is built with UXP's `xmp` module or with every value XML-escaped. Values read back from a shared PSD are shown as plain text only.
 - **Never written**: credentials, signed links, team or project ids, local file paths.
 - A shared PSD carries these fields, so prompts and prices travel with it unless the settings leave them out. A unit test serializes the metadata and the layer names with both settings on and searches them for the prompt text and the prices.

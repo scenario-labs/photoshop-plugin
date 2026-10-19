@@ -45,8 +45,8 @@ test("release bundle: the panel and estimate_cost give the exact prices of the t
 
   ps.entrypoints[0].panels.scenarioPanel.show();
   await waitFor(() => doc.text("generate") === "Generate (2 CU)", { label: "Image price on the button", timeout: 5000 });
-  assert.equal(doc.byId("generate").getAttribute("disabled"), "");
-  assert.equal(doc.text("generate-note"), "Generation comes in the next build.");
+  assert.equal(doc.byId("generate").getAttribute("disabled"), null, "the Image lane generates");
+  assert.equal(doc.text("generate-note"), "");
 
   const listed = await o.callOwn("list_models", { lane: "remove_background", limit: 5 });
   assert.equal(listed.models[0].model_id, "model_851-labs-background-remover");

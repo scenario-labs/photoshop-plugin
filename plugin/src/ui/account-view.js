@@ -16,6 +16,8 @@ var TEXT = {
   admins_only: "Only team admins and project owners can create keys.",
   no_account: "No account, or no plan with API access?",
   paste: "Paste the key and its secret.",
+  // The sign-in view shows the fields first; how to get a key follows.
+  no_key_title: "NO KEY YET?",
   storage_note: "Keys stay in Photoshop's secure storage on this computer.",
   add_title: "Add a key for another project",
   // SPEC 4.2 step 2: what Copy a request for your admin copies.

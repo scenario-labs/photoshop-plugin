@@ -17,6 +17,8 @@ const { Owner } = require("../../helper/src/link/owner.js");
 const hp = require("../../helper/src/link/crypto.js");
 const P = require("../../shared/protocol.json");
 const { freePort, newToken, waitFor, sleep } = require("../helpers/fakes.js");
+const { startFixtureScenario } = require("../helpers/fixture-scenario.js");
+const { newKeyPair, projectRecord } = require("../helpers/mock-scenario.js");
 const { runBundle } = require("../helpers/uxp-sim.js");
 const manifest = require("../../plugin/manifest.json");
 
@@ -31,9 +33,12 @@ async function ownerOn(port, token) {
 
 test("the release bundle holds no development code and no run-time code generation", () => {
   assert.ok(!release.code.includes("dev-pairing-token"), "the dev token import is stubbed out");
-  assert.ok(release.code.includes("Release build: development-only module removed."));
+  assert.ok(!release.code.includes("dev-api-key"), "the dev API key import is stubbed out");
+  assert.ok(!release.code.includes("SCENARIO_API_SECRET"), "nothing in a release build reads a key file");
+  assert.equal(release.code.split("Release build: development-only module removed.").length - 1, 2, "both development-only modules are stubs");
   assert.ok(release.code.includes('module.exports = {"DEV":false,"BUILD":"release"}'));
   assert.ok(dev.code.includes("dev-pairing-token"));
+  assert.ok(dev.code.includes("dev-api-key"));
   for (const code of [release.code, dev.code]) {
     assert.ok(!/\beval\s*\(/.test(code), "no eval");
     assert.ok(!/\bnew\s+Function\s*\(/.test(code), "no new Function");
@@ -151,6 +156,59 @@ test("development bundle: imports dev-pairing-token from the data folder, then r
   await waitFor(() => !bad.has("dev-pairing-token"), { label: "bad file removed" });
   await sleep(400);
   assert.match(bad.get("scenario-link.log"), /dev-pairing-token ignored/);
+});
+
+test("development bundle: dev-api-key goes through Save and test, is stored only when accepted, and the file is removed either way", async (t) => {
+  const good = newKeyPair();
+  const other = newKeyPair();
+  const mock = await startFixtureScenario({ accounts: [{ ...good, projects: [projectRecord(good.key, { name: "Imported project" })] }] });
+  t.after(() => mock.close());
+
+  // Accepted: signed in, the pair in secure storage, the file gone, the log
+  // without the values.
+  const files = new Map([["dev-api-key", `SCENARIO_API_KEY=${good.key}\nSCENARIO_API_SECRET=${good.secret}\n`]]);
+  const secure = new Map([[P.token.secure_storage_key, newToken()]]);
+  const ps = runBundle(dev.code, { port: await freePort(), secure, files, api: mock.origin });
+  t.after(() => ps.kill());
+  await waitFor(() => ps.doc.text("project-label") === "Imported project", { label: "signed in from the file" });
+  assert.equal(files.has("dev-api-key"), false, "the file is removed after the import");
+  assert.ok([...secure.values()].some((v) => String(v).includes(good.secret)), "the pair is in secure storage");
+  await sleep(400);
+  const log = files.get("scenario-link.log");
+  assert.match(log, /dev build: API key imported/);
+  for (const v of [good.key, good.secret]) assert.ok(!log.includes(v), "the log never holds the key or the secret");
+  assert.ok(mock.requests.length > 0 && mock.requests.every((r) => r.method === "GET"), "Save and test only reads");
+
+  // Refused by Scenario: nothing stored, the file removed, the error type logged.
+  const badFiles = new Map([["dev-api-key", `export SCENARIO_API_KEY="${other.key}"\nSCENARIO_API_SECRET='${other.secret}'\n`]]);
+  const badSecure = new Map([[P.token.secure_storage_key, newToken()]]);
+  const ps2 = runBundle(dev.code, { port: await freePort(), secure: badSecure, files: badFiles, api: mock.origin });
+  t.after(() => ps2.kill());
+  await waitFor(() => !badFiles.has("dev-api-key"), { label: "refused file removed" });
+  await sleep(400);
+  assert.match(badFiles.get("scenario-link.log"), /dev build: API key not imported \(Unauthorized\)/);
+  assert.equal(ps2.doc.text("project-label"), "Not signed in");
+  assert.ok(![...badSecure.values()].some((v) => String(v).includes(other.secret)), "a refused pair is not stored");
+  for (const v of [other.key, other.secret]) assert.ok(!badFiles.get("scenario-link.log").includes(v));
+
+  // Incomplete file: nothing sent, the file removed.
+  const before = mock.requests.length;
+  const halfFiles = new Map([["dev-api-key", `SCENARIO_API_KEY=${good.key}\n`]]);
+  const ps3 = runBundle(dev.code, { port: await freePort(), files: halfFiles, api: mock.origin });
+  t.after(() => ps3.kill());
+  await waitFor(() => !halfFiles.has("dev-api-key"), { label: "incomplete file removed" });
+  await sleep(400);
+  assert.match(halfFiles.get("scenario-link.log"), /dev-api-key ignored \(InvalidParameter\)/);
+  assert.equal(mock.requests.length, before, "an incomplete file sends nothing");
+
+  // A release build ignores the file and leaves it alone.
+  const relFiles = new Map([["dev-api-key", `SCENARIO_API_KEY=${good.key}\nSCENARIO_API_SECRET=${good.secret}\n`]]);
+  const ps4 = runBundle(release.code, { port: await freePort(), files: relFiles, api: mock.origin });
+  t.after(() => ps4.kill());
+  await waitFor(() => ps4.doc.shown("view-signin"), { label: "release build not signed in" });
+  await sleep(400);
+  assert.ok(relFiles.has("dev-api-key"), "a release build never reads the key file");
+  assert.equal(ps4.doc.text("project-label"), "Not signed in");
 });
 
 test("both link URLs refused by Photoshop: the panel says the connection was refused", async (t) => {

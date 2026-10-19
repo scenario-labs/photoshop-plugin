@@ -6,33 +6,17 @@
   </head>
   <body>
     <header class="header">
-      <span class="mark">Scenario</span>
-      <sp-action-button quiet class="project" id="project">Not signed in</sp-action-button>
-      <span id="agent-dot" class="dot off" title="No agent connected"></span>
-      <sp-action-button quiet disabled id="jobs">Jobs</sp-action-button>
-      <sp-action-button quiet id="open-settings">Settings</sp-action-button>
+      <span class="mark fixed">Scenario</span>
+      <sp-action-button quiet class="project tight" id="project"><span class="project-label" id="project-label">Not signed in</span></sp-action-button>
+      <span id="agent-dot" class="dot off fixed" title="No agent connected"></span>
+      <sp-action-button quiet class="fixed tight" id="jobs">Jobs</sp-action-button>
+      <sp-action-button quiet class="fixed tight" id="open-settings">Settings</sp-action-button>
     </header>
 
     <section class="view" id="view-signin">
       <sp-action-button quiet id="signin-back">Back</sp-action-button>
       <sp-heading size="XS" id="signin-title"></sp-heading>
-      <sp-body size="S" id="signin-disclosure"></sp-body>
-      <sp-body size="S" id="signin-plan"></sp-body>
-
-      <sp-body size="S" id="signin-step1"></sp-body>
-      <div class="row">
-        <sp-button variant="secondary" id="signin-create-key">Create an API key</sp-button>
-      </div>
-      <sp-body size="XS" class="muted" id="signin-admins"></sp-body>
-      <div class="row">
-        <sp-action-button id="signin-copy-request">Copy a request for your admin</sp-action-button>
-      </div>
-      <sp-body size="XS" class="muted" id="signin-no-account"></sp-body>
-      <div class="row wrap">
-        <sp-action-button id="signin-see-plans">See plans</sp-action-button>
-        <sp-action-button id="signin-create-account">Create a Scenario account</sp-action-button>
-      </div>
-      <sp-body size="XS" id="signin-note"></sp-body>
+      <sp-body size="XS" class="muted" id="signin-disclosure"></sp-body>
 
       <sp-body size="S" id="signin-step2"></sp-body>
       <sp-detail>API KEY</sp-detail>
@@ -43,6 +27,7 @@
         <sp-button variant="cta" id="signin-save">Save and test</sp-button>
         <sp-body size="XS" class="progress" id="signin-progress"></sp-body>
       </div>
+      <sp-body size="XS" class="muted" id="signin-storage"></sp-body>
 
       <div class="banner" id="signin-status">
         <sp-body size="S" id="signin-status-text"></sp-body>
@@ -61,7 +46,25 @@
         </div>
       </div>
 
-      <sp-body size="XS" class="muted" id="signin-storage"></sp-body>
+      <div class="help">
+        <sp-detail id="signin-help-title"></sp-detail>
+        <sp-body size="S" id="signin-step1"></sp-body>
+        <div class="row">
+          <sp-button variant="secondary" id="signin-create-key">Create an API key</sp-button>
+        </div>
+        <sp-body size="XS" class="muted" id="signin-admins"></sp-body>
+        <div class="row">
+          <sp-action-button id="signin-copy-request">Copy a request for your admin</sp-action-button>
+        </div>
+        <sp-body size="XS" class="muted" id="signin-note"></sp-body>
+        <sp-body size="XS" class="muted" id="signin-no-account"></sp-body>
+        <sp-body size="XS" class="muted" id="signin-plan"></sp-body>
+        <div class="row wrap">
+          <sp-action-button id="signin-see-plans">See plans</sp-action-button>
+          <sp-action-button id="signin-create-account">Create a Scenario account</sp-action-button>
+        </div>
+      </div>
+
       <sp-action-button quiet id="signin-privacy">Privacy</sp-action-button>
     </section>
 
@@ -71,6 +74,14 @@
         <sp-body size="XS" id="account-banner-2"></sp-body>
         <sp-body size="XS" id="account-banner-3"></sp-body>
         <sp-action-button quiet id="account-banner-close">Close</sp-action-button>
+      </div>
+      <div class="banner" id="ready-banner">
+        <sp-body size="S" id="ready-banner-text"></sp-body>
+        <sp-action-button quiet id="ready-banner-close">Close</sp-action-button>
+      </div>
+      <div class="banner" id="meta-banner">
+        <sp-body size="XS" id="meta-banner-text"></sp-body>
+        <sp-action-button quiet id="meta-banner-close">Close</sp-action-button>
       </div>
 
       <nav class="lanes" id="lane-tabs">
@@ -97,6 +108,19 @@
           <sp-body size="XS" class="muted" id="model-badges"></sp-body>
         </div>
         <sp-body size="XS" id="lane-source"></sp-body>
+        <div id="refs-section">
+          <div class="row">
+            <sp-detail class="label grow" id="refs-title">REFERENCES</sp-detail>
+          </div>
+          <div class="row wrap" id="refs-add">
+            <sp-action-button id="refs-add-selection">Selection</sp-action-button>
+            <sp-action-button id="refs-add-layer">Layer</sp-action-button>
+            <sp-action-button id="refs-add-visible">All visible</sp-action-button>
+            <sp-action-button id="refs-add-file">File</sp-action-button>
+          </div>
+          <div class="list" id="refs-list"></div>
+          <sp-body size="XS" class="muted" id="refs-note"></sp-body>
+        </div>
         <div class="row" id="size-row">
           <sp-detail class="label">SIZE</sp-detail>
           <select class="grow" id="size-select"></select>
@@ -108,6 +132,17 @@
         <sp-body size="XS" class="muted" id="lane-output"></sp-body>
         <sp-body size="S" class="muted" id="lane-note"></sp-body>
       </main>
+
+      <div class="tray" id="tray">
+        <sp-body size="S" id="tray-status"></sp-body>
+        <sp-body size="XS" class="muted" id="tray-detail"></sp-body>
+        <sp-body size="XS" id="tray-badges"></sp-body>
+        <div class="row wrap">
+          <sp-action-button id="tray-place">Place</sp-action-button>
+          <sp-action-button id="tray-open">Open as document</sp-action-button>
+          <sp-action-button quiet id="tray-jobs">Jobs</sp-action-button>
+        </div>
+      </div>
 
       <div class="prompt-bar" id="prompt-bar">
         <sp-textfield multiline class="field" id="prompt" placeholder="Describe the image"></sp-textfield>
@@ -121,6 +156,14 @@
         <sp-body size="XS" id="generate-reason"></sp-body>
         <sp-body size="XS" id="generate-refund"></sp-body>
         <sp-body size="XS" class="muted" id="generate-note"></sp-body>
+        <div class="card" id="confirm-card">
+          <sp-body size="S" id="confirm-text"></sp-body>
+          <sp-body size="XS" class="muted" id="confirm-detail"></sp-body>
+          <div class="row">
+            <sp-action-button id="confirm-cancel">Cancel</sp-action-button>
+            <sp-button variant="cta" class="push" id="confirm-ok">Generate</sp-button>
+          </div>
+        </div>
       </div>
 
       <section class="subview" id="view-picker">
@@ -148,6 +191,17 @@
           <sp-action-button id="picker-refresh">Refresh</sp-action-button>
         </div>
       </section>
+    </section>
+
+    <section class="view" id="view-jobs">
+      <div class="row">
+        <sp-action-button quiet id="jobs-back">Back</sp-action-button>
+        <sp-heading size="XS">Jobs</sp-heading>
+      </div>
+      <sp-body size="XS" class="muted" id="jobs-tab">On this computer</sp-body>
+      <div class="list" id="jobs-list"></div>
+      <sp-body size="S" class="muted" id="jobs-empty"></sp-body>
+      <sp-body size="XS" id="jobs-note"></sp-body>
     </section>
 
     <section class="view" id="view-projects">

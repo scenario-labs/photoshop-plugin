@@ -22,10 +22,27 @@ function fileInput(schema, name) {
   return null;
 }
 
-// The file inputs the lane fills from the document, as {name: count}.
-function pendingFor(lane, schema, params) {
+// The input that takes reference images in the Image lane: the first file
+// input whose role is reference, or null.
+function referenceInput(schema) {
+  for (var i = 0; i < schema.file_inputs.length; i++) if (schema.file_inputs[i].role === "reference") return schema.file_inputs[i];
+  return null;
+}
+
+// The file inputs the lane fills from the document, as {name: count}. In
+// the Image lane these are the references the person added: captured when
+// added, uploaded at Generate, priced by count until then.
+function pendingFor(lane, schema, params, refCount) {
   var pending = {};
-  if (lane === "image") return pending;
+  if (lane === "image") {
+    if (!refCount) return pending;
+    var ref = referenceInput(schema);
+    if (!ref) throw invalid("This model takes no reference images.");
+    var max = ref.multiple ? ref.max || null : 1;
+    if (max !== null && refCount > max) throw invalid("This model takes at most " + max + " reference image" + (max === 1 ? "" : "s") + ".");
+    pending[ref.name] = refCount;
+    return pending;
+  }
   var name = schema.capture_input_name;
   if (!name) throw invalid("This model takes no image input, so it can't run in the " + lane + " lane.");
   var input = fileInput(schema, name);
@@ -49,7 +66,8 @@ function checkModelLane(schema, lane) {
   if (map.lanesOf(row).indexOf(lane) < 0) throw invalid(schema.name + " does not run in the " + lane + " lane.");
 }
 
-// a: { lane, model_id, parameters, takes, target, source_size }
+// a: { lane, model_id, parameters, takes, target, source_size, references
+//      (Image lane: how many references wait for upload) }
 function build(schema, a) {
   checkLane(a.lane);
   checkModelLane(schema, a.lane);
@@ -59,10 +77,10 @@ function build(schema, a) {
     lane: a.lane,
     parameters: params,
     takes: a.takes === undefined ? null : a.takes,
-    pending: pendingFor(a.lane, schema, params),
+    pending: pendingFor(a.lane, schema, params, a.references || 0),
     source_size: a.source_size || null,
     target: a.target || null
   };
 }
 
-module.exports = { build: build, pendingFor: pendingFor, checkLane: checkLane };
+module.exports = { build: build, pendingFor: pendingFor, checkLane: checkLane, referenceInput: referenceInput };

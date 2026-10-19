@@ -45,13 +45,15 @@ async function signIn(doc, pair) {
 
 test("first run: the sign-in view with the spec's texts; header 'Not signed in'", async (t) => {
   const { doc, app } = await bootPanel(t);
-  assert.equal(doc.text("project"), "Not signed in");
+  assert.equal(doc.text("project-label"), "Not signed in");
   assert.ok(doc.shown("view-signin"));
   assert.ok(!doc.shown("view-main") && !doc.shown("view-projects") && !doc.shown("view-settings"));
   assert.equal(doc.text("signin-title"), "Connect your Scenario account");
   assert.equal(doc.text("signin-disclosure"), "Generative AI by Scenario.");
   assert.equal(doc.text("signin-plan"), "Needs a Scenario plan with API access (Starter or above).");
-  assert.equal(doc.text("signin-step1"), "1. Create a Project key with the Editor role in the project you want to use. A CU limit on the key caps what this plugin and connected agents can spend.");
+  assert.equal(doc.text("signin-step2"), "Paste the key and its secret.");
+  assert.equal(doc.text("signin-help-title"), "NO KEY YET?");
+  assert.equal(doc.text("signin-step1"), "Create a Project key with the Editor role in the project you want to use. A CU limit on the key caps what this plugin and connected agents can spend.");
   assert.equal(doc.text("signin-admins"), "Only team admins and project owners can create keys.");
   assert.equal(doc.text("signin-storage"), "Keys stay in Photoshop's secure storage on this computer.");
   assert.equal(doc.byId("signin-secret").getAttribute("type"), "password");
@@ -91,7 +93,7 @@ test("paste key:secret: the secret goes to the masked field at once; Save and te
   await waitFor(() => doc.shown("view-main"), { label: "signed in" });
   assert.deepEqual(progress, ["Testing 1 of 2", "Testing 2 of 2"]);
   assert.equal(doc.text("signin-progress"), "");
-  assert.equal(doc.text("project"), "Fall campaign");
+  assert.equal(doc.text("project-label"), "Fall campaign");
   assert.ok(doc.shown("account-banner"));
   assert.deepEqual([doc.text("account-banner-1"), doc.text("account-banner-2"), doc.text("account-banner-3")], ["Connected to Scenario", "Project: Fall campaign", `Key ....${pair.key.slice(-4)}`]);
   assert.equal(keyField._value, "", "fields are cleared after saving");
@@ -117,7 +119,7 @@ test("two lines without clipboard data, and a typed key and secret, both work", 
   assert.equal(doc.byId("signin-secret")._value, a.secret);
   doc.byId("signin-save").click();
   await waitFor(() => doc.shown("view-main"));
-  assert.equal(doc.text("project"), "A");
+  assert.equal(doc.text("project-label"), "A");
 
   // Typed: the secret is read through the password-field workaround.
   doc.byId("project").click();
@@ -128,7 +130,7 @@ test("two lines without clipboard data, and a typed key and secret, both work", 
   doc.type("signin-secret", b.secret);
   doc.byId("signin-save").click();
   await waitFor(() => doc.shown("view-main"));
-  assert.equal(doc.text("project"), "B");
+  assert.equal(doc.text("project-label"), "B");
   assert.equal(doc.byId("signin-secret").getAttribute("type"), "password", "the field is a password field again");
   assert.deepEqual(app.auth.status(), { signed_in: true, project_name: "B" });
 });
@@ -144,7 +146,7 @@ test("wrong key: the SPEC text and actions; Enter key again clears; Create an AP
   assert.equal(doc.text("signin-act-enter_again"), "Enter key again");
   assert.ok(doc.shown("signin-links"), "Report a problem and Get help under the error");
   assert.ok(doc.shown("view-signin"));
-  assert.equal(doc.text("project"), "Not signed in");
+  assert.equal(doc.text("project-label"), "Not signed in");
 
   doc.byId("signin-act-create_key").click();
   doc.byId("signin-help").click();
@@ -172,7 +174,7 @@ test("offline, then Retry once the connection is back", async (t) => {
   down = false;
   doc.byId("signin-act-retry").click();
   await waitFor(() => doc.shown("view-main"), { label: "Retry signed in" });
-  assert.equal(doc.text("project"), "Back online");
+  assert.equal(doc.text("project-label"), "Back online");
 });
 
 test("Reader key and Team key: refused with their texts; Copy error copies one line", async (t) => {
@@ -197,7 +199,7 @@ test("Reader key and Team key: refused with their texts; Copy error copies one l
   await signIn(doc, team);
   assert.equal(doc.text("signin-status-text"), "This is a team (Organization) key. Generating needs a Project key.");
   assert.deepEqual(shownActions(doc, "signin"), ["create_key"]);
-  assert.equal(doc.text("project"), "Not signed in");
+  assert.equal(doc.text("project-label"), "Not signed in");
 });
 
 test("no API access (a text known as data): the SPEC text with Open plans and the admin request", async (t) => {
@@ -242,7 +244,7 @@ test("Scenario busy: 'Retrying in N s.' while the read waits", async (t) => {
   doc.byId("signin-save").click();
   await waitFor(() => doc.text("signin-progress") === "Scenario is busy. Retrying in 1 s.", { label: "retry text" });
   await waitFor(() => doc.shown("view-main"), { timeout: 4000 });
-  assert.equal(doc.text("project"), "After wait");
+  assert.equal(doc.text("project-label"), "After wait");
 });
 
 test("no project name readable: header 'Scenario project ....XXXX'; Settings and the header agree", async (t) => {
@@ -250,7 +252,7 @@ test("no project name readable: header 'Scenario project ....XXXX'; Settings and
   const { doc } = await bootPanel(t, { accounts: [{ ...pair }], handle: ({ path }) => (path === "/v1/projects" ? { status: 403, body: {} } : undefined) });
   await signIn(doc, pair);
   const label = `Scenario project ....${pair.key.slice(-4)}`;
-  assert.equal(doc.text("project"), label);
+  assert.equal(doc.text("project-label"), label);
   assert.deepEqual([doc.text("account-banner-1"), doc.text("account-banner-2"), doc.text("account-banner-3")], ["Connected to Scenario", `Project: ${label}`, "(the API returned no project name)"]);
 });
 
@@ -269,13 +271,13 @@ test("Projects view: a second key, the switch, and the list", async (t) => {
   assert.equal(doc.text("projects-note"), "Switching changes trained models, the Library and where results go. Running jobs keep their project.");
   doc.byId("projects-add").click();
   await signIn(doc, b);
-  assert.equal(doc.text("project"), "Mascot training");
+  assert.equal(doc.text("project-label"), "Mascot training");
   doc.byId("project").click();
   const rows = doc.byId("projects-list").children;
   assert.deepEqual(rows.map((r) => r.textContent), [`Fall campaign   ....${a.key.slice(-4)}`, `Mascot training   ....${b.key.slice(-4)}`]);
   assert.deepEqual(rows.map((r) => r.getAttribute("selected")), [null, ""]);
   rows[0].click();
-  await waitFor(() => doc.text("project") === "Fall campaign", { label: "switched" });
+  await waitFor(() => doc.text("project-label") === "Fall campaign", { label: "switched" });
   assert.deepEqual(app.auth.status(), { signed_in: true, project_name: "Fall campaign" });
   assert.deepEqual(doc.byId("projects-list").children.map((r) => r.getAttribute("selected")), ["", null]);
   doc.byId("projects-back").click();
@@ -313,13 +315,13 @@ test("Settings: Test connection, a confirmed Sign out per project, then signed o
   assert.equal(doc.text("settings-signout"), "Confirm sign out");
   assert.equal(app.auth.status().project_name, "Mascot training", "the first click only asks");
   doc.byId("settings-signout").click();
-  await waitFor(() => doc.text("project") === "Fall campaign", { label: "fell back to the other project" });
+  await waitFor(() => doc.text("project-label") === "Fall campaign", { label: "fell back to the other project" });
   assert.equal(doc.text("settings-note"), "Signed out. Now using Fall campaign.");
   assert.equal(doc.byId("settings-accounts").children.length, 1);
 
   doc.byId("settings-signout").click();
   doc.byId("settings-signout").click();
-  await waitFor(() => doc.text("project") === "Not signed in");
+  await waitFor(() => doc.text("project-label") === "Not signed in");
   assert.equal(doc.text("settings-note"), "Signed out. The key is removed from this computer.");
   assert.equal(doc.text("settings-none"), "Not signed in.");
   assert.ok(!doc.shown("settings-signout"));
@@ -356,7 +358,7 @@ test("after a restart the saved key is used: header and status without a new sig
   await signIn(first.doc, pair);
   first.app.link.stop();
   const again = await bootPanel(t, { accounts: [{ ...pair }], host: first.host });
-  assert.equal(again.doc.text("project"), "Kept");
+  assert.equal(again.doc.text("project-label"), "Kept");
   assert.ok(again.doc.shown("view-main"));
   assert.deepEqual(again.app.auth.status(), { signed_in: true, project_name: "Kept" });
   assert.equal(again.mock.requests.length, 0, "starting makes no request to Scenario");

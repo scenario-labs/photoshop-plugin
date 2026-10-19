@@ -11,22 +11,27 @@
 // - Reads (GET) retry on 429 and on 502 to 504; nothing else is retried.
 // - Request and response bodies are never logged.
 //
-// - Generation: this build sends no paid request. Every POST to /generate
-//   must be a price check: `priceCheck: true` and the frozen dry-run query
-//   object of scenario/dry-run.js itself (compared by identity, so no other
-//   flag value can be sent). Anything else is refused before it leaves.
+// - Generation: a POST to /generate is one of two things, and anything else
+//   is refused before it leaves. A price check: `priceCheck: true` and the
+//   frozen query object of scenario/dry-run.js itself (compared by identity,
+//   so no other flag value can be sent). Or the paid request: `paid` set to
+//   the frozen marker of scenario/paid.js (by identity) and no query at all,
+//   so the paid URL never carries the price-check flag.
+// - Paid requests (`paid` set) are never retried and time out after 60 s
+//   (SPEC 6.1 item 8). Errors raised before anything is sent carry
+//   `beforeSend: true`, so a caller never reads them as a lost answer.
 //
-// The catalog, model schemas, price checks and asset uploads are built on
-// request() in their own modules. Paid requests (next build) pass `paid:
-// true`: no retry, 60 s timeout (SPEC 6.1).
+// The catalog, model schemas, price checks, asset uploads and the paid
+// request are built on request() in their own modules.
 
 var API = require("../../../shared/scenario-api.json");
 var errorsMod = require("./errors.js");
 var utf8 = require("../util/utf8.js");
 var b64 = require("../util/base64url.js");
 var priceChecks = require("./dry-run.js");
+var paidMod = require("./paid.js");
 
-var PAID_TIMEOUT_MS = 60000;
+var PAID_TIMEOUT_MS = API.paid.timeout_ms;
 
 function basicToken(pair) {
   return b64.encodeStandard(utf8.encode(pair.key + ":" + pair.secret));
@@ -141,12 +146,20 @@ function createClient(opts) {
     );
   }
 
-  // SPEC 6.1 item 1: the only request to /generate this build sends is a
-  // price check with the constant from dry-run.js.
+  function refuse(type, text) {
+    var e = new errorsMod.ScenarioError(type, text);
+    e.beforeSend = true;
+    return e;
+  }
+
+  // SPEC 6.1 items 1 and 8: a request to /generate is a price check with the
+  // constant from dry-run.js, or the paid request with the marker from
+  // paid.js and no query string.
   function guardGenerate(method, path, o) {
     if (!/^\/generate(\/|$)/.test(path)) return;
     if (method === "POST" && o.priceCheck === true && o.query === priceChecks.DRY_RUN_QUERY && !o.paid) return;
-    throw new errorsMod.ScenarioError("Internal", "Generation is not available in this build; only price checks are sent.");
+    if (method === "POST" && o.paid === paidMod.PAID_REQUEST && o.priceCheck !== true && (o.query === undefined || o.query === null)) return;
+    throw refuse("Internal", "Refused before sending: a request to /generate must be a price check or the paid request, and the paid request carries no query.");
   }
 
   // o: { query, body, credentials (overrides the saved pair, for Save and
@@ -155,10 +168,17 @@ function createClient(opts) {
   async function request(method, path, o) {
     o = o || {};
     guardGenerate(method, String(path), o);
-    if (typeof fetchFn !== "function") throw new errorsMod.ScenarioError("Internal", "This Photoshop offers no fetch.");
+    if (typeof fetchFn !== "function") throw refuse("Internal", "This Photoshop offers no fetch.");
     var pair = o.credentials || (opts.credentials ? opts.credentials() : null);
-    if (!pair || !pair.key || !pair.secret) throw new errorsMod.ScenarioError("NotSignedIn", "No Scenario key is saved in the plugin.");
-    var url = buildUrl(path, o.query);
+    if (!pair || !pair.key || !pair.secret) throw refuse("NotSignedIn", "No Scenario key is saved in the plugin.");
+    var url;
+    try {
+      url = buildUrl(path, o.query);
+    } catch (e) {
+      e.beforeSend = true;
+      throw e;
+    }
+    if (o.paid === paidMod.PAID_REQUEST && url.indexOf("?") >= 0) throw refuse("Internal", "Refused before sending: the paid request carries no query string.");
     var headers = { Accept: "application/json" };
     // Always true for a URL built above; kept as the one place the header is set.
     if (originOf(url) === apiOrigin) headers.Authorization = "Basic " + basicToken(pair);

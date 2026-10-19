@@ -8,7 +8,7 @@
 // own require at run time. No eval, no code generation at run time.
 //
 // Release builds (the default) replace src/dev/* with stubs. --dev keeps the
-// development-only token import (see AGENTS.md).
+// development-only pairing token and API key imports (see AGENTS.md).
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -19,6 +19,12 @@ const ROOTS = [path.join(PLUGIN, "src"), path.join(PLUGIN, "manifest.json"), pat
 const FLAGS = path.join(PLUGIN, "src", "build-flags.js");
 const DEV_DIR = path.join(PLUGIN, "src", "dev") + path.sep;
 const REQUIRE = /\brequire\(\s*(["'])([^"']+)\1\s*\)/g;
+// What each development-only module becomes in a release bundle: the same
+// exports, doing nothing, and no file name.
+const DEV_STUBS = {
+  "import-token.js": "{ importToken: async function () { return false; }, FILE: null }",
+  "import-key.js": "{ importKey: async function () { return false; }, FILE: null, parse: null }"
+};
 
 function inside(file) {
   return ROOTS.some((root) => file === root || file.startsWith(root + path.sep));
@@ -35,7 +41,9 @@ function resolveRequest(fromFile, request) {
 function sourceFor(file, dev) {
   if (file === FLAGS) return `"use strict";\nmodule.exports = ${JSON.stringify({ DEV: dev, BUILD: dev ? "dev" : "release" })};\n`;
   if (!dev && file.startsWith(DEV_DIR)) {
-    return '"use strict";\n// Release build: development-only module removed.\nmodule.exports = { importToken: async function () { return false; }, FILE: null };\n';
+    const stub = DEV_STUBS[path.basename(file)];
+    if (!stub) throw new Error(`${path.relative(REPO, file)}: no release stub for this development-only module`);
+    return `"use strict";\n// Release build: development-only module removed.\nmodule.exports = ${stub};\n`;
   }
   const text = fs.readFileSync(file, "utf8");
   if (file.endsWith(".json")) return `module.exports = ${JSON.stringify(JSON.parse(text))};\n`;

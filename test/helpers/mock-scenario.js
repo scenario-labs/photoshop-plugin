@@ -86,7 +86,7 @@ async function startMockScenario({ accounts = [], handle = null } = {}) {
     const send = (status, body, headers = {}) => {
       if (status === null) return; // never answer
       res.writeHead(status, { "content-type": "application/json", ...headers });
-      res.end(typeof body === "string" ? body : JSON.stringify(body));
+      res.end(Buffer.isBuffer(body) || typeof body === "string" ? body : JSON.stringify(body));
     };
     const custom = handler ? handler({ ...record, account }) : undefined;
     if (custom && custom.destroy) return req.socket.destroy(); // the connection drops: offline
