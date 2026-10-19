@@ -1,0 +1,22 @@
+{
+  "name": "scenario-photoshop-plugin",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Scenario for Adobe Photoshop: UXP plugin and local MCP server (early skeleton)",
+  "license": "MIT",
+  "workspaces": [
+    "helper",
+    "plugin"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node test/run.js",
+    "lint": "node test/lint.js",
+    "build": "node plugin/scripts/build.js",
+    "build:dev": "node plugin/scripts/build.js --dev",
+    "package": "node plugin/scripts/package.js",
+    "package:dev": "node plugin/scripts/package.js --dev"
+  }
+}

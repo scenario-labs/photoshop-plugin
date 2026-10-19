@@ -1,0 +1,88 @@
+/* Panel shell. Follows Photoshop's interface brightness through the UXP host
+   variables. 8 px grid, no transitions (UXP has none). */
+body {
+  margin: 0;
+  padding: 8px;
+  color: var(--uxp-host-text-color);
+  background-color: var(--uxp-host-background-color);
+  font-size: var(--uxp-host-font-size);
+}
+
+.header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--uxp-host-border-color);
+}
+
+.mark {
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.project {
+  flex: 1;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  margin-right: 8px;
+  border: 1px solid var(--uxp-host-text-color);
+}
+
+.dot.on {
+  background-color: var(--uxp-host-text-color);
+}
+
+.dot.off {
+  background-color: transparent;
+}
+
+.dot.warn {
+  background-color: #e68619;
+  border-color: #e68619;
+}
+
+.lanes {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  padding: 8px 0;
+}
+
+.lane-body {
+  padding: 8px 0 16px 0;
+  border-bottom: 1px solid var(--uxp-host-border-color);
+}
+
+.agents {
+  padding: 8px 0;
+}
+
+.status-line {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  padding: 4px 0;
+}
+
+.token {
+  font-family: monospace;
+}
+
+.muted {
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.footer {
+  padding-top: 8px;
+  border-top: 1px solid var(--uxp-host-border-color);
+}

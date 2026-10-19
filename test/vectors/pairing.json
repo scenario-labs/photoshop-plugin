@@ -1,0 +1,12 @@
+{
+  "$comment": "Known-answer vectors for the pairing proofs and message MACs (SPEC 2.6 byte layout). token = bytes 0x00..0x1f, nonce_o = 0x20..0x3f, nonce_c = 0x40..0x5f. Frames carry the body {\"t\":\"ping\"}. Both implementations must reproduce every value.",
+  "token": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "nonce_o": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
+  "nonce_c": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8",
+  "proof_plugin": "6tBiVQjATVr3_iRkCKGBWCX0_Yz9zda1Pqq6xrWtjM4",
+  "proof_peer": "PsQGURtqFcLjYVxaSg1jY1PDtA0YExvL2CwmqR02dfw",
+  "proof_o": "4zpTTS7PnrxMCYYx7kyHK_Cyz7CEESYjhn-xUjpgdhU",
+  "session_key_hex": "c30dc36d1ec5df267b50a7b89f92d8548ec426aff455de78b056a0fc92fb6cdc",
+  "frame_o2c_1": "1.P6u7YWcM1uBqEM7LpSDtroSuKmVo7N4ZZaCIPyqou8s.{\"t\":\"ping\"}",
+  "frame_c2o_258": "258.vw3i5SZN4w_9C6CIhfhLbGm6doEav9_pSJo_Iq5kiMY.{\"t\":\"ping\"}"
+}

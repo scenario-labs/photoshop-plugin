@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="header">
+      <span class="mark">Scenario</span>
+      <sp-body size="S" class="project" id="project">Not signed in</sp-body>
+      <span id="agent-dot" class="dot off" title="No agent connected"></span>
+      <sp-action-button quiet disabled id="jobs">Jobs</sp-action-button>
+    </header>
+
+    <nav class="lanes">
+      <sp-action-button data-lane="image" selected>Image</sp-action-button>
+      <sp-action-button data-lane="edit">Edit</sp-action-button>
+      <sp-action-button data-lane="enhance">Enhance</sp-action-button>
+      <sp-action-button data-lane="trained">Trained</sp-action-button>
+      <sp-action-button data-lane="library">Library</sp-action-button>
+    </nav>
+
+    <main class="lane-body">
+      <sp-heading size="XS" id="lane-title">Image</sp-heading>
+      <sp-body size="S" id="lane-purpose"></sp-body>
+      <sp-body size="S" class="muted" id="lane-note"></sp-body>
+    </main>
+
+    <section class="agents">
+      <sp-detail>AGENTS</sp-detail>
+      <div class="status-line">
+        <span id="link-dot" class="dot off"></span>
+        <sp-body size="S" id="link-headline">Starting</sp-body>
+      </div>
+      <sp-body size="XS" class="muted" id="link-detail"></sp-body>
+
+      <sp-detail>PAIRING TOKEN</sp-detail>
+      <sp-body size="S" class="token" id="token-value">Not created yet</sp-body>
+      <div class="row">
+        <sp-action-button id="token-show">Show</sp-action-button>
+        <sp-action-button id="token-copy">Copy</sp-action-button>
+        <sp-action-button id="token-reset">Reset</sp-action-button>
+      </div>
+      <sp-body size="XS" class="muted" id="token-note"></sp-body>
+    </section>
+
+    <footer class="footer">
+      <sp-detail id="version"></sp-detail>
+    </footer>
+
+    <script src="dist/main.js"></script>
+  </body>
+</html>
