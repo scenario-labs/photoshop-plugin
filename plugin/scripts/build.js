@@ -27,7 +27,8 @@ const DEV_STUBS = {
   "import-key.js": "{ importKey: async function () { return false; }, FILE: null, parse: null }",
   "ui-loop.js": "{ start: function () { return null; }, COMMAND: null, RESULT: null }",
   "ui-demo.js": "{ hook: function () { return null; }, run: null, DIR: null }",
-  "live-run.js": "{ start: function () { return null; }, REQUEST: null, DIR: null }"
+  "live-run.js": "{ start: function () { return null; }, REQUEST: null, DIR: null }",
+  "test-hooks.js": "{ create: function () { return { arm: function () {}, at: function () { return Promise.resolve(); }, value: function (p, v) { return v; }, wait: function () { return new Promise(function () {}); }, disarm: function () {}, active: false }; } }"
 };
 
 function inside(file) {

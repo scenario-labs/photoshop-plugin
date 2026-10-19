@@ -1,27 +1,58 @@
 "use strict";
 // The job ledger (SPEC 2.5, 6.2, 6.4): one JSON file per job in the plugin
 // data folder, jobs/<local_id>.json, written atomically (the record goes to
-// <file>.tmp, then is renamed over the file). At startup the records are
-// read back from the files and the restart transitions apply:
-//   submitting                        -> uncertain (a job may exist)
+// <file>.tmp, then is renamed over the file). It is the source of truth
+// across restarts. At startup the records are read back from the files (the
+// copy with the higher revision wins when a write stopped between the
+// temporary file and the rename) and the restart transitions apply:
+//   submitting                          -> uncertain (a job may exist)
 //   uploading_inputs, awaiting_approval -> not_sent ("Interrupted by a restart")
-//   applying                          -> ready (nothing lands by itself)
+//   applying                            -> ready (the runner first looks for
+//                                          a placed layer: then applied)
+//   queued, generating, cancel_requested without a job id -> uncertain
 // queued, generating and cancel_requested resume polling; succeeded and
-// downloading resume downloading (the runner does both).
+// downloading resume downloading (the runner does both); download_failed,
+// ready, apply_failed and uncertain stay. Every record that was not final
+// keeps `recovered_from` (its state before the restart) so Jobs can say so.
+// Nothing lands in a document by itself after a restart.
 //
-// Records hold prompts, settings and document titles, never keys, secrets,
-// signed links or absolute paths: file paths are relative to the plugin data
-// folder.
+// Records hold prompts, settings, document titles and hashes, never keys,
+// secrets, signed links or absolute paths: file paths are relative to the
+// plugin data folder.
 
 var charges = require("./charges.js");
 
 var DIR = "jobs";
+var STATES = ["uploading_inputs", "awaiting_approval", "submitting", "queued", "generating", "cancel_requested", "succeeded", "downloading", "download_failed", "ready", "applying", "apply_failed", "applied", "failed", "blocked", "canceled", "not_sent", "uncertain"];
+var FINAL = ["applied", "failed", "blocked", "canceled", "not_sent"];
 var IN_FLIGHT = ["uploading_inputs", "awaiting_approval", "submitting", "uncertain"];
 var ACTIVE = ["uploading_inputs", "awaiting_approval", "submitting", "queued", "generating", "cancel_requested", "succeeded", "downloading", "applying"];
 var LOCAL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 function copy(v) {
   return v === undefined ? undefined : JSON.parse(JSON.stringify(v));
+}
+
+// A saved result path the plugin can trust: relative to the data folder,
+// inside the Output Folder, no parent steps.
+function safePath(p) {
+  return typeof p === "string" && /^Scenario\/[A-Za-z0-9._\/-]+$/.test(p) && p.indexOf("..") < 0 && p.indexOf("//") < 0;
+}
+
+// Light checks on a record read from disk: a known state, outputs as a list
+// whose paths stay inside the Output Folder. Returns the record, or null.
+function sane(rec) {
+  if (!rec || typeof rec !== "object" || STATES.indexOf(rec.state) < 0) return null;
+  if (rec.outputs !== undefined && rec.outputs !== null && !Array.isArray(rec.outputs)) return null;
+  var outs = rec.outputs || [];
+  for (var i = 0; i < outs.length; i++) {
+    if (!outs[i] || typeof outs[i] !== "object") return null;
+    if (outs[i].path !== null && outs[i].path !== undefined && !safePath(outs[i].path)) {
+      outs[i].path = null;
+      outs[i].state = "pending";
+    }
+  }
+  return rec;
 }
 
 // o: { host: {readDataText, writeDataAtomic, listData, ensureDataDir},
@@ -116,8 +147,18 @@ function createLedger(o) {
           // an unreadable copy is skipped
         }
       }
-      if (!rec) continue;
+      rec = sane(rec);
+      if (!rec) {
+        log("jobs: a record was skipped (unreadable)");
+        continue;
+      }
       var before = rec.state;
+      var touched = false;
+      if (FINAL.indexOf(before) < 0 && before !== "uncertain" && before !== "download_failed" && before !== "ready" && before !== "apply_failed") {
+        rec.recovered_from = before;
+        rec.recovered_at = iso();
+        touched = true;
+      }
       if (rec.state === "submitting") {
         rec.state = "uncertain";
         rec.error = "Unknown: Photoshop closed while the request was being sent. A job may exist on Scenario.";
@@ -130,9 +171,19 @@ function createLedger(o) {
         rec.finished_at = rec.finished_at || iso();
       } else if (rec.state === "applying") {
         rec.state = "ready";
+        // The runner looks for its layers once before any new placement.
+        rec.placement_checked = false;
+      } else if ((rec.state === "queued" || rec.state === "generating" || rec.state === "cancel_requested") && !rec.job_id) {
+        rec.state = "uncertain";
+        rec.error = "Unknown: the job id was not saved before Photoshop closed. A job may exist on Scenario.";
       }
       records[id] = rec;
-      if (rec.state !== before) changed.push(rec);
+      if (rec.state !== before || touched) {
+        changed.push(rec);
+        // The first 8 characters of the local id: enough to follow one job
+        // in the log, and short of the redaction of token-like strings.
+        log("jobs: restart: " + id.slice(0, 8) + " " + before + (rec.state !== before ? " -> " + rec.state : ", resumes"));
+      }
     }
     for (var k = 0; k < changed.length; k++) {
       changed[k].revision = (changed[k].revision || 0) + 1;
@@ -157,6 +208,12 @@ function createLedger(o) {
 
   function get(id) {
     return Object.prototype.hasOwnProperty.call(records, id) ? copy(records[id]) : null;
+  }
+
+  function findByJobId(jobId) {
+    if (!jobId) return null;
+    for (var id in records) if (records[id].job_id === jobId) return copy(records[id]);
+    return null;
   }
 
   function findByKey(key) {
@@ -222,6 +279,7 @@ function createLedger(o) {
     all: all,
     get: get,
     findByKey: findByKey,
+    findByJobId: findByJobId,
     inFlight: inFlight,
     create: create,
     update: update,
@@ -235,4 +293,4 @@ function createLedger(o) {
   };
 }
 
-module.exports = { createLedger: createLedger, IN_FLIGHT: IN_FLIGHT, LOCAL_ID: LOCAL_ID };
+module.exports = { createLedger: createLedger, IN_FLIGHT: IN_FLIGHT, LOCAL_ID: LOCAL_ID, STATES: STATES, FINAL: FINAL, ACTIVE: ACTIVE, safePath: safePath };

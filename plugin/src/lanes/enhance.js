@@ -167,6 +167,7 @@ function cutoutView(schema, ctx, o) {
     canvas: [canvas.width, canvas.height],
     source: source,
     layer_id: layer.id,
+    background: !!layer.background,
     lands: lands,
     mask_box: common.boxArray(maskBox),
     read: [read.width, read.height]

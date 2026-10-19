@@ -30,6 +30,18 @@
 //      check on the composite. A failed check adds a badge and, for
 //      "Changed outside", offers Undo; the result always stays placed, and
 //      a check that cannot run leaves a note. Nothing is ever discarded.
+//
+// After a restart (SPEC 6.4, M5), recover() runs once the ledger is read:
+// saved results whose files are gone go back to download stopped, a job
+// that was placing is looked for in the open documents first, then polling
+// and downloads resume for the jobs of the signed-in project. A job of
+// another project waits until its project is the current one. Place puts a
+// result in its own document: the same document in this Photoshop session,
+// or the saved file it was made from (a hash of its path); it is held while
+// that document is closed or not in front, and never switches documents.
+// "Place in current document" is the person's explicit choice. Unknown jobs
+// are resolved in Jobs (jobs/resolve.js): Link this job continues it; Mark
+// not sent needs a complete check that found no exact match.
 
 var API = require("../../../shared/scenario-api.json");
 var errorsMod = require("../scenario/errors.js");
@@ -45,6 +57,10 @@ var checksMod = require("../apply/checks.js");
 var pixelsMod = require("../capture/pixels.js");
 var shapeMod = require("../capture/shape.js");
 var slugMod = require("../util/slug.js");
+var xmpMod = require("../util/xmp.js");
+var sha = require("../util/sha256.js");
+var utf8 = require("../util/utf8.js");
+var resolveMod = require("./resolve.js");
 
 var OUTPUT_FOLDER = "Scenario";
 var POLLING = ["queued", "generating", "cancel_requested"];
@@ -52,6 +68,24 @@ var POLLING = ["queued", "generating", "cancel_requested"];
 var QUOTE_MODE = priceChecks.DRY_RUN_QUERY[Object.keys(priceChecks.DRY_RUN_QUERY)[0]];
 var AUTO_PLACE_RETRY_MS = 2000;
 var AUTO_PLACE_TRIES = 30;
+// Pauses for a status read that cannot go through (SPEC 6.4 item 5).
+var OFFLINE_MS = API.jobs.poll_offline_ms;
+var RATE_LIMIT_MS = API.paid.pause_default_s * 1000;
+var NO_HOOKS = {
+  at: function () {
+    return Promise.resolve();
+  },
+  value: function (point, v) {
+    return v;
+  }
+};
+
+// A short hash of a project id, kept with each job so it resumes only under
+// that project's key.
+function projectHash(id) {
+  if (typeof id !== "string" || !id) return null;
+  return sha.toHex(sha.sha256(utf8.encode(id))).slice(0, 24);
+}
 
 // SPEC 6.4 item 5.
 function pollDelay(elapsedMs) {
@@ -80,7 +114,9 @@ function trainedIds(params) {
 // o: { client, quotes, ledger, catalog, host, downloader, settings,
 //      account() -> {id, key_hash, project_name}, version, session, log,
 //      timers, now, recordError(type), pollDelay(ms) (tests),
-//      placeWhenReady (default true), capture (capture/capture.js) }
+//      placeWhenReady (default true), capture (capture/capture.js),
+//      hooks (dev/test-hooks.js; development builds only), blockedTexts
+//      (tests), offlineMs (tests) }
 function createRunner(o) {
   var log = o.log || function () {};
   var timers = o.timers || { setTimeout: setTimeout, clearTimeout: clearTimeout };
@@ -99,6 +135,15 @@ function createRunner(o) {
   var downloading = {};
   var autoTries = {};
   var listeners = [];
+  // Why a job is not moving (sign-in, another project, offline), in memory.
+  var waiting = {};
+  // Download stop tokens, per job.
+  var stops = {};
+  var placing = {};
+  var hooks = o.hooks || NO_HOOKS;
+  var blockedTexts = o.blockedTexts || null;
+  var offlineMs = o.offlineMs || OFFLINE_MS;
+  var resolver = resolveMod.createResolver({ client: o.client, ledger: o.ledger, now: now, log: log, blockedTexts: blockedTexts });
 
   function iso() {
     return new Date(now()).toISOString();
@@ -129,6 +174,26 @@ function createRunner(o) {
     return left > 0 ? left : 0;
   }
 
+  function setWaiting(id, why) {
+    var before = waiting[id] || null;
+    if (why) waiting[id] = why;
+    else delete waiting[id];
+    if (before !== (why || null)) emit({ type: "waiting", local_id: id, reason: why || null });
+  }
+
+  // Null when the job can be read with the current key, else why not. A job
+  // made under another project waits for it; records without a project
+  // hash (made before 0.5.0) compare the key hash, then the project name.
+  function gateFor(rec) {
+    var acc = o.account();
+    if (!acc) return "Waiting for sign-in to continue.";
+    var p = rec.project || {};
+    var other = false;
+    if (p.id_hash && acc.project_id) other = p.id_hash !== projectHash(acc.project_id);
+    else if (p.key_hash && acc.key_hash && p.key_hash !== acc.key_hash) other = !(p.name && acc.project_name && p.name === acc.project_name);
+    return other ? "Waiting for its project" + (p.name ? ' "' + p.name + '"' : "") + ": switch to that project to continue." : null;
+  }
+
   function update(id, patch) {
     return o.ledger.update(id, patch).catch(function (e) {
       log("jobs: record not saved: " + e.message);
@@ -139,7 +204,7 @@ function createRunner(o) {
   function targetRecord(a) {
     var t = a.req.target || {};
     var out = { kind: t.kind || null, session: o.session || null, sample: t.sample || null };
-    var keep = ["canvas", "upload", "layer_id", "selection", "margin", "feather", "source", "read", "output", "lands", "expand", "route", "overlap", "anchor", "mask_box"];
+    var keep = ["canvas", "upload", "layer_id", "selection", "margin", "feather", "source", "read", "output", "lands", "expand", "route", "overlap", "anchor", "mask_box", "background"];
     for (var i = 0; i < keep.length; i++) if (t[keep[i]] !== undefined) out[keep[i]] = JSON.parse(JSON.stringify(t[keep[i]]));
     if (t.kind === "new_document") {
       out.width = t.width;
@@ -148,7 +213,12 @@ function createRunner(o) {
     } else {
       out.document_id = t.document_id;
       out.document_title = a.document_title || null;
+      out.document_key = o.host && typeof o.host.documentKey === "function" ? o.host.documentKey(t.document_id) : null;
       out.box = t.box ? t.box.slice() : null;
+      if (o.host && typeof o.host.documentSize === "function") {
+        var size = o.host.documentSize(t.document_id);
+        if (size) out.document_size = [size.width, size.height];
+      }
     }
     return out;
   }
@@ -186,7 +256,7 @@ function createRunner(o) {
         idempotency_key: key,
         fingerprint: fp,
         origin: { kind: "person" },
-        project: { name: acc.project_name || null, key_hash: acc.key_hash || null },
+        project: { name: acc.project_name || null, key_hash: acc.key_hash || null, id_hash: projectHash(acc.project_id) },
         lane: a.req.lane,
         model_id: a.req.model_id,
         model_name: a.model_name || null,
@@ -265,6 +335,13 @@ function createRunner(o) {
   // 4: uploads (the capture, its mask, then the references), then the
   // second price check. The capture goes to the model's image input, or
   // first among its references.
+  // True when the person canceled the upload (the record left
+  // uploading_inputs): nothing more is uploaded or sent.
+  function canceled(id) {
+    var r = o.ledger.get(id);
+    return !r || r.state !== "uploading_inputs";
+  }
+
   async function uploadThenCheck(rec, refs, red, capFiles) {
     var ids = [];
     var capId = null;
@@ -280,14 +357,19 @@ function createRunner(o) {
           capId = u.asset_id;
           capInput = f.input;
         } else placed[f.input] = u.asset_id;
+        if (all.length === 1) await hooks.at("upload", { local_id: rec.local_id });
+        if (canceled(rec.local_id)) return { record: o.ledger.get(rec.local_id), state: "not_sent" };
       }
       for (var i = 0; i < refs.length; i++) {
         var up = await assetsMod.uploadImage(o.client, refs[i].bytes, uploadName("reference", refs[i].id || i, refs[i].ext));
         ids.push(up.asset_id);
         all.push(up.asset_id);
+        if (all.length === 1) await hooks.at("upload", { local_id: rec.local_id });
+        if (canceled(rec.local_id)) return { record: o.ledger.get(rec.local_id), state: "not_sent" };
       }
     } catch (e) {
       recordError(e && e.type);
+      if (canceled(rec.local_id)) return { record: o.ledger.get(rec.local_id), state: "not_sent" };
       return finish(rec.local_id, "not_sent", { error: "Not sent: " + (capFiles.length ? "an input" : "a reference") + " did not upload. " + ((e && e.message) || e) });
     }
     var schema = await o.catalog.schema(rec.model_id);
@@ -302,6 +384,7 @@ function createRunner(o) {
     for (var name in placed) body[name] = placed[name];
     var inputs = JSON.parse(JSON.stringify(rec.inputs));
     inputs.asset_ids = all;
+    if (canceled(rec.local_id)) return { record: o.ledger.get(rec.local_id), state: "not_sent" };
     await update(rec.local_id, { parameters: body, inputs: inputs });
     return checkAndSend(rec.local_id, red.thousandths);
   }
@@ -311,6 +394,8 @@ function createRunner(o) {
     var t;
     try {
       t = await o.quotes.recheck(rec.model_id, rec.parameters);
+      t = hooks.value("price_after_upload", t, { local_id: id });
+      if (canceled(id)) return { record: o.ledger.get(id), state: "not_sent" };
     } catch (e) {
       recordError(e && e.type);
       if (e && e.type === "DryRunCreatedJob") {
@@ -357,6 +442,7 @@ function createRunner(o) {
   // 5: the paid request.
   async function send(id) {
     var rec = o.ledger.get(id);
+    if (!rec || ["uploading_inputs", "awaiting_approval", "submitting"].indexOf(rec.state) < 0) return { record: rec, state: rec ? rec.state : null };
     try {
       await o.ledger.update(id, { state: "submitting", claimed_at: iso() });
     } catch (e) {
@@ -370,6 +456,7 @@ function createRunner(o) {
       recordError(e && e.type);
       return finish(id, "not_sent", { error: "Not sent: " + ((e && e.message) || e) });
     }
+    await hooks.at("paid_answer", { local_id: id, status: out.status });
     if (out.error) recordError(out.error.type);
     if (out.status === "queued") {
       var r = await update(id, {
@@ -383,6 +470,12 @@ function createRunner(o) {
       log("jobs: sent, queued on Scenario");
       poll(id);
       return { record: r, state: "queued" };
+    }
+    if (out.status === "not_sent" && out.error && jobsApi.isBlockedText(out.error.scenarioMessage || out.reason, blockedTexts)) {
+      // A content-policy refusal at submit (SPEC 2.5): no job exists.
+      recordError("Blocked");
+      log("jobs: blocked at submit");
+      return finish(id, "blocked", { error: "Blocked: Scenario refused this request (content policy)." + (out.error.scenarioMessage ? " " + out.error.scenarioMessage : ""), cu_charged: "0", refunded: false });
     }
     if (out.status === "not_sent") {
       if (out.pause_s) pausedUntil = now() + out.pause_s * 1000;
@@ -398,14 +491,19 @@ function createRunner(o) {
     return { record: u, state: "uncertain" };
   }
 
-  // 6: polling.
+  // 6: polling. A read that cannot go through pauses: offline 15 s, a 429
+  // for Retry-After (60 s when absent); a refused key, a job the key cannot
+  // see and other errors keep the normal pace, with the reason shown. A job
+  // of another project, or no key at all, stops polling until the account
+  // changes (accounts.onChange calls resume()).
   function poll(id) {
     if (polling[id]) return;
     polling[id] = true;
     var rec0 = o.ledger.get(id);
     var since = rec0 && rec0.submitted_at ? Date.parse(rec0.submitted_at) : now();
-    function schedule() {
-      timers.setTimeout(tick, delayFor(Math.max(0, now() - since)));
+    if (isNaN(since)) since = now();
+    function schedule(ms) {
+      timers.setTimeout(tick, ms || delayFor(Math.max(0, now() - since)));
     }
     async function tick() {
       var rec = o.ledger.get(id);
@@ -413,18 +511,49 @@ function createRunner(o) {
         delete polling[id];
         return;
       }
+      var gate = gateFor(rec);
+      if (gate) {
+        delete polling[id];
+        setWaiting(id, gate);
+        return;
+      }
       var read;
       try {
-        read = await jobsApi.getJob(o.client, rec.job_id);
+        read = await jobsApi.getJob(o.client, rec.job_id, blockedTexts);
       } catch (e) {
-        log("jobs: status read failed (" + ((e && e.type) || "error") + "); trying again");
+        var type = (e && e.type) || "error";
+        log("jobs: status read failed (" + type + ")");
+        if (type === "NotSignedIn") {
+          delete polling[id];
+          setWaiting(id, "Waiting for sign-in to continue.");
+          return;
+        }
+        if (type === "Unauthorized" || type === "Forbidden" || type === "JobNotFound") {
+          // Reads go on at the normal pace: a paid job is never given up.
+          setWaiting(id, type === "JobNotFound" ? "Scenario does not list this job for the current key. Still checking." : "Scenario refused the current key. It continues once the key works again.");
+          schedule();
+          return;
+        }
+        if (type === "Offline") {
+          setWaiting(id, "Offline. Checking again when the connection returns.");
+          schedule(offlineMs);
+          return;
+        }
+        if (type === "RateLimited") {
+          var wait = e.retryAfterS > 0 ? Math.min(e.retryAfterS, 3600) * 1000 : RATE_LIMIT_MS;
+          setWaiting(id, "Scenario asked to wait " + Math.round(wait / 1000) + " s.");
+          schedule(wait);
+          return;
+        }
         schedule();
         return;
       }
+      setWaiting(id, null);
       var patch = { remote_status: read.remote_status, progress: read.progress };
       if (!read.status || read.status === "queued" || read.status === "generating") {
         if (read.status && rec.state !== "cancel_requested") patch.state = read.status;
         await update(id, patch);
+        await hooks.at("poll", { local_id: id, status: read.status });
         schedule();
         return;
       }
@@ -463,13 +592,32 @@ function createRunner(o) {
     return { folder: y + m + day, prefix: y + "-" + m + "-" + day };
   }
 
-  // 7: downloads, one take after another.
+  // 7: downloads, one take after another. Files already saved are kept;
+  // each new attempt asks for fresh signed links.
   async function download(id) {
     if (downloading[id]) return;
+    var rec = o.ledger.get(id);
+    if (!rec) return;
+    var gate = gateFor(rec);
+    if (gate) {
+      setWaiting(id, gate);
+      return;
+    }
+    setWaiting(id, null);
+    if (!(rec.outputs || []).length) {
+      // Finished on Scenario but the result list was not saved: read it again.
+      if (rec.job_id) {
+        await update(id, { state: "queued" });
+        poll(id);
+      } else {
+        await update(id, { state: "download_failed", error: "Download stopped: the job's results were not saved. Open it on Scenario." });
+      }
+      return;
+    }
     downloading[id] = true;
+    var token = { stopped: false, onStop: null };
+    stops[id] = token;
     try {
-      var rec = o.ledger.get(id);
-      if (!rec) return;
       await update(id, { state: "downloading", error: null });
       var kind = planMod.kindOf(rec.lane);
       var dp = datePath(rec.submitted_at || rec.created_at);
@@ -485,22 +633,36 @@ function createRunner(o) {
         if (outputs[i].state === "saved" && outputs[i].path) continue;
         var base = dir + "/" + dp.prefix + (slug ? "-" + slug : "") + "-" + slugMod.tail(outputs[i].asset_id) + (outputs.length > 1 ? "-take" + (i + 1) : "");
         try {
-          var got = await o.downloader.download(outputs[i].asset_id, base);
+          var got = await o.downloader.download(outputs[i].asset_id, base, null, token);
           outputs[i] = { asset_id: outputs[i].asset_id, state: "saved", path: got.path, width: got.width, height: got.height, mime: got.mime };
           await update(id, { outputs: outputs });
         } catch (e) {
+          if (token.stopped || (e && e.stopped)) {
+            await update(id, { state: "download_failed", outputs: outputs, error: "Download stopped: stopped by you. Resume download fetches it again.", download_error_type: null });
+            return;
+          }
           recordError(e && e.type);
           var type = e && (e.type === "ResultUnreachable" || e.type === "ResultExpired") ? e.type : null;
           await update(id, { state: "download_failed", outputs: outputs, error: (type || "Download stopped") + ": " + ((e && e.message) || e), download_error_type: type });
           return;
         }
       }
-      await update(id, { state: "ready", error: null });
+      await update(id, { state: "ready", error: null, download_error_type: null });
       emit({ type: "ready", local_id: id });
       maybeAutoPlace(id);
     } finally {
       delete downloading[id];
+      if (stops[id] === token) delete stops[id];
     }
+  }
+
+  // Stop download in Jobs (SPEC 6.4 item 4): the attempt in progress stops,
+  // its part file goes, saved takes stay; Resume download continues.
+  function stopDownload(id) {
+    var token = stops[id];
+    if (!token) return Promise.resolve(o.ledger.get(id));
+    o.downloader.stop(token);
+    return Promise.resolve(o.ledger.get(id));
   }
 
   function canAutoPlace(rec) {
@@ -531,8 +693,55 @@ function createRunner(o) {
     return e;
   }
 
+  function docTitle(rec) {
+    var t = rec.target || {};
+    return t.document_title ? '"' + t.document_title + '"' : "its document";
+  }
+
+  // The open document a job's results belong in (SPEC 6.4, M5): the same
+  // document in this Photoshop session; else the saved file it was made
+  // from, found by the hash of its path; for records made before 0.5.0,
+  // which carry no such hash, the open document with the same title and
+  // canvas size. Returns { id, how: "same" | "key" | "title" } or null.
+  function homeDoc(rec) {
+    var t = rec.target || {};
+    var docs = typeof o.host.listDocuments === "function" ? o.host.listDocuments() : [];
+    var i;
+    if (rec.session && rec.session === o.session && t.document_id !== undefined && t.document_id !== null) {
+      for (i = 0; i < docs.length; i++) if (docs[i].id === t.document_id) return { id: t.document_id, how: "same" };
+    }
+    if (Object.prototype.hasOwnProperty.call(t, "document_key")) {
+      if (!t.document_key || typeof o.host.documentKey !== "function") return null;
+      for (i = 0; i < docs.length; i++) if (o.host.documentKey(docs[i].id) === t.document_key) return { id: docs[i].id, how: "key" };
+      return null;
+    }
+    if (!t.document_title) return null;
+    var want = t.canvas || t.document_size || null;
+    for (i = 0; i < docs.length; i++) {
+      if (docs[i].title !== t.document_title) continue;
+      var size = o.host.documentSize(docs[i].id);
+      if (!want || (size && size.width === want[0] && size.height === want[1])) return { id: docs[i].id, how: "title" };
+    }
+    return null;
+  }
+
+  // Where a placement would go now, for Jobs: { kind: "new_document" |
+  // "active" (its document is in front) | "open" (open, not in front) |
+  // "closed", document_id, title }.
+  function whereFor(rec) {
+    var t = rec.target || {};
+    var newDoc = t.kind === "new_document" || !t.kind || (t.kind === "upscale" && t.lands === "new_document");
+    if (newDoc) return { kind: "new_document", document_id: null, title: null };
+    var home = homeDoc(rec);
+    var active = o.host.activeDocumentId();
+    if (!home) return { kind: "closed", document_id: null, title: t.document_title || null, unsaved: Object.prototype.hasOwnProperty.call(t, "document_key") && !t.document_key && rec.session !== o.session };
+    return { kind: home.id === active ? "active" : "open", document_id: home.id, title: t.document_title || null, how: home.how };
+  }
+
   // Where a job's results land: the plan options (document, box, fit, mask,
-  // insert point, canvas, reads for the checks) and notes.
+  // insert point, canvas, reads for the checks) and notes. opts:
+  // new_document (Open as document), current_document (Place in current
+  // document: the active document over its canvas), unmasked.
   function placement(rec, opts) {
     var t = rec.target || {};
     var notes = [];
@@ -545,14 +754,24 @@ function createRunner(o) {
       var h = t.kind === "new_document" ? t.height : first.height;
       return { document: null, box: { left: 0, top: 0, width: w || first.width, height: h || first.height }, fit: "cover", mask: null, notes: notes };
     }
-    var sameDoc = rec.session === o.session && active !== null && active !== undefined && active === t.document_id;
-    if (!sameDoc || !t.box) {
-      if (active === null || active === undefined) throw err("DocumentClosed", "Open a document to place this result, or use Open as document.");
+    var hasActive = active !== null && active !== undefined;
+    var home = homeDoc(rec);
+    var inHome = !!home && hasActive && home.id === active;
+    if (!inHome && !opts.current_document) {
+      if (!home) {
+        var unsaved = Object.prototype.hasOwnProperty.call(t, "document_key") && !t.document_key && rec.session !== o.session;
+        throw err("DocumentClosed", unsaved ? "Its document was never saved, so it closed with Photoshop. Use Place in current document or Open as document." : "Open " + docTitle(rec) + " to place this result there, or use Place in current document or Open as document.");
+      }
+      throw err("DocumentNotActive", "Bring " + docTitle(rec) + " to the front to place this result there, or use Place in current document.");
+    }
+    if (!inHome || !t.box) {
+      if (!hasActive) throw err("DocumentClosed", "Open a document to place this result, or use Open as document.");
       if (t.kind === "expand" || t.kind === "cutout") throw err("DocumentClosed", "This result lands in the document it was made from. Open that document, or use Open as document.");
       var size = o.host.documentSize(active);
       notes.push("Placed in the current document over its canvas.");
       return { document: size, box: { left: 0, top: 0, width: size.width, height: size.height }, fit: rec.lane === "image" ? "cover" : "box", mask: null, notes: notes };
     }
+    if (home.how === "title") notes.push("Placed in " + docTitle(rec) + ", found by its name and size after a restart.");
     var doc = o.host.documentSize(active);
     var box = boxOf(t.box);
     var sameCanvas = !t.canvas || (doc.width === t.canvas[0] && doc.height === t.canvas[1]);
@@ -615,7 +834,7 @@ function createRunner(o) {
       if (!sameCanvas) throw canvasChanged();
       var src = rec.inputs && rec.inputs.capture ? rec.inputs.capture.source_path : null;
       if (t.lands === "new_layer" && !src) throw err("Internal", "The source pixels of this cutout were not saved; use Open as document.");
-      return { document: doc, box: box, fit: "box", mask: null, cutout: { layer_id: t.layer_id, lands: t.lands, box: box, mask_box: t.mask_box ? boxOf(t.mask_box) : box, source_path: src }, notes: notes };
+      return { document: doc, box: box, fit: "box", mask: null, cutout: { layer_id: t.layer_id, background: !!t.background, lands: t.lands, box: box, mask_box: t.mask_box ? boxOf(t.mask_box) : box, source_path: src }, notes: notes };
     }
     return { document: doc, box: box, fit: "box", mask: null, notes: notes };
   }
@@ -708,6 +927,79 @@ function createRunner(o) {
     opts = opts || {};
     var rec = o.ledger.get(id);
     if (!rec || ["ready", "apply_failed", "applied"].indexOf(rec.state) < 0) throw err("Internal", "This job has no saved results to place.");
+    if (placing[id]) throw err("Internal", "This result is being placed.");
+    placing[id] = true;
+    try {
+      return await placeNow(id, rec, opts);
+    } finally {
+      delete placing[id];
+    }
+  }
+
+  // Layers in the open documents whose metadata carries this job's result
+  // asset ids or its job id (SPEC 6.4: a placement that was running when
+  // Photoshop closed may have been kept by crash recovery).
+  async function placedLayers(rec) {
+    if (typeof o.host.findPlacedLayers !== "function") return [];
+    var assets = (rec.outputs || [])
+      .map(function (x) {
+        return x && x.asset_id;
+      })
+      .filter(Boolean);
+    var needles = assets.slice();
+    if (rec.job_id) needles.push(rec.job_id);
+    if (!needles.length) return [];
+    var found = [];
+    try {
+      found = (await o.host.findPlacedLayers(needles)) || [];
+    } catch (e) {
+      return [];
+    }
+    return found.filter(function (f) {
+      var m = xmpMod.parse(f.xmp || "") || {};
+      return (m.assetId && assets.indexOf(m.assetId) >= 0) || (rec.job_id && m.jobId === rec.job_id && !m.assetId);
+    });
+  }
+
+  // A job recovered from placing: if its layers are already in an open
+  // document, it is placed (applied) and nothing lands twice.
+  async function checkPlaced(id) {
+    var rec = o.ledger.get(id);
+    if (!rec || rec.recovered_from !== "applying" || rec.placement_checked || rec.state !== "ready") return null;
+    var found = await placedLayers(rec);
+    if (!found.length) return null;
+    var docId = found[0].document_id;
+    log("jobs: a job that was placing at the restart is already in a document");
+    return update(id, {
+      state: "applied",
+      placement_checked: true,
+      error: null,
+      placement: {
+        document_id: docId,
+        layer_ids: found
+          .filter(function (f) {
+            return f.document_id === docId;
+          })
+          .map(function (f) {
+            return f.layer_id;
+          }),
+        group_id: null,
+        history: null,
+        masked: null,
+        notes: ["Found in the document after Photoshop restarted; it was not placed again."],
+        checks: [],
+        verify: null,
+        badges: [],
+        undone: false
+      }
+    });
+  }
+
+  async function placeNow(id, rec, opts) {
+    if (!opts.new_document) {
+      var already = await checkPlaced(id);
+      if (already) return already;
+    }
     var where;
     try {
       where = placement(rec, opts);
@@ -717,7 +1009,8 @@ function createRunner(o) {
     }
     var p = planMod.build(rec, { version: o.version, document: where.document, box: where.box, mask: where.mask, restore_active: !!opts.auto, fit: where.fit, insert: where.insert, canvas: where.canvas, duplicate: where.duplicate, reads: where.reads, cutout: where.cutout });
     var before = rec.state;
-    await update(id, { state: "applying" });
+    await update(id, { state: "applying", placement_checked: true });
+    await hooks.at("place", { local_id: id, document_id: where.document ? where.document.id : null });
     try {
       var result = await o.host.placeResults(p, { auto: !!opts.auto, decide: where.decide || null });
       var notes = where.notes.concat(result.notes || []);
@@ -777,11 +1070,74 @@ function createRunner(o) {
     return update(id, { state: "ready", placement: pl });
   }
 
-  // SPEC 6.2 step 5.3: the person marks an Unknown job not sent.
-  function markNotSent(id) {
+  // Cancel on an uploading job (SPEC 3.11): nothing was sent to generate.
+  // Uploads already done stay on Scenario, hidden like every upload.
+  function cancelUpload(id) {
     var rec = o.ledger.get(id);
-    if (!rec || rec.state !== "uncertain") return Promise.resolve(null);
-    return finish(id, "not_sent", { error: "Not sent: marked not sent by you." });
+    if (!rec || rec.state !== "uploading_inputs") return Promise.resolve(rec);
+    return finish(id, "not_sent", { error: "Not sent: Canceled while uploading." }).then(function (r) {
+      return r.record;
+    });
+  }
+
+  // SPEC 6.2 step 5: Unknown resolution, by the person only.
+  function check(id) {
+    var rec = o.ledger.get(id);
+    if (!rec || rec.state !== "uncertain") return Promise.reject(err("Internal", "This job is not Unknown."));
+    return resolver.check(id).then(function (c) {
+      emit({ type: "checked", local_id: id });
+      return c;
+    });
+  }
+
+  // Link this job: the record takes the Scenario job and continues
+  // (polling, the charge, download, then Place). Only a job the last check
+  // listed, and never one another record holds.
+  async function link(id, jobId) {
+    var rec = o.ledger.get(id);
+    if (!rec || rec.state !== "uncertain") throw err("Internal", "This job is not Unknown.");
+    if (!paid.validJobId(jobId)) throw err("Internal", "Not a Scenario job id.");
+    var other = o.ledger.findByJobId(jobId);
+    if (other && other.local_id !== id) throw err("Internal", "This Scenario job is already linked to another job here.");
+    var c = resolver.lastCheck(id);
+    var pick = null;
+    for (var i = 0; c && i < c.candidates.length; i++) if (c.candidates[i].job_id === jobId) pick = c.candidates[i];
+    if (!pick) throw err("Internal", "Check again first: this job is not among the jobs found.");
+    var r = await update(id, {
+      state: "queued",
+      job_id: jobId,
+      submitted_at: pick.created_at || rec.claimed_at || iso(),
+      error: null,
+      resolution: { kind: "linked", at: iso(), exact: !!pick.exact }
+    });
+    resolver.forget(id);
+    log("jobs: Unknown job linked by the person");
+    emit({ type: "linked", local_id: id });
+    poll(id);
+    return r;
+  }
+
+  // Mark not sent (SPEC 6.2 step 5.3), durable; it unblocks the request.
+  // Allowed only after a complete check within the last 10 minutes found no
+  // job on Scenario matching this request exactly: a matching job ran and
+  // was charged, so it is linked instead and its result is kept. The check
+  // runs here when none is recent.
+  async function markNotSent(id) {
+    var rec = o.ledger.get(id);
+    if (!rec || rec.state !== "uncertain") return null;
+    var c = resolver.lastCheck(id);
+    if (!resolver.fresh(c) || !c.complete) c = await resolver.check(id);
+    if (!c.complete) {
+      throw err("CheckIncomplete", "Could not check Scenario's jobs" + (c.error ? " (" + c.error + ")" : "") + ". Check again before marking it not sent.");
+    }
+    if (c.preselected || c.candidates.some(function (x) {
+      return x.exact;
+    })) {
+      throw err("JobMayExist", "A job on Scenario matches this request exactly, so it ran and was charged. Link it to keep its result.");
+    }
+    var out = await finish(id, "not_sent", { error: "Not sent: marked not sent by you.", resolution: { kind: "not_sent", at: iso(), checked_at: c.checked_at, candidates: c.candidates.length } });
+    resolver.forget(id);
+    return out;
   }
 
   function resumeDownload(id) {
@@ -790,8 +1146,9 @@ function createRunner(o) {
     return download(id);
   }
 
-  // After the ledger is read at startup: polling and downloads resume;
-  // nothing is placed by itself.
+  // Polling and downloads continue for the jobs the current key can read;
+  // the others wait (SPEC 6.4). Called after the ledger is read and on every
+  // account change. Nothing is placed by itself.
   function resume() {
     var list = o.ledger.all();
     for (var i = 0; i < list.length; i++) {
@@ -801,17 +1158,67 @@ function createRunner(o) {
     }
   }
 
+  // At startup, once the ledger is read (SPEC 6.4 item 2): saved results
+  // whose files are gone go back to download stopped (Resume download asks
+  // Scenario again); a job that was placing is looked for in the open
+  // documents; then resume().
+  async function recover() {
+    var list = o.ledger.all();
+    var dirs = {};
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i];
+      try {
+        if (r.state === "ready" || r.state === "apply_failed") {
+          var outs = JSON.parse(JSON.stringify(r.outputs || []));
+          var missing = 0;
+          for (var k = 0; k < outs.length; k++) {
+            if (outs[k].state !== "saved" || !outs[k].path) continue;
+            var at = outs[k].path.lastIndexOf("/");
+            var dir = outs[k].path.slice(0, at);
+            if (!dirs[dir]) dirs[dir] = (await o.host.listData(dir)) || [];
+            if (dirs[dir].indexOf(outs[k].path.slice(at + 1)) < 0) {
+              outs[k] = { asset_id: outs[k].asset_id, state: "pending", path: null };
+              missing++;
+            }
+          }
+          if (missing) {
+            await update(r.local_id, { state: "download_failed", outputs: outs, error: "Download stopped: " + (missing === 1 ? "a saved result is" : missing + " saved results are") + " missing from the Output Folder. Resume download fetches them again.", download_error_type: null });
+            continue;
+          }
+          if (r.recovered_from === "applying") await checkPlaced(r.local_id);
+        }
+      } catch (e) {
+        log("jobs: recovery check failed (" + ((e && e.message) || e) + ")");
+      }
+    }
+    resume();
+  }
+
   return {
     start: start,
     approve: approve,
     decline: decline,
     place: place,
     undo: undo,
+    cancelUpload: cancelUpload,
+    check: check,
+    link: link,
     markNotSent: markNotSent,
+    lastCheck: resolver.lastCheck,
+    isChecking: resolver.isChecking,
     resumeDownload: resumeDownload,
+    stopDownload: stopDownload,
     resume: resume,
+    recover: recover,
     pausedFor: pausedFor,
     canAutoPlace: canAutoPlace,
+    whereFor: whereFor,
+    waitingFor: function (id) {
+      return waiting[id] || null;
+    },
+    isDownloading: function (id) {
+      return !!downloading[id];
+    },
     onEvent: function (fn) {
       listeners.push(fn);
     },
@@ -819,4 +1226,4 @@ function createRunner(o) {
   };
 }
 
-module.exports = { createRunner: createRunner, pollDelay: pollDelay, trainedIds: trainedIds, OUTPUT_FOLDER: OUTPUT_FOLDER, QUOTE_MODE: QUOTE_MODE };
+module.exports = { createRunner: createRunner, pollDelay: pollDelay, trainedIds: trainedIds, projectHash: projectHash, OUTPUT_FOLDER: OUTPUT_FOLDER, QUOTE_MODE: QUOTE_MODE, POLLING: POLLING };

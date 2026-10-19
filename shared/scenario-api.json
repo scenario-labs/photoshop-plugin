@@ -23,6 +23,20 @@
     "$comment": "SPEC 6.4 item 3: results are fetched only from these origins, which are also in the plugin manifest, without any Authorization header. A result link on any other host stops the download (ResultUnreachable). Measured live 2026-10-19: result links are signed cdn.cloud.scenario.com links that answer 302 to the same host, then the file.",
     "origins": ["https://cdn.cloud.scenario.com"]
   },
+  "jobs": {
+    "$comment": "SPEC 6.2 step 5 and 3.11. GET /v1/jobs lists the project's jobs newest first, `pageSize` and `paginationToken` in, `jobs` and `nextPaginationToken` out; `createdAfter` cannot be combined with `status` or `type` (documented). Rows carry jobId, jobType (`custom` for model jobs), status, createdAt, billing and metadata.input with modelId and every valid input; a processed prompt is a text asset id whose text is in that asset's metadata.preview (measured live 2026-10-19). Unknown resolution lists from the claim time minus before_ms and keeps jobs created until the claim time plus after_ms; a scan that stops at max_pages is incomplete, so nothing is marked not sent from it.",
+    "path": "/jobs",
+    "page_size": 50,
+    "max_pages": 20,
+    "model_job_type": "custom",
+    "window": { "before_ms": 600000, "after_ms": 3600000 },
+    "check_valid_ms": 600000,
+    "poll_offline_ms": 15000
+  },
+  "blocked": {
+    "$comment": "SPEC 2.5 and 6.1 item 10: texts that mark a content-policy refusal, in a failed job's metadata.error or hint, or in a refused paid request's reason. None was measured in M2.0 (item 10), so the list is empty and every failure reads as failed; a text added here reads as blocked, matched without case as a substring.",
+    "texts": []
+  },
   "uploads": {
     "$comment": "SPEC 5.5: uploads go through POST /v1/assets as base64 only, so a file must stay under max_file_bytes; the request body cap is about 6 MiB (413 Request Too Long above it, measured live 2026-10-19). Captures that do not fit are read again with the long side 10% smaller, at most reduce_steps times.",
     "max_file_bytes": 4000000,
@@ -45,6 +59,7 @@
     "create_key": "https://help.scenario.com/articles/2952168846-api-keys-and-scopes",
     "plans": "https://app.scenario.com/settings/organization-plans",
     "create_account": "https://app.scenario.com/",
+    "open_on_scenario": "https://app.scenario.com/",
     "get_help": "https://help.scenario.com/",
     "report_problem": "https://github.com/scenario-labs/photoshop-plugin/issues/new/choose",
     "privacy": "https://github.com/scenario-labs/photoshop-plugin/blob/main/PRIVACY.md"

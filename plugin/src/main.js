@@ -36,6 +36,8 @@ var referencesMod = require("./capture/references.js");
 var captureMod = require("./capture/capture.js");
 var flowMod = require("./lanes/flow.js");
 var devLive = require("./dev/live-run.js");
+var devHooks = require("./dev/test-hooks.js");
+var jobsModelMod = require("./jobs/view-model.js");
 var jobsViewMod = require("./ui/jobs-view.js");
 var menuMod = require("./ui/menu.js");
 var thumbsMod = require("./ui/thumbs.js");
@@ -94,7 +96,8 @@ function sessionMarker(random, now) {
 
 // env: { hostRequire, global, document, console; tests also pass host,
 // clipboardClearMs, apiBaseUrl (a mock Scenario API), downloadOrigins (the
-// mock CDN) and pollDelay }
+// mock CDN), pollDelay, offlineMs, blockedTexts and testHooks (the
+// development test hooks, which development builds always have) }
 function boot(env) {
   var host = env.host || hostMod.createHost(env.hostRequire, env.global);
   var redactor = redactMod.createRedactor();
@@ -126,6 +129,10 @@ function boot(env) {
   var capture = null;
   var jobsView = null;
   var menu = null;
+  var jobsModel = null;
+  // Development builds only (dev/test-hooks.js); release builds carry a stub
+  // whose points do nothing.
+  var hooks = flags.DEV || env.testHooks ? devHooks.create({ log: logger.log, timers: host.timers }) : null;
 
   // UXP wants entrypoints declared during the first synchronous run. A
   // reloaded panel (development builds) finds them declared already. The
@@ -184,7 +191,8 @@ function boot(env) {
       AbortController: host.AbortController,
       timers: host.timers,
       files: { writeBinary: host.writeDataBinary, rename: host.renameData, remove: host.removeData },
-      origins: env.downloadOrigins
+      origins: env.downloadOrigins,
+      hooks: hooks
     });
     runner = runnerMod.createRunner({
       client: client,
@@ -202,7 +210,23 @@ function boot(env) {
       timers: host.timers,
       now: host.timers.now,
       recordError: errors.record,
-      pollDelay: env.pollDelay
+      pollDelay: env.pollDelay,
+      hooks: hooks,
+      blockedTexts: env.blockedTexts,
+      offlineMs: env.offlineMs
+    });
+    jobsModel = jobsModelMod.createJobsModel({
+      ledger: ledger,
+      runner: runner,
+      host: host,
+      session: session,
+      now: host.timers.now,
+      openLink: function (name) {
+        return host.openExternal(API.links[name]);
+      },
+      copyText: function (text) {
+        return host.clipboardWrite(redactor.apply(text));
+      }
     });
     references = referencesMod.createReferences({ host: host, random: random, log: logger.log });
   }
@@ -225,10 +249,11 @@ function boot(env) {
         logger.log("pairing token unavailable: " + e.message);
       }
     }
+    var jobsRead = false;
     if (ledger) {
       try {
         await ledger.load();
-        runner.resume();
+        jobsRead = true;
       } catch (e) {
         logger.log("jobs unavailable: " + e.message);
       }
@@ -238,6 +263,15 @@ function boot(env) {
       logger.log(acc.signed_in ? "signed in (" + acc.count + " project(s) saved)" : "not signed in");
     } catch (e) {
       logger.log("saved keys unavailable: " + e.message);
+    }
+    // After the keys are read, so polling and downloads resume under the
+    // project each job was made in (SPEC 6.4).
+    if (jobsRead) {
+      try {
+        await runner.recover();
+      } catch (e) {
+        logger.log("jobs recovery failed: " + e.message);
+      }
     }
     if (flags.DEV) {
       // Development builds only: a key pair left in the data folder goes
@@ -377,6 +411,8 @@ function boot(env) {
     accounts.onChange(function () {
       if (accountPanel) accountPanel.refresh();
       if (lanes) lanes.refresh();
+      // Jobs waiting for their project's key continue.
+      if (runner) runner.resume();
     });
     // Document, canvas and selection changes reprice the Image lane.
     if (typeof host.onDocumentEvents === "function" && !host.onDocumentEvents(function () {
@@ -410,6 +446,8 @@ function boot(env) {
       capture: capture,
       flow: flow,
       jobsView: jobsView,
+      jobsModel: jobsModel,
+      hooks: hooks,
       session: session,
       diagnostics: diagnostics,
       errors: errors,

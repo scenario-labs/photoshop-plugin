@@ -6,7 +6,11 @@
 // file; measured live 2026-10-19), checks the bytes are an image whose
 // header reads right, writes them to <file>.part and renames the part to the
 // file. Three attempts with back-off; a link on another host stops at once
-// (ResultUnreachable), an asset gone from Scenario too (ResultExpired).
+// (ResultUnreachable), an asset gone from Scenario too (ResultExpired). An
+// expired signed link (the CDN answers 403) is not final: the next attempt
+// asks for a fresh one. A partial file restarts from zero (no Range
+// request). Stop download aborts the attempt in progress and removes its
+// part file; the person resumes later with fresh links.
 
 var API = require("../../../shared/scenario-api.json");
 var errorsMod = require("./errors.js");
@@ -61,7 +65,9 @@ function sniff(bytes) {
 
 // o: { client, fetch, AbortController, timers: {setTimeout, clearTimeout},
 //      files: { writeBinary(path, bytes), rename(from, to), remove(path) },
-//      origins (allowed download origins; tests only), sleep(ms) (tests) }
+//      origins (allowed download origins; tests only), sleep(ms) (tests),
+//      hooks (dev/test-hooks.js: the `download_part` point, between the
+//      part file and the rename; development builds only) }
 function createDownloader(o) {
   var origins = (o.origins || API.downloads.origins).map(function (x) {
     return String(x).toLowerCase();
@@ -76,11 +82,20 @@ function createDownloader(o) {
       });
     };
 
+  var hooks = o.hooks || null;
+
   function allowed(url) {
     return origins.indexOf(originOf(url)) >= 0;
   }
 
-  async function fetchOnce(url) {
+  function stoppedError() {
+    var e = new errorsMod.ScenarioError("Internal", "Download stopped by you.");
+    e.final = true;
+    e.stopped = true;
+    return e;
+  }
+
+  async function fetchOnce(url, token) {
     var controller = null;
     if (o.AbortController) {
       try {
@@ -92,6 +107,19 @@ function createDownloader(o) {
     var timer = null;
     var init = { method: "GET", redirect: "follow", credentials: "omit", headers: {} };
     if (controller) init.signal = controller.signal;
+    var stopRace = null;
+    if (token) {
+      stopRace = new Promise(function (resolve, reject) {
+        token.onStop = function () {
+          try {
+            if (controller) controller.abort();
+          } catch (e) {
+            // nothing more to do
+          }
+          reject(stoppedError());
+        };
+      });
+    }
     var timeout = new Promise(function (resolve, reject) {
       timer = setT(function () {
         try {
@@ -103,7 +131,7 @@ function createDownloader(o) {
       }, TIMEOUT_MS);
     });
     try {
-      var res = await Promise.race([o.fetch(url, init), timeout]);
+      var res = await Promise.race(stopRace ? [o.fetch(url, init), timeout, stopRace] : [o.fetch(url, init), timeout]);
       if (res.url && !allowed(res.url)) {
         var e = new errorsMod.ScenarioError("ResultUnreachable", "Stored on a host this plugin can't reach.");
         e.final = true;
@@ -114,7 +142,7 @@ function createDownloader(o) {
         bad.status = res.status;
         throw bad;
       }
-      var buf = await Promise.race([res.arrayBuffer(), timeout]);
+      var buf = await Promise.race(stopRace ? [res.arrayBuffer(), timeout, stopRace] : [res.arrayBuffer(), timeout]);
       var bytes = new Uint8Array(buf);
       var declared = null;
       try {
@@ -127,27 +155,45 @@ function createDownloader(o) {
       return bytes;
     } finally {
       clearT(timer);
+      if (token) token.onStop = null;
     }
   }
 
   // Downloads one asset to `<base>.<ext>`. Resolves { path, ext, mime,
-  // width, height, bytes: size }. onAttempt(n) reports each attempt.
-  async function download(assetId, base, onAttempt) {
+  // width, height, bytes: size }. onAttempt(n) reports each attempt. token
+  // (optional): { stopped } set by stop(token); a stopped download rejects
+  // with e.stopped.
+  async function download(assetId, base, onAttempt, token) {
     var last = null;
     for (var attempt = 1; attempt <= ATTEMPTS; attempt++) {
+      if (token && token.stopped) throw stoppedError();
       if (onAttempt) onAttempt(attempt);
+      var part = null;
       try {
         var info = await jobsApi.getAsset(o.client, assetId);
         if (!allowed(info.url)) throw new errorsMod.ScenarioError("ResultUnreachable", "Stored on a host this plugin can't reach.");
-        var bytes = await fetchOnce(info.url);
+        var bytes = await fetchOnce(info.url, token);
+        if (token && token.stopped) throw stoppedError();
         var kind = sniff(bytes);
         var path = base + "." + kind.ext;
-        var part = path + ".part";
+        part = path + ".part";
         await o.files.writeBinary(part, bytes);
+        if (hooks) await hooks.at("download_part", { asset_id: assetId, part: part });
+        if (token && token.stopped) throw stoppedError();
         await o.files.rename(part, path);
         return { path: path, ext: kind.ext, mime: kind.mime, width: kind.width, height: kind.height, bytes: bytes.length };
       } catch (err) {
         last = err;
+        if (err && err.stopped) {
+          if (part && o.files.remove) {
+            try {
+              await o.files.remove(part);
+            } catch (e) {
+              // a leftover part file is overwritten by the next attempt
+            }
+          }
+          throw err;
+        }
         if (err && (err.type === "ResultUnreachable" || err.type === "ResultExpired" || err.final)) throw err;
         if (attempt < ATTEMPTS) await sleep(BACKOFF_MS[attempt - 1] || 3000);
       }
@@ -157,7 +203,14 @@ function createDownloader(o) {
     throw stopped;
   }
 
-  return { download: download, allowed: allowed };
+  // Stops a download started with this token.
+  function stop(token) {
+    if (!token) return;
+    token.stopped = true;
+    if (typeof token.onStop === "function") token.onStop();
+  }
+
+  return { download: download, stop: stop, allowed: allowed };
 }
 
-module.exports = { createDownloader: createDownloader, sniff: sniff, originOf: originOf, ATTEMPTS: ATTEMPTS };
+module.exports = { createDownloader: createDownloader, sniff: sniff, originOf: originOf, ATTEMPTS: ATTEMPTS, BACKOFF_MS: BACKOFF_MS };
