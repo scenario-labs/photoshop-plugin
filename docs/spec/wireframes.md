@@ -1160,22 +1160,29 @@ Settings > Agents. All three switches are off by default. The second needs the f
 | [ ] Agents may run Photoshop         |
 |     commands                         |
 |     Lets agents run Photoshop        |
-|     commands (batchPlay) on open     |
-|     documents: layers, selections,   |
-|     masks, adjustments, filters and  |
-|     transforms. Each call is one     |
-|     History step. Commands that      |
-|     save, close, export or print,    |
-|     play Actions, run scripts, use   |
-|     Adobe's generative features or   |
-|     change Photoshop's settings are  |
-|     always refused. Turn on only for |
-|     agents you trust.                |
+|     commands (batchPlay) on the      |
+|     document in front: layers,       |
+|     selections, masks, adjustments,  |
+|     filters and transforms. Each     |
+|     call is one History step.        |
+|     Commands that save, close,       |
+|     export or print, play Actions,   |
+|     run scripts, use Adobe's         |
+|     generative features or change    |
+|     Photoshop's settings are always  |
+|     refused. Turn on only for agents |
+|     you trust.                       |
 |     Needs the switch above. Turns    |
 |     off when Photoshop quits.        |
 |                                      |
 | [ ] Agents read the active document  |
 |     only                             |
+|     Agents see only the document you |
+|     are working on and the jobs made |
+|     from it on this computer. Images |
+|     already in your Scenario project,|
+|     such as generations and Library  |
+|     assets, stay visible to agents.  |
 +--------------------------------------+
 | Agent spending                       |
 | (o) Ask each time                    |
