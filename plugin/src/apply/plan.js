@@ -72,8 +72,8 @@ function names(kind, prompt, assetIds, leavePrompts) {
 // pixels; the record's target box by default), mask, restore_active,
 // fit ("cover" by default, or "box"), insert ({layer_id} or null: the top),
 // canvas (Expand), duplicate ({name}: land in a copy), reads (for the
-// checks), cutout (Remove BG: { layer_id, lands, box, mask_box,
-// source_path }) }.
+// checks), cutout (Remove BG: { layer_id, background (the source was the
+// Background), lands, box, mask_box, source_path }) }.
 function build(rec, o) {
   o = o || {};
   var kind = kindOf(rec.lane);
@@ -131,6 +131,7 @@ function build(rec, o) {
   if (o.cutout) {
     cut = {
       layer_id: o.cutout.layer_id,
+      background: !!o.cutout.background,
       lands: o.cutout.lands,
       box: o.cutout.box,
       mask_box: o.cutout.lands === "mask" ? o.cutout.mask_box : o.cutout.box,

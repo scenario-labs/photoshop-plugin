@@ -118,7 +118,7 @@ function createFakePhotoshop(opts = {}) {
       visible: spec.visible !== false,
       alpha: !!spec.alpha,
       frame: spec.frame || { left: 0, top: 0, width: doc.width, height: doc.height },
-      xmp: null,
+      xmp: spec.xmp || null,
       mask: spec.mask ? maskOf(spec.mask) : null,
       path: spec.path || null,
       layers: spec.layers || null,
@@ -191,6 +191,8 @@ function createFakePhotoshop(opts = {}) {
     const doc = {
       id: spec.id,
       title: spec.title || `Untitled-${spec.id}`,
+      // The saved file's path ("" when never saved), as UXP's Document.path.
+      path: spec.path || "",
       width: spec.width || 1024,
       height: spec.height || 1024,
       pattern: spec.pattern || "gradient",
@@ -248,6 +250,19 @@ function createFakePhotoshop(opts = {}) {
       get activeHistoryState() {
         const list = undo.get(doc.id) || [];
         return { name: list.length ? list[list.length - 1].name : "Open" };
+      },
+      // File > Save As (PSD) into a data-folder file entry: the "file" keeps
+      // the title and size; app.open() makes a document from it again.
+      saveAs: {
+        async psd(file, o, asCopy) {
+          if (!inModal) throw new Error("save needs a modal scope");
+          if (ps.halted) throw new Error("fake: Photoshop quit");
+          files.set(file._path, JSON.stringify({ fake_psd: true, title: file.name, width: doc.width, height: doc.height }));
+          if (!asCopy) {
+            doc.path = file.url;
+            doc.title = file.name;
+          }
+        }
       }
     };
     const specs = spec.layers || [{ name: "Background", background: !!opts.scene }];
@@ -267,6 +282,15 @@ function createFakePhotoshop(opts = {}) {
     },
     set activeDocument(d) {
       app._active = d ? d.id : null;
+    },
+    // File > Open of a document saved with saveAs.psd: a new id, in front.
+    async open(file) {
+      if (!inModal) throw new Error("open needs a modal scope");
+      const spec = JSON.parse(files.get(file._path));
+      const d = makeDoc({ id: ++nextId, title: spec.title, width: spec.width, height: spec.height, path: file.url });
+      app.documents.push(d);
+      app._active = d.id;
+      return d;
     },
     async createDocument(o) {
       if (!inModal) throw new Error("createDocument needs a modal scope");
@@ -315,6 +339,12 @@ function createFakePhotoshop(opts = {}) {
       restore(doc3, last.snap);
       ps.undone.push({ document_id: doc3.id, name: last.name });
       return {};
+    }
+    if (d._obj === "get" && d._target[0]._property === "XMPMetadataAsUTF8") {
+      const layer = findLayer(doc, d._target[1]._id);
+      if (!layer) throw new Error("fake: no such layer");
+      ps.xmpReads = (ps.xmpReads || 0) + 1;
+      return layer.xmp ? { XMPMetadataAsUTF8: layer.xmp } : {};
     }
     if (d._obj === "get" && d._target[0]._property === "hasUserMask") {
       const layer = findLayer(doc, d._target[1]._id);
@@ -578,6 +608,26 @@ function createFakePhotoshop(opts = {}) {
     return { name: path.split("/").pop(), url: DATA + path, _path: path, isFile: true };
   }
 
+  function isDir(path) {
+    if (dirs.has(path)) return true;
+    for (const k of files.keys()) if (k.startsWith(`${path}/`)) return true;
+    return false;
+  }
+
+  // A data-folder subfolder, as UXP's Folder entry.
+  function folder(path) {
+    return {
+      name: path.split("/").pop(),
+      url: DATA + path,
+      _path: path,
+      isFile: false,
+      isFolder: true,
+      async createFile(n) {
+        return entry(`${path}/${n}`);
+      }
+    };
+  }
+
   const uxp = {
     host: { version: "27.11.0", name: "Photoshop" },
     entrypoints: { setup: (def) => (ps.entrypoints = def) },
@@ -596,13 +646,15 @@ function createFakePhotoshop(opts = {}) {
       formats: { binary: { binary: true }, utf8: { utf8: true } },
       localFileSystem: {
         async getEntryWithUrl(url) {
-          const path = name(url);
+          const path = name(url).replace(/\/$/, "");
+          if (!files.has(path) && isDir(path)) return folder(path);
           if (!files.has(path)) throw new Error(`fake: no entry ${url}`);
           return entry(path);
         },
         async getDataFolder() {
           return {
             async getEntry(path) {
+              if (!files.has(path) && isDir(path)) return folder(path);
               if (!files.has(path)) throw new Error(`fake: no entry ${path}`);
               return entry(path);
             }
@@ -667,6 +719,26 @@ function createFakePhotoshop(opts = {}) {
     }
   };
 
+  // ps.halt(): Photoshop quit. Every file, storage and Photoshop call of
+  // this instance fails from then on, so work still pending in it (a held
+  // test hook) writes nothing; a restart boots a new instance on the same
+  // `files` and `secure` maps.
+  ps.halted = false;
+  ps.halt = () => {
+    ps.halted = true;
+  };
+  const halting = (obj, name) => {
+    const f = obj[name];
+    obj[name] = function (...a) {
+      if (ps.halted) return Promise.reject(new Error("fake: Photoshop quit"));
+      return f.apply(this, a);
+    };
+  };
+  for (const k of Object.keys(fs)) halting(fs, k);
+  for (const k of ["getItem", "setItem", "removeItem"]) halting(uxp.storage.secureStorage, k);
+  halting(photoshop.core, "executeAsModal");
+  halting(photoshop.action, "batchPlay");
+
   const os = { platform: () => "darwin", release: () => "25.5.0" };
   const modules = { uxp, photoshop, fs, os };
 
@@ -682,6 +754,14 @@ function createFakePhotoshop(opts = {}) {
   ps.doc = (id) => app.documents.find((d) => d.id === id);
   ps.setActive = (id) => {
     app._active = id;
+  };
+  // The person opens a document (File > Open): it gets a new id and comes
+  // to the front.
+  ps.openDocument = (spec) => {
+    const d = makeDoc({ ...spec, id: spec.id || ++nextId });
+    app.documents.push(d);
+    app._active = d.id;
+    return d;
   };
   ps.closeAll = () => {
     app.documents.splice(0);

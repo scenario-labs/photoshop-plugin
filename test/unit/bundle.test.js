@@ -37,7 +37,8 @@ test("the release bundle holds no development code and no run-time code generati
   assert.ok(!release.code.includes("SCENARIO_API_SECRET"), "nothing in a release build reads a key file");
   assert.ok(!release.code.includes("dev-live-run.json"), "the live-check request reader is stubbed out");
   assert.ok(!release.code.includes("Scenario dev: set up"), "nothing in a release build makes documents for the live check");
-  assert.equal(release.code.split("Release build: development-only module removed.").length - 1, 3, "the three development-only modules are stubs");
+  const devModules = require("node:fs").readdirSync(require("node:path").join(__dirname, "..", "..", "plugin", "src", "dev")).filter((f) => f.endsWith(".js")).length;
+  assert.equal(release.code.split("Release build: development-only module removed.").length - 1, devModules, "every development-only module is a stub");
   assert.ok(release.code.includes('module.exports = {"DEV":false,"BUILD":"release"}'));
   assert.ok(dev.code.includes("dev-pairing-token"));
   assert.ok(dev.code.includes("dev-api-key"));

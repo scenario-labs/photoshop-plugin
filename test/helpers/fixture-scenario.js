@@ -19,6 +19,12 @@
 //   /v1/assets/{id} gives each result a signed-looking CDN link, and the CDN
 //   (same server, no /v1 prefix) answers 302 to itself, then the PNG, as
 //   measured. CDN requests are recorded in `cdnRequests`.
+// - GET /v1/jobs lists the jobs newest first, as measured (150, 151):
+//   `createdAfter`, `pageSize` and `paginationToken` in, `jobs` and
+//   `nextPaginationToken` out, model jobs with jobType `custom`, the prompt
+//   replaced by a text asset id that GET /v1/assets/{id} answers with the
+//   text in metadata.preview (153). opts.jobsList(request) can answer
+//   instead (errors); `mock.jobs` rows without `createdAt` read as now.
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -97,7 +103,10 @@ function canonical(v) {
 //         paid (true, or (call) -> answer | undefined), jobPlan(job) ->
 //         [remote statuses], charge(body) -> CU, cdnBase (the origin the
 //         asset links name; the mock's own by default), cdn(request) ->
-//         answer | undefined, resultSize(body) -> {width, height} }
+//         answer | undefined, resultSize(body) -> {width, height},
+//         jobsList(request) -> answer | undefined, jobRead(request, job) ->
+//         answer | undefined (a status read's answer), assetRead(request,
+//         id) -> answer | undefined }
 async function startFixtureScenario(opts = {}) {
   const assets = new Map(Object.entries(measured.assets).map(([id, a]) => [id, { width: a.width, height: a.height }]));
   const uploads = [];
@@ -110,6 +119,16 @@ async function startFixtureScenario(opts = {}) {
   const recs = { ...records, ...(opts.extraRecords || {}) };
   let n = 0;
   let jobN = 0;
+  const texts = new Map();
+  const textIds = new Map();
+  const textId = (text) => {
+    if (!textIds.has(text)) {
+      const id = `asset_mockText${textIds.size + 1}`;
+      textIds.set(text, id);
+      texts.set(id, text);
+    }
+    return textIds.get(text);
+  };
   let mockOrigin = null;
   const copy = (v) => JSON.parse(JSON.stringify(v));
 
@@ -120,6 +139,9 @@ async function startFixtureScenario(opts = {}) {
     tpl.status = status;
     tpl.progress = status === "success" || status === "failure" ? 1 : status === "in-progress" ? 0.5 : 0;
     tpl.billing = { cuCost: job.charge, cuDiscount: 0 };
+    if (job.disableRefund) tpl.billing.disableRefund = true;
+    if (job.error && status === "failure") tpl.metadata.error = job.error;
+    if (job.hint !== undefined && status === "failure") tpl.metadata.hint = job.hint;
     tpl.metadata.input = { modelId: job.model, ...job.body };
     if (status === "success") {
       if (!job.assets) {
@@ -133,6 +155,18 @@ async function startFixtureScenario(opts = {}) {
       tpl.metadata.assetIds = job.assets;
     } else if (status !== "failure") tpl.metadata.assetIds = [];
     return { job: tpl };
+  }
+
+  // A row of GET /v1/jobs: the record with jobType, createdAt, and the
+  // prompt as its text asset id (measured: processed jobs list it so).
+  function jobRow(job) {
+    const status = job.plan[Math.min(job.polls, job.plan.length - 1)];
+    const row = jobBody({ ...job, polls: job.polls }).job;
+    row.jobType = job.jobType || "custom";
+    row.createdAt = job.createdAt || new Date().toISOString();
+    row.status = status;
+    if (row.metadata && row.metadata.input && typeof row.metadata.input.prompt === "string" && !/^asset_/.test(row.metadata.input.prompt)) row.metadata.input.prompt = textId(row.metadata.input.prompt);
+    return row;
   }
 
   function shape(body) {
@@ -195,7 +229,7 @@ async function startFixtureScenario(opts = {}) {
         if (custom !== undefined) return custom;
       }
       jobN++;
-      const job = { id: `job_mock${jobN}`, model: g[1], body: r.body || {}, polls: 0, charge: opts.charge ? opts.charge(r.body) : 2 };
+      const job = { id: `job_mock${jobN}`, model: g[1], body: r.body || {}, polls: 0, charge: opts.charge ? opts.charge(r.body) : 2, createdAt: new Date().toISOString() };
       job.plan = opts.jobPlan ? opts.jobPlan(job) : ["in-progress", "success"];
       jobs.set(job.id, job);
       const submit = copy(jobsFixture.submit_image.body);
@@ -205,9 +239,33 @@ async function startFixtureScenario(opts = {}) {
       submit.job.metadata.input = { modelId: g[1], ...job.body };
       return { status: 200, body: submit };
     }
+    if (r.method === "GET" && r.path === "/v1/jobs") {
+      if (opts.jobsList) {
+        const custom = opts.jobsList(r);
+        if (custom) return custom;
+      }
+      const after = r.query.createdAfter ? Date.parse(r.query.createdAfter) : -Infinity;
+      const rows = [...jobs.values()]
+        .map((j) => {
+          if (!j.createdAt) j.createdAt = new Date().toISOString();
+          return j;
+        })
+        .filter((j) => Date.parse(j.createdAt) > after)
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || (b.id < a.id ? -1 : 1))
+        .map(jobRow);
+      const size = Number(r.query.pageSize) || 10;
+      const start = r.query.paginationToken ? Number(String(r.query.paginationToken).slice(1)) : 0;
+      const body = { jobs: rows.slice(start, start + size) };
+      if (start + size < rows.length) body.nextPaginationToken = `t${start + size}`;
+      return { status: 200, body };
+    }
     const jm = /^\/v1\/jobs\/([^/]+)$/.exec(r.path);
     if (r.method === "GET" && jm) {
       const job = jobs.get(jm[1]);
+      if (opts.jobRead) {
+        const custom = opts.jobRead(r, job);
+        if (custom) return custom;
+      }
       if (!job) return { status: 404, body: { reason: `Job ${jm[1]} not found` } };
       const out = jobBody(job);
       job.polls++;
@@ -216,6 +274,14 @@ async function startFixtureScenario(opts = {}) {
     const am = /^\/v1\/assets\/([^/]+)$/.exec(r.path);
     if (r.method === "GET" && am) {
       const id = decodeURIComponent(am[1]);
+      if (opts.assetRead) {
+        const custom = opts.assetRead(r, id);
+        if (custom) return custom;
+      }
+      if (texts.has(id)) {
+        const text = texts.get(id);
+        return { status: 200, body: { asset: { id, url: `${opts.cdnBase || mockOrigin}/assets/${id}?Key-Pair-Id=k&Policy=p&Signature=s`, mimeType: "text/plain", metadata: { type: "uploaded-text", kind: "text", preview: text, hasFullPreview: true, charCount: text.length, size: text.length }, kind: "text" } } };
+      }
       const res = results.get(id);
       if (!res) return { status: 404, body: { reason: `Asset ${id} not found` } };
       const rec = copy(jobsFixture.result_record.body);
@@ -245,7 +311,7 @@ async function startFixtureScenario(opts = {}) {
 
   const mock = await startMockScenario({ accounts: opts.accounts || [], handle });
   mockOrigin = mock.origin;
-  return Object.assign(mock, { uploads, priceChecks, violations, assets, catalogRows, records: recs, paidCalls, jobs, results, cdnRequests });
+  return Object.assign(mock, { uploads, priceChecks, violations, assets, catalogRows, records: recs, paidCalls, jobs, results, cdnRequests, texts, textId });
 }
 
 module.exports = { startFixtureScenario, measured, catalogRows, records, pngSize, solidPng, jobsFixture };

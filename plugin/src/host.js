@@ -6,6 +6,7 @@
 var utf8 = require("./util/utf8.js");
 var b64 = require("./util/base64url.js");
 var pixelsMod = require("./capture/pixels.js");
+var sha = require("./util/sha256.js");
 
 function toBytes(v) {
   if (v && v.buffer && typeof v.byteLength === "number") return new Uint8Array(v.buffer, v.byteOffset || 0, v.byteLength);
@@ -291,6 +292,14 @@ function createHost(hostRequire, g) {
   async function cutout(doc, plan, notes) {
     var c = plan.cutout;
     var source = findLayer(doc, c.layer_id);
+    // A document reopened after a restart may give its Background a new id;
+    // the Background is still the one source of a Background cutout.
+    if (!source && c.background) {
+      source =
+        (doc.layers || []).filter(function (l) {
+          return l.isBackgroundLayer;
+        })[0] || null;
+    }
     if (!source) throw new Error("the source layer is gone");
     await selectLayers(doc.id, [source.id]);
     var temp = await placeFile(doc, plan.takes[0].path, plan.takes[0].fit, notes);
@@ -414,6 +423,70 @@ function createHost(hostRequire, g) {
       for (var i = 0; i < docs.length; i++) {
         var d = docs[i];
         out.push({ id: d.id, title: d.title || d.name || "" });
+      }
+      return out;
+    },
+    // A short hash of a saved document's file path, so a job finds its
+    // document again after a restart (document ids last one Photoshop
+    // session). Null for a document never saved. The path itself is never
+    // stored. Read only.
+    documentKey: function (id) {
+      try {
+        var d = findDoc(id);
+        if (!d) return null;
+        var p = null;
+        try {
+          p = d.path;
+        } catch (e) {
+          p = null;
+        }
+        if (typeof p !== "string" || !p) return null;
+        return "k" + sha.toHex(sha.sha256(utf8.encode(p))).slice(0, 32);
+      } catch (e) {
+        return null;
+      }
+    },
+    // Layers in the open documents whose Scenario metadata names one of
+    // `needles` (asset or job ids): [{ document_id, layer_id, xmp }]. Read only
+    // (batchPlay get of each layer's XMP); at most `limit` layers per
+    // document are read.
+    findPlacedLayers: async function (needles, limit) {
+      var out = [];
+      if (!ps || !ps.app || !needles || !needles.length) return out;
+      var max = limit || 2000;
+      var docs = ps.app.documents || [];
+      for (var i = 0; i < docs.length; i++) {
+        var doc = docs[i];
+        var stack = [];
+        try {
+          stack = (doc.layers || []).slice();
+        } catch (e) {
+          stack = [];
+        }
+        var seen = 0;
+        while (stack.length && seen < max) {
+          var l = stack.shift();
+          seen++;
+          try {
+            if (l.layers && l.layers.length) for (var c = 0; c < l.layers.length; c++) stack.push(l.layers[c]);
+          } catch (e) {
+            // not a group
+          }
+          var x = null;
+          try {
+            var r = await play([{ _obj: "get", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "layer", _id: l.id }, { _ref: "document", _id: doc.id }] }]);
+            x = r && r[0] ? r[0].XMPMetadataAsUTF8 : null;
+          } catch (e) {
+            x = null;
+          }
+          if (typeof x !== "string" || !x) continue;
+          for (var n = 0; n < needles.length; n++) {
+            if (needles[n] && x.indexOf(needles[n]) >= 0) {
+              out.push({ document_id: doc.id, layer_id: l.id, xmp: x });
+              break;
+            }
+          }
+        }
       }
       return out;
     },
