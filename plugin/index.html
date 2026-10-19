@@ -73,7 +73,7 @@
         <sp-action-button quiet id="account-banner-close">Close</sp-action-button>
       </div>
 
-      <nav class="lanes">
+      <nav class="lanes" id="lane-tabs">
         <sp-action-button data-lane="image" selected>Image</sp-action-button>
         <sp-action-button data-lane="edit">Edit</sp-action-button>
         <sp-action-button data-lane="enhance">Enhance</sp-action-button>
@@ -81,11 +81,73 @@
         <sp-action-button data-lane="library">Library</sp-action-button>
       </nav>
 
-      <main class="lane-body">
+      <main class="lane-body" id="lane-body">
         <sp-heading size="XS" id="lane-title">Image</sp-heading>
         <sp-body size="S" id="lane-purpose"></sp-body>
+        <div class="row wrap" id="enhance-tools">
+          <sp-action-button id="tool-upscale">Upscale</sp-action-button>
+          <sp-action-button id="tool-expand">Expand</sp-action-button>
+          <sp-action-button id="tool-remove_background">Remove BG</sp-action-button>
+        </div>
+        <div class="card" id="model-card">
+          <div class="row">
+            <sp-body size="S" class="grow" id="model-name"></sp-body>
+            <sp-action-button id="model-change">Change</sp-action-button>
+          </div>
+          <sp-body size="XS" class="muted" id="model-badges"></sp-body>
+        </div>
+        <sp-body size="XS" id="lane-source"></sp-body>
+        <div class="row" id="size-row">
+          <sp-detail class="label">SIZE</sp-detail>
+          <select class="grow" id="size-select"></select>
+        </div>
+        <div class="row" id="factor-row">
+          <sp-detail class="label">FACTOR</sp-detail>
+          <select class="grow" id="factor-select"></select>
+        </div>
+        <sp-body size="XS" class="muted" id="lane-output"></sp-body>
         <sp-body size="S" class="muted" id="lane-note"></sp-body>
       </main>
+
+      <div class="prompt-bar" id="prompt-bar">
+        <sp-textfield multiline class="field" id="prompt" placeholder="Describe the image"></sp-textfield>
+        <div class="row">
+          <div class="row" id="takes-row">
+            <sp-detail class="label">TAKES</sp-detail>
+            <select id="takes-select"></select>
+          </div>
+          <sp-button variant="cta" class="push" id="generate" disabled>Generate</sp-button>
+        </div>
+        <sp-body size="XS" id="generate-reason"></sp-body>
+        <sp-body size="XS" id="generate-refund"></sp-body>
+        <sp-body size="XS" class="muted" id="generate-note"></sp-body>
+      </div>
+
+      <section class="subview" id="view-picker">
+        <div class="row">
+          <sp-action-button quiet id="picker-back">Back</sp-action-button>
+          <sp-heading size="XS">Models</sp-heading>
+        </div>
+        <sp-textfield class="field" id="picker-search" placeholder="Search models"></sp-textfield>
+        <div class="row wrap" id="picker-tabs">
+          <sp-action-button id="picker-tab-image">Image</sp-action-button>
+          <sp-action-button id="picker-tab-edit">Edit</sp-action-button>
+          <sp-action-button id="picker-tab-enhance">Enhance</sp-action-button>
+          <sp-action-button id="picker-tab-trained">Trained</sp-action-button>
+        </div>
+        <div class="row wrap" id="picker-chips"></div>
+        <div class="row">
+          <sp-detail class="label">TAGS</sp-detail>
+          <select class="grow" id="picker-tags"></select>
+        </div>
+        <sp-body size="XS" class="muted" id="picker-status"></sp-body>
+        <div class="list" id="picker-list"></div>
+        <div class="row wrap">
+          <sp-action-button id="picker-more">Load more</sp-action-button>
+          <sp-action-button id="picker-clear">Clear filters</sp-action-button>
+          <sp-action-button id="picker-refresh">Refresh</sp-action-button>
+        </div>
+      </section>
     </section>
 
     <section class="view" id="view-projects">

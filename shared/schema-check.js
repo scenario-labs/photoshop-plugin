@@ -1,7 +1,7 @@
 "use strict";
 // A small JSON Schema checker for the subset the shared definitions use:
 // type (string or list), const, enum, properties, required, additionalProperties
-// (false or a schema), items, minLength, maxLength, minimum, and local $ref
+// (false or a schema), items, minLength, maxLength, minimum, maximum, and local $ref
 // ("#/definitions/<name>"). Runs in Node and in UXP. Returns a list of problems;
 // an empty list means the value conforms.
 
@@ -74,6 +74,9 @@ function check(schema, value, path, root, out) {
   }
   if ((actual === "integer" || actual === "number") && schema.minimum !== undefined && value < schema.minimum) {
     out.push(path + ": below " + schema.minimum);
+  }
+  if ((actual === "integer" || actual === "number") && schema.maximum !== undefined && value > schema.maximum) {
+    out.push(path + ": above " + schema.maximum);
   }
   if (actual === "object") {
     var props = schema.properties || {};

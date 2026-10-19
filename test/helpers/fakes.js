@@ -73,8 +73,13 @@ function fakeHost(over = {}) {
     },
     photoshopVersion: () => over.photoshopVersion || "27.11.0",
     osName: () => over.osName || "darwin 25.5.0",
-    listDocuments: () => host.docs.slice(),
+    listDocuments: () => host.docs.map((d) => ({ id: d.id, title: d.title })),
     activeDocumentId: () => host.active,
+    documentSize: (id) => {
+      const want = id === null || id === undefined ? host.active : id;
+      const d = host.docs.find((x) => x.id === want);
+      return d ? { id: d.id, width: d.width || 1024, height: d.height || 1024 } : null;
+    },
     async readDataText(name) {
       return files.has(name) ? files.get(name) : null;
     },

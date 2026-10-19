@@ -42,5 +42,5 @@ test("the plugin log redacts token-like strings and never holds the token", asyn
   const log = host.files.get("scenario-link.log");
   assert.ok(!log.includes(token));
   assert.match(log, /carries \[redacted\] by mistake/);
-  assert.match(log, /plugin 0\.1\.0 \(source\) starting; random source: getRandomValues/);
+  assert.ok(log.includes(`plugin ${main.VERSION} (source) starting; random source: getRandomValues`));
 });

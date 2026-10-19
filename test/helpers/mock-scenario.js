@@ -1,7 +1,8 @@
 "use strict";
 // A mock of Scenario's REST API on 127.0.0.1 for the sign-in tests. It checks
 // HTTP Basic credentials against keys made per test, records every request
-// (method, path, query, the Authorization header), and answers the two reads
+// (method, path, the query string as sent, the Authorization header, the JSON
+// body), and answers the two reads
 // Save and test makes: GET /v1/models and GET /v1/projects. Error bodies
 // follow what the live API returned on 2026-10-19: no credentials give 401
 // {"message": "Unauthorized"}, an unknown key 403 {"reason": "Given APIKey
@@ -57,13 +58,27 @@ async function startMockScenario({ accounts = [], handle = null } = {}) {
   let handler = handle;
   const sockets = new Set();
   const server = http.createServer((req, res) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => answer(req, res, Buffer.concat(chunks).toString("utf8")));
+  });
+  function answer(req, res, text) {
     const url = new URL(req.url, "http://mock");
+    let body = null;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      body = null;
+    }
     const record = {
       method: req.method,
       path: url.pathname,
+      // The query string exactly as sent, for the price-check flag test.
+      search: url.search,
       query: Object.fromEntries(url.searchParams),
       authorization: req.headers.authorization || null,
-      host: req.headers.host
+      host: req.headers.host,
+      body
     };
     requests.push(record);
     const auth = record.authorization;
@@ -81,7 +96,7 @@ async function startMockScenario({ accounts = [], handle = null } = {}) {
     if (req.method === "GET" && url.pathname === "/v1/models") return send(200, { models: [], nextPaginationToken: null });
     if (req.method === "GET" && url.pathname === "/v1/projects") return send(200, { projects: account.projects || [] });
     return send(404, { reason: `Route ${url.pathname} not found` });
-  });
+  }
   server.on("connection", (s) => {
     sockets.add(s);
     s.on("close", () => sockets.delete(s));

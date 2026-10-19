@@ -339,7 +339,7 @@ test("Copy diagnostics shows the text first; it names no project, key or secret"
   doc.byId("diag-copy").click();
   assert.ok(doc.shown("diag-preview"));
   const text = doc.text("diag-text");
-  assert.match(text, /^plugin 0\.1\.0 \(source\) \. helper not linked\n/);
+  assert.ok(text.startsWith(`plugin ${main.VERSION} (source) . helper not linked\n`));
   assert.match(text, /account: signed in, keys saved 1/);
   assert.match(text, /last errors: Unauthorized$/);
   for (const secret of [pair.key, pair.secret, "Secret project name", pair.key.slice(-4)]) assert.ok(!text.includes(secret));

@@ -1,6 +1,6 @@
 # Privacy
 
-This page describes what the Scenario plugin for Adobe Photoshop and its local Scenario MCP server, `scenario-photoshop`, send and store. It applies to the first public release, 0.1.0. The plugin is a client of your own Scenario account: what Scenario does with what it receives is governed by Scenario's [Terms](https://www.scenario.com) and [Privacy Policy](https://www.scenario.com/privacy-policy), which this page does not replace.
+This page describes what the Scenario plugin for Adobe Photoshop and its local Scenario MCP server, `scenario-photoshop`, send and store. It applies to the first public release. The plugin is a client of your own Scenario account: what Scenario does with what it receives is governed by Scenario's [Terms](https://www.scenario.com) and [Privacy Policy](https://www.scenario.com/privacy-policy), which this page does not replace.
 
 Status: written against the v1 specification ([docs/spec/SPEC.md](docs/spec/SPEC.md)). It is checked against the released build before each release. It sits at the root of the repository so the panel's About link points to one short path.
 
@@ -19,7 +19,7 @@ Status: written against the v1 specification ([docs/spec/SPEC.md](docs/spec/SPEC
 
 Price checks never upload pixels from your documents. For models whose price depends on an image input, they use a blank stand-in image, which the plugin uploads to your project and hides in the Library like its other uploads. If the exact price after the upload differs from the one shown, nothing is spent and the plugin asks you again, but the upload has already happened. Uploaded images are stored by Scenario as assets of your project, like uploads made in the Scenario web app, and the members of that project can see them.
 
-Before sending, the plugin converts captured pixels to sRGB at 8 bits per channel. Your document's color profile is not sent. Uploads are named `photoshop-<purpose>-<date>-<short id>`.
+Before sending, the plugin converts captured pixels to sRGB at 8 bits per channel. Your document's color profile is not sent. Uploads are named `photoshop-<purpose>-<date>-<short id>`; the blank stand-ins used for price checks are named `photoshop-standin-<width>x<height>.png`.
 
 **Never sent to Scenario by the plugin:**
 - Your PSD file, or any layer or area that was not chosen as a source.
@@ -58,7 +58,7 @@ The UXP plugin can reach only the hosts declared in its manifest. The local serv
 | Downloaded results | The Output Folder: inside the plugin data folder by default, or the folder you chose | Delete the files; placed results are embedded in your documents and do not depend on them |
 | Copy of the job records | `<Output Folder>/.scenario/jobs/`, only when you chose an Output Folder. It holds prompts and document names, and travels with the folder if the folder is synced or shared | Delete the folder |
 | Logs | The plugin data folder, `logs/`: kept 7 days, at most 5 MB. Keys, secrets, tokens and request and response bodies are never written | Delete the folder |
-| Model list cache, settings, agent activity log | The plugin data folder | Delete the folder |
+| Model list cache, favorite models, the asset ids of the blank stand-ins uploaded for price checks, settings, agent activity log | The plugin data folder | Delete the folder |
 | Provenance in your documents | Metadata on each result layer: model, prompt, settings, asset and job ids, prices, date, and who started it. Layer names include the first words of the prompt | Delete the layer. For future results, Settings > Results > **Leave prompts out of documents** removes the prompt, every free-text setting and the prompt words in layer names; **Leave prices out of documents** removes the prices |
 
 Signed download and upload links are kept in memory only, never on disk.

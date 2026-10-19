@@ -7,7 +7,7 @@ const catalog = require("../../shared/catalog.json");
 const P = require("../../shared/protocol.json");
 const { LinkManager } = require("./link/manager.js");
 const { McpServer } = require("./mcp.js");
-const { createTools, STATUS_TIMEOUT_MS } = require("./tools.js");
+const { createTools, STATUS_TIMEOUT_MS, RELAY_TIMEOUTS_MS } = require("./tools.js");
 const { runSetup } = require("./setup.js");
 const tokenFile = require("./token-file.js");
 
@@ -45,7 +45,12 @@ async function serve({ env, stdin, stdout, stderr }) {
     handlers: createTools({ manager, version: VERSION, noSpend }),
     version: VERSION,
     log,
-    timeouts: { scenario_status: STATUS_TIMEOUT_MS + 2000 },
+    timeouts: {
+      scenario_status: STATUS_TIMEOUT_MS + 2000,
+      list_models: RELAY_TIMEOUTS_MS.list_models + 2000,
+      model_schema: RELAY_TIMEOUTS_MS.model_schema + 2000,
+      estimate_cost: RELAY_TIMEOUTS_MS.estimate_cost + 2000
+    },
     onInitialize: (name) => manager.setClientName(name)
   });
   log(`${VERSION} starting${noSpend ? " (no-spend)" : ""}`);

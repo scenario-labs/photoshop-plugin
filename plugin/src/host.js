@@ -106,6 +106,26 @@ function createHost(hostRequire, g) {
       var d = ps.app.activeDocument;
       return d ? d.id : null;
     },
+    // Width and height in pixels of an open document (the active one when
+    // id is null), or null. Read only: no modal state, no document change.
+    documentSize: function (id) {
+      try {
+        if (!ps || !ps.app) return null;
+        var d = null;
+        if (id === null || id === undefined) d = ps.app.activeDocument;
+        else {
+          var docs = ps.app.documents || [];
+          for (var i = 0; i < docs.length; i++) if (docs[i].id === id) d = docs[i];
+        }
+        if (!d) return null;
+        var w = Number(d.width);
+        var h = Number(d.height);
+        if (!(w > 0 && h > 0)) return null;
+        return { id: d.id, width: Math.round(w), height: Math.round(h) };
+      } catch (e) {
+        return null;
+      }
+    },
 
     readDataText: async function (name) {
       if (!fs) return null;

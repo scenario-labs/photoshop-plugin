@@ -11,15 +11,20 @@
 // - Reads (GET) retry on 429 and on 502 to 504; nothing else is retried.
 // - Request and response bodies are never logged.
 //
-// Seams for M2 after the M2.0 measurements: the catalog, model schemas, dry
-// runs (price checks), runs, jobs, assets and uploads are built on request()
-// in their own modules. Paid requests pass `paid: true`: no retry, 60 s
-// timeout (SPEC 6.1).
+// - Generation: this build sends no paid request. Every POST to /generate
+//   must be a price check: `priceCheck: true` and the frozen dry-run query
+//   object of scenario/dry-run.js itself (compared by identity, so no other
+//   flag value can be sent). Anything else is refused before it leaves.
+//
+// The catalog, model schemas, price checks and asset uploads are built on
+// request() in their own modules. Paid requests (next build) pass `paid:
+// true`: no retry, 60 s timeout (SPEC 6.1).
 
 var API = require("../../../shared/scenario-api.json");
 var errorsMod = require("./errors.js");
 var utf8 = require("../util/utf8.js");
 var b64 = require("../util/base64url.js");
+var priceChecks = require("./dry-run.js");
 
 var PAID_TIMEOUT_MS = 60000;
 
@@ -136,11 +141,20 @@ function createClient(opts) {
     );
   }
 
+  // SPEC 6.1 item 1: the only request to /generate this build sends is a
+  // price check with the constant from dry-run.js.
+  function guardGenerate(method, path, o) {
+    if (!/^\/generate(\/|$)/.test(path)) return;
+    if (method === "POST" && o.priceCheck === true && o.query === priceChecks.DRY_RUN_QUERY && !o.paid) return;
+    throw new errorsMod.ScenarioError("Internal", "Generation is not available in this build; only price checks are sent.");
+  }
+
   // o: { query, body, credentials (overrides the saved pair, for Save and
-  //      test), retries, timeoutMs, paid, onWait(seconds, error) }
+  //      test), retries, timeoutMs, paid, priceCheck, onWait(seconds, error) }
   // Resolves { status, body }; rejects with a ScenarioError.
   async function request(method, path, o) {
     o = o || {};
+    guardGenerate(method, String(path), o);
     if (typeof fetchFn !== "function") throw new errorsMod.ScenarioError("Internal", "This Photoshop offers no fetch.");
     var pair = o.credentials || (opts.credentials ? opts.credentials() : null);
     if (!pair || !pair.key || !pair.secret) throw new errorsMod.ScenarioError("NotSignedIn", "No Scenario key is saved in the plugin.");

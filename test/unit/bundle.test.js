@@ -18,6 +18,7 @@ const hp = require("../../helper/src/link/crypto.js");
 const P = require("../../shared/protocol.json");
 const { freePort, newToken, waitFor, sleep } = require("../helpers/fakes.js");
 const { runBundle } = require("../helpers/uxp-sim.js");
+const manifest = require("../../plugin/manifest.json");
 
 const release = bundle({ dev: false });
 const dev = bundle({ dev: true });
@@ -56,7 +57,7 @@ test("the release bundle boots in a fake UXP, links to a real owner and answers 
   assert.equal(ps.entrypoints.length, 1, "entrypoints set up during the first synchronous run");
   assert.ok(ps.entrypoints[0].panels.scenarioPanel);
   await waitFor(() => o.pluginInfo(), { label: "plugin linked" });
-  assert.equal(o.pluginInfo().plugin_version, "0.1.0");
+  assert.equal(o.pluginInfo().plugin_version, manifest.version);
   assert.equal(o.pluginInfo().os, "darwin 25.5.0");
   o.setOwnClientName("Claude Code");
   const r = await o.callOwn("scenario_status", {});
@@ -71,7 +72,7 @@ test("the release bundle boots in a fake UXP, links to a real owner and answers 
   await waitFor(() => ps.doc.text("link-headline").startsWith("Connected"), { label: "panel shows the link" });
   assert.equal(ps.doc.els.get("link-dot").className, "dot on");
   assert.equal(ps.doc.text("token-value"), `Ending in ${token.slice(-4)}`);
-  assert.match(ps.doc.text("version"), /^Scenario for Photoshop 0\.1\.0/);
+  assert.ok(ps.doc.text("version").startsWith(`Scenario for Photoshop ${manifest.version}`));
   assert.equal(ps.doc.text("lane-title"), "Image");
   ps.doc.lanes[3].click();
   assert.equal(ps.doc.text("lane-title"), "Trained");
@@ -79,7 +80,7 @@ test("the release bundle boots in a fake UXP, links to a real owner and answers 
   assert.equal(ps.doc.lanes[0].getAttribute("selected"), null);
   await sleep(400);
   const log = ps.files.get("scenario-link.log") || "";
-  assert.match(log, /plugin 0\.1\.0 \(release\) starting; random source: getRandomValues/);
+  assert.ok(log.includes(`plugin ${manifest.version} (release) starting; random source: getRandomValues`));
   assert.ok(!log.includes(token) && !ps.logs.join("\n").includes(token), "the token is never logged");
   assert.ok(!log.includes("cover.psd"), "document titles are never logged");
 });
@@ -166,7 +167,7 @@ test(".ccx package: a valid stored zip with the five plugin files, same bytes on
   const b = packagePlugin({ dev: false, outDir: path.join(dir, "b"), distFile: path.join(dir, "b", "main.js") });
   const buf = fs.readFileSync(a.file);
   assert.ok(buf.equals(fs.readFileSync(b.file)), "reproducible");
-  assert.equal(path.basename(a.file), "scenario-photoshop-0.1.0.ccx");
+  assert.equal(path.basename(a.file), `scenario-photoshop-${manifest.version}.ccx`);
 
   const names = [];
   let off = 0;
@@ -197,5 +198,5 @@ test(".ccx package: a valid stored zip with the five plugin files, same bytes on
   if (!unzip.error) assert.equal(unzip.status, 0, unzip.stdout + unzip.stderr);
 
   const d = packagePlugin({ dev: true, outDir: path.join(dir, "d"), distFile: path.join(dir, "d", "main.js") });
-  assert.equal(path.basename(d.file), "scenario-photoshop-0.1.0-dev.ccx");
+  assert.equal(path.basename(d.file), `scenario-photoshop-${manifest.version}-dev.ccx`);
 });

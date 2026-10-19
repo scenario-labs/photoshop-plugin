@@ -92,15 +92,17 @@ test("initialize negotiates the protocol version and passes the client name on",
   assert.equal((await h.next()).result.protocolVersion, "2025-11-25", "unknown versions get the newest supported one");
 });
 
-test("tools/list offers only scenario_status, read-only, within the size caps", async () => {
+test("tools/list offers the four tools of this build, within the size caps", async () => {
   const h = harness();
   h.send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } });
   await h.next();
   h.send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
   const r = await h.next();
   const tools = r.result.tools;
-  assert.deepEqual(tools.map((x) => x.name), ["scenario_status"]);
+  assert.deepEqual(tools.map((x) => x.name), ["scenario_status", "list_models", "model_schema", "estimate_cost"]);
   assert.equal(tools[0].annotations.readOnlyHint, true);
+  for (const name of ["list_models", "model_schema"]) assert.equal(tools.find((x) => x.name === name).annotations.readOnlyHint, true, name);
+  assert.equal(tools.find((x) => x.name === "estimate_cost").annotations.readOnlyHint, false, "estimate_cost may upload a blank stand-in");
   assert.equal(tools[0].annotations.destructiveHint, false);
   assert.ok(tools[0].outputSchema, "outputSchema from 2025-06-18 on");
   assert.equal(tools[0].release, undefined, "catalog-only fields are not sent");

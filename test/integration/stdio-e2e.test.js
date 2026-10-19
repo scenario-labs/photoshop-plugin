@@ -42,7 +42,7 @@ test("one client, no Photoshop: initialize, tools/list, and a status that says w
   const init = await h.initialize("e2e-client");
   assert.equal(init.result.serverInfo.name, "scenario-photoshop");
   const list = await h.request("tools/list", {});
-  assert.deepEqual(list.result.tools.map((x) => x.name), ["scenario_status"]);
+  assert.deepEqual(list.result.tools.map((x) => x.name), ["scenario_status", "list_models", "model_schema", "estimate_cost"]);
   const s = await h.status();
   assert.equal(s.connected, false);
   assert.equal(s.helper_role, "owner");
@@ -62,7 +62,7 @@ test("one client and the plugin: scenario_status from the fake Photoshop, client
   await h.initialize("e2e-client");
   const s = await statusUntil(h, (x) => x.connected, "connected");
   assert.equal(s.photoshop_version, "27.11.0");
-  assert.equal(s.helper_version, "0.1.0");
+  assert.equal(s.helper_version, require("../../helper/package.json").version);
   assert.equal(s.no_spend, true, "SCENARIO_NO_SPEND reaches the status");
   assert.equal(s.uncertain_jobs, 0);
   assert.deepEqual(s.open_documents, [
@@ -94,7 +94,7 @@ test("two clients: the second helper relays as a peer; when the first exits, the
   const exit = await a.close();
   assert.equal(exit.code, 0, "the helper exits cleanly when its client closes stdin");
   const after = await statusUntil(b, (x) => x.connected && x.helper_role === "owner", "b took the port and the plugin relinked", 10000);
-  assert.equal(after.plugin_version, "0.1.0");
+  assert.equal(after.plugin_version, require("../../plugin/manifest.json").version);
   assert.deepEqual(
     plugin.link.state().clients.map((c) => c.client_name),
     ["client-b"]
@@ -150,4 +150,54 @@ test("setup writes the token file; a helper started without the variable pairs f
   await h.initialize("from-file");
   const s = await statusUntil(h, (x) => x.connected, "paired from the token file");
   assert.equal(s.helper_role, "owner");
+});
+
+test("the catalog tools through a real helper: list_models, model_schema and estimate_cost answer from the plugin, valid against the catalog", async (t) => {
+  const main = require("../../plugin/src/main.js");
+  const { createFakeDocument } = require("../helpers/fake-dom.js");
+  const { startFixtureScenario } = require("../helpers/fixture-scenario.js");
+  const { newKeyPair, projectRecord } = require("../helpers/mock-scenario.js");
+  const { fakeHost, uxpWebSocket } = require("../helpers/fakes.js");
+  const pair = newKeyPair();
+  const mock = await startFixtureScenario({ accounts: [{ ...pair, projects: [projectRecord(pair.key, { name: "E2E project" })] }] });
+  const port = await freePort();
+  const token = newToken();
+  const host = fakeHost({ WebSocket: uxpWebSocket({ rewrite: (u) => u.replace(":9890", `:${port}`) }), secure: [["scenario.pairing_token", token]] });
+  const doc = createFakeDocument();
+  const app = await main.boot({ host, document: doc, console: null, apiBaseUrl: mock.url });
+  const h = spawnHelper({ env: helperEnv(port, token, { SCENARIO_NO_SPEND: "1" }) });
+  t.after(async () => {
+    app.link.stop();
+    await h.close();
+    await mock.close();
+  });
+  doc.paste("signin-key", `${pair.key}:${pair.secret}`);
+  doc.byId("signin-save").click();
+  await waitFor(() => doc.shown("view-main"), { label: "signed in" });
+  await h.initialize("e2e-client");
+  await statusUntil(h, (x) => x.connected && x.signed_in, "connected and signed in");
+  const tools = Object.fromEntries(catalog.tools.map((x) => [x.name, x]));
+  async function call(name, args) {
+    const r = await h.request("tools/call", { name, arguments: args });
+    assert.equal(r.error, undefined, JSON.stringify(r.error));
+    assert.notEqual(r.result.isError, true, JSON.stringify(r.result));
+    const out = r.result.structuredContent;
+    assert.deepEqual(schema.validate(tools[name].outputSchema, out), [], `${name} output matches its schema`);
+    return out;
+  }
+  const listed = await call("list_models", { lane: "upscale", limit: 3 });
+  assert.equal(listed.models.length, 3);
+  assert.equal(listed.models[0].model_id, "model_topaz-image-upscale");
+  assert.match(listed.next_cursor, /^o3$/);
+  const s = await call("model_schema", { model_id: "model_openai-gpt-image-2-5-flare" });
+  assert.equal(s.model_id, "model_openai-gpt-image-2-5-flare");
+  const q = await call("estimate_cost", { model_id: "model_openai-gpt-image-2-5-flare", lane: "image", parameters: { prompt: "a lighthouse", quality: "low", width: 1024, height: 1024 }, takes: 1, new_document: { width: 1024, height: 1024 } });
+  assert.equal(q.cu_cost_exact, "2");
+  assert.equal(q.price_kind, "exact");
+  const bad = await h.request("tools/call", { name: "estimate_cost", arguments: { model_id: "model_openai-gpt-image-2-5-flare", lane: "image", parameters: { quality: "low" } } });
+  assert.equal(bad.result.isError, true);
+  assert.match(bad.result.content[0].text, /InvalidParameter/);
+  assert.match(bad.result.content[0].text, /Prompt is required/);
+  for (const r of mock.requests.filter((x) => x.path.startsWith("/v1/generate"))) assert.equal(r.search, "?dryRun=true");
+  assert.deepEqual(mock.violations, []);
 });

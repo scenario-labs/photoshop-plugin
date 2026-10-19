@@ -21,6 +21,12 @@ var accountsMod = require("./auth/accounts.js");
 var authMod = require("./auth/auth.js");
 var clientMod = require("./scenario/client.js");
 var diagnosticsMod = require("./diagnostics.js");
+var catalogMod = require("./catalog/catalog.js");
+var assetsMod = require("./scenario/assets.js");
+var quotesMod = require("./forms/quotes.js");
+var catalogToolsMod = require("./bridge/catalog-tools.js");
+var lanesMod = require("./ui/lanes.js");
+var pickerMod = require("./ui/picker.js");
 var API = require("../../shared/scenario-api.json");
 
 var VERSION = manifest.version;
@@ -80,10 +86,15 @@ function boot(env) {
     baseUrl: env.apiBaseUrl
   });
   var auth = authMod.createAuth({ client: client, accounts: accounts, redactor: redactor, log: logger.log, recordError: errors.record });
+  var catalog = catalogMod.createCatalog({ client: client, host: host, account: accounts.current, now: host.timers.now, log: logger.log });
+  var standIns = assetsMod.createStandIns({ client: client, host: host, account: accounts.current, log: logger.log });
   var panel = null;
   var accountPanel = null;
+  var lanes = null;
+  var picker = null;
   var link = null;
   var diagnostics = null;
+  var quotes = null;
 
   // UXP wants entrypoints declared during the first synchronous run.
   host.setupEntrypoints({
@@ -91,6 +102,8 @@ function boot(env) {
       scenarioPanel: {
         show: function () {
           if (panel) panel.refresh();
+          // Price checks start when the panel is first shown, never at launch.
+          if (lanes) lanes.activate();
         }
       }
     }
@@ -104,6 +117,19 @@ function boot(env) {
   }
   logger.log("plugin " + VERSION + " (" + flags.BUILD + ") starting; random source: " + (random ? random.source : "none"));
   var pairing = random ? pairingMod.createPairing(host, random) : null;
+  quotes = quotesMod.createQuotes({
+    client: client,
+    catalog: catalog,
+    standIns: standIns,
+    account: accounts.current,
+    random: random,
+    now: host.timers.now,
+    log: logger.log,
+    onAlarm: function () {
+      errors.record("DryRunCreatedJob");
+    }
+  });
+  var catalogTools = catalogToolsMod.createCatalogTools({ catalog: catalog, quotes: quotes, host: host, settings: settings });
 
   var ready = (async function () {
     if (pairing && flags.DEV) {
@@ -139,7 +165,12 @@ function boot(env) {
       },
       catalogHash: catalogHash(),
       switches: settings.switches,
-      handlers: { scenario_status: statusMod.createStatusHandler(host, settings, VERSION, auth) },
+      handlers: {
+        scenario_status: statusMod.createStatusHandler(host, settings, VERSION, auth),
+        list_models: catalogTools.list_models,
+        model_schema: catalogTools.model_schema,
+        estimate_cost: catalogTools.estimate_cost
+      },
       timers: host.timers,
       log: logger.log,
       onState: function (s) {
@@ -173,9 +204,37 @@ function boot(env) {
         await pairing.reset();
         logger.log("pairing token reset");
         link.restart("Pairing token reset. Agent clients need the new token.");
+      },
+      onLane: function (id) {
+        if (!lanes) return;
+        lanes.select(id);
+        lanes.activate();
       }
     };
     panel = panelMod.createPanel(env.document, panelActions, VERSION);
+    picker = pickerMod.createPicker(env.document, {
+      catalog: catalog,
+      host: host,
+      log: logger.log,
+      onChoose: function (row) {
+        var lane = lanes ? lanes.choose(row) : null;
+        if (lane && panel) panel.selectLane(lane);
+      },
+      onClose: function () {
+        if (lanes) lanes.restore();
+      }
+    });
+    lanes = lanesMod.createLanes(env.document, {
+      catalog: catalog,
+      quotes: quotes,
+      host: host,
+      account: accounts.current,
+      timers: host.timers,
+      log: logger.log,
+      openPicker: function (tab, tool) {
+        if (picker) picker.open(tab, tool);
+      }
+    });
     diagnostics = diagnosticsMod.createDiagnostics({ version: VERSION, build: flags.BUILD, host: host, settings: settings, auth: auth, link: link, errors: errors });
     accountPanel = accountPanelMod.createAccountPanel(env.document, {
       auth: auth,
@@ -193,6 +252,7 @@ function boot(env) {
     });
     accounts.onChange(function () {
       if (accountPanel) accountPanel.refresh();
+      if (lanes) lanes.refresh();
     });
 
     link.start();
@@ -207,6 +267,12 @@ function boot(env) {
       auth: auth,
       accounts: accounts,
       client: client,
+      catalog: catalog,
+      quotes: quotes,
+      standIns: standIns,
+      lanes: lanes,
+      picker: picker,
+      catalogTools: catalogTools,
       accountPanel: accountPanel,
       diagnostics: diagnostics,
       errors: errors,

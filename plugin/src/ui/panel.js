@@ -1,11 +1,12 @@
 "use strict";
-// The panel shell: header, lane tabs (placeholders in this build), and the
+// The panel shell: header, lane tabs (their bodies are ui/lanes.js), and the
 // agent link status with the pairing token. Uses Spectrum UXP widgets from
 // index.html; this file only binds them. No overlays, no animation.
 
 var view = require("./view.js");
 
-// doc: the panel's document. actions: { copyToken(), resetToken(), token() }.
+// doc: the panel's document. actions: { copyToken(), resetToken(), token(),
+// onLane(id) (optional: a lane tab was chosen) }.
 function createPanel(doc, actions, version) {
   if (!doc || typeof doc.getElementById !== "function") return null;
   var byId = function (id) {
@@ -32,7 +33,9 @@ function createPanel(doc, actions, version) {
     }
     setText("lane-title", lane.label);
     setText("lane-purpose", lane.purpose);
-    setText("lane-note", view.NOT_BUILT);
+    // The lane bodies (ui/lanes.js) fill the rest; without them, a placeholder.
+    if (actions.onLane) actions.onLane(id);
+    else setText("lane-note", view.NOT_BUILT);
   }
 
   function renderToken() {
@@ -128,6 +131,7 @@ function createPanel(doc, actions, version) {
   return {
     renderLink: renderLink,
     renderToken: renderToken,
+    selectLane: selectLane,
     refresh: function () {
       renderToken();
       if (lastLink) renderLink(lastLink);

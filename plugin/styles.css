@@ -98,6 +98,36 @@ body {
   border-bottom: 1px solid var(--uxp-host-border-color);
 }
 
+.card {
+  padding: 4px 8px;
+  margin: 8px 0;
+  border: 1px solid var(--uxp-host-border-color);
+}
+
+.grow {
+  flex: 1;
+}
+
+.push {
+  margin-left: auto;
+}
+
+.label {
+  min-width: 56px;
+  margin-right: 8px;
+  align-self: center;
+}
+
+.prompt-bar {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--uxp-host-border-color);
+}
+
+.model-row {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--uxp-host-border-color);
+}
+
 .agents {
   padding: 8px 0;
 }

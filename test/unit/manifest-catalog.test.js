@@ -95,12 +95,14 @@ test("panel page: local resources only, one script at the end of the body", () =
   assert.ok(!/@keyframes|animation\s*:/.test(css), "no animation");
 });
 
-test("catalog: one read-only tool in this build, with schemas the server can serve", () => {
+test("catalog: the four tools of this build, with schemas the server can serve", () => {
   assert.equal(typeof catalog.catalog_version, "string");
   assert.equal(catalog.server.name, "scenario-photoshop");
-  assert.deepEqual(catalog.tools.map((t) => t.name), ["scenario_status"]);
+  assert.deepEqual(catalog.tools.map((t) => t.name), ["scenario_status", "list_models", "model_schema", "estimate_cost"]);
+  // Every tool name of this build is one MCP.md section 4 defines.
+  for (const tool of catalog.tools) assert.ok(MCP_MD.includes("| `" + tool.name + "` |"), `${tool.name} is in MCP.md`);
   for (const tool of catalog.tools) {
-    assert.match(tool.name, /^scenario_[a-z_]+$/);
+    assert.match(tool.name, /^[a-z][a-z_]+$/);
     assert.ok(tool.title && tool.description);
     assert.ok(tool.description.length <= 2500);
     assert.equal(tool.inputSchema.type, "object");

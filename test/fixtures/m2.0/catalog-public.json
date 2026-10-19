@@ -1,0 +1,1083 @@
+{
+ "models": [
+  {
+   "id": "model_openai-gpt-image-2-5-flare",
+   "name": "GPT Image 2.5 Flare",
+   "shortDescription": "OpenAI GPT Image 2.5 Flare: fast, high-quality text-to-image generation and editing for everyday content, from social posts to product shots and quick creative concepts.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img"
+   ],
+   "tags": [
+    "Character Design",
+    "GPT-Image",
+    "Image to Image",
+    "OpenAI",
+    "Product Photography",
+    "Text Rendering",
+    "Text to Image",
+    "editing",
+    "sc:featured",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2026-09-09T10:01:30.954Z",
+   "source": "other"
+  },
+  {
+   "id": "model_topaz-image-upscale",
+   "name": "Topaz Image Upscale",
+   "shortDescription": "Topaz Image Upscale by Topaz Labs enlarges photos up to 6x with five specialized enhancement modes, subject detection, and face enhancement controls.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Enhance",
+    "Topaz Labs",
+    "image-upscale",
+    "photography",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2025-08-12T14:31:35.348Z",
+   "source": "other"
+  },
+  {
+   "id": "model_851-labs-background-remover",
+   "name": "851 Labs Background Remover",
+   "shortDescription": "Cut out any subject in one click. Open-source InSPyReNet gives clean edges on hair, fur, and glass, output as a transparent PNG, white, green screen, or blurred background.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "851 Labs",
+    "Background Removal",
+    "Cutout",
+    "Green Screen",
+    "Product Photography",
+    "Transparent PNG",
+    "remove-background",
+    "tool"
+   ],
+   "status": "trained",
+   "createdAt": "2026-07-10T10:33:06.110Z",
+   "source": "other"
+  },
+  {
+   "id": "model_photoroom-expand",
+   "name": "Photoroom Expand",
+   "shortDescription": "Expand any image's background to a new canvas size with AI-generated fill. Original content stays intact, new areas blend seamlessly.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Photoroom",
+    "expand",
+    "image",
+    "reframe",
+    "sc:third-party",
+    "tool"
+   ],
+   "status": "trained",
+   "createdAt": "2025-12-18T12:34:04.925Z",
+   "source": "other"
+  },
+  {
+   "id": "model_bfl-flux-1-dev",
+   "name": "FLUX.1 Dev",
+   "shortDescription": "FLUX.1 Dev by Black Forest Labs. High-quality text-to-image and image-to-image with strong prompt adherence, ControlNet, and a top base for LoRA fine-tuning.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img",
+    "controlnet",
+    "outpaint"
+   ],
+   "tags": [
+    "Black Forest Labs",
+    "Flux",
+    "Image to Image",
+    "Text to Image",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2024-09-20T12:01:00.000Z",
+   "source": "other"
+  },
+  {
+   "id": "model_bfl-flux-1-schnell",
+   "name": "FLUX.1 Schnell",
+   "shortDescription": "FLUX.1 Schnell by Black Forest Labs. A fast, few-step text-to-image model delivering quality results in as few as 4 inference steps.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img"
+   ],
+   "tags": [
+    "Black Forest Labs",
+    "Flux",
+    "Image to Image",
+    "Text to Image",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2024-09-20T12:00:00.000Z",
+   "source": "other"
+  },
+  {
+   "id": "model_bfl-flux-2-dev",
+   "name": "FLUX 2 (Dev)",
+   "shortDescription": "FLUX 2 (Dev) by Black Forest Labs is an open-weight image model built for fine-tuning. Stack up to 6 LoRAs, add up to 5 reference images, and generate up to 2048x2048.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img"
+   ],
+   "tags": [
+    "BFL",
+    "Black Forest Labs",
+    "Flux",
+    "Image Editing",
+    "Image to Image",
+    "Text to Image",
+    "editing",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2025-11-25T17:57:36.871Z",
+   "source": "other"
+  },
+  {
+   "id": "model_bfl-flux-2-klein-9b",
+   "name": "FLUX.2 Klein 9b",
+   "shortDescription": "FLUX.2 Klein 9b by Black Forest Labs. Fast text-to-image and image editing with strong style coherence, multi-reference support, and LoRA compatibility.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img"
+   ],
+   "tags": [
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2026-03-04T09:19:56.954Z",
+   "source": "other"
+  },
+  {
+   "id": "model_bfl-flux-2-klein-9b-base",
+   "name": "Flux.2 [klein] 9B Base",
+   "shortDescription": "FLUX.2 [klein] 9B Base by Black Forest Labs. Undistilled 9B foundation model for text-to-image and image-to-image, built for LoRA fine-tuning and high output diversity.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img"
+   ],
+   "tags": [
+    "Black Forest Labs",
+    "Image to Image",
+    "Text to Image",
+    "Third Party",
+    "editing",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2025-11-04T14:33:53.938Z",
+   "source": "other"
+  },
+  {
+   "id": "model_bfl-flux-2-klein-4b",
+   "name": "Flux.2 [klein] 4B",
+   "shortDescription": "Flux.2 [klein] 4B by Black Forest Labs. A 4B-parameter model distilled for sub-second image generation and editing, with LoRA support.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img"
+   ],
+   "tags": [
+    "BFL",
+    "Black Forest Labs",
+    "Image to Image",
+    "Text To Image",
+    "Third Party",
+    "editing",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2025-11-04T14:33:55.938Z",
+   "source": "other"
+  },
+  {
+   "id": "model_bfl-flux-2-klein-4b-base",
+   "name": "Flux.2 [klein] 4B Base",
+   "shortDescription": "FLUX.2 [klein] 4B Base by Black Forest Labs. Compact, undistilled 4B image model built for LoRA compatibility, fine-tuning, and precise prompt control.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img"
+   ],
+   "tags": [
+    "Black Forest Labs",
+    "Image To Image",
+    "Text To Image",
+    "Third Party",
+    "editing",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2025-11-04T14:33:54.938Z",
+   "source": "other"
+  },
+  {
+   "id": "model_z-image",
+   "name": "Z-Image",
+   "shortDescription": "Z-Image by Alibaba Tongyi is a 6B open-source model for photorealistic image generation with best-in-class bilingual text rendering in English and Chinese.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img",
+    "controlnet"
+   ],
+   "tags": [
+    "Academia",
+    "Image to Image",
+    "Text to Image",
+    "sc:featured",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2026-03-04T10:04:25.824Z",
+   "source": "other"
+  },
+  {
+   "id": "model_z-image-turbo",
+   "name": "Z-Image Turbo",
+   "shortDescription": "Z-Image Turbo by Tongyi-MAI is a distilled open-source image model built for near-instant generation with strong photorealism and accurate text rendering in images.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img",
+    "controlnet"
+   ],
+   "tags": [
+    "Academia",
+    "Image to Image",
+    "Text to Image",
+    "sc:featured",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2025-11-28T15:48:20.069Z",
+   "source": "other"
+  },
+  {
+   "id": "model_qwen-image-edit-2511",
+   "name": "Qwen Edit 2511",
+   "shortDescription": "Qwen Edit 2511 by Alibaba edits images from plain text instructions. Add, remove, or restyle elements, with up to 6 LoRA styles and multi-reference image support.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Qwen",
+    "editing",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2026-03-04T09:43:27.317Z",
+   "source": "other"
+  },
+  {
+   "id": "model_flux-kontext-editing",
+   "name": "Flux Kontext",
+   "shortDescription": "Flux Kontext by Black Forest Labs. Edit images with text instructions, preserving characters and style across local or global edits. Supports up to 10 reference images.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Black Forest Labs",
+    "Flux",
+    "editing",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2025-11-05T14:37:11.459Z",
+   "source": "other"
+  },
+  {
+   "id": "model_google-gemini-3-1-flash",
+   "name": "Gemini 3.1 🍌",
+   "shortDescription": "Gemini 3.1 Flash Image by Google: fast image generation and editing with resolutions from 512 to 4K, adjustable thinking depth, and optional Search grounding.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img",
+    "video2img"
+   ],
+   "tags": [
+    "editing",
+    "featured",
+    "sc:featured",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2026-02-26T21:06:25.121Z",
+   "source": "other"
+  },
+  {
+   "id": "model_bytedance-seedream-5-0-pro",
+   "name": "Seedream 5.0 Pro",
+   "shortDescription": "Prompt in, finished art out: posters, packaging, and key art with flawless text, even non-Latin scripts. Generate and edit with up to 10 references at 3136px.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img"
+   ],
+   "tags": [
+    "bytedance",
+    "editing",
+    "sc:featured",
+    "sc:third-party",
+    "seedream"
+   ],
+   "status": "trained",
+   "createdAt": "2026-07-08T13:50:15.486Z",
+   "source": "other"
+  },
+  {
+   "id": "model_xai-grok-imagine-image-2-0",
+   "name": "Grok Imagine Image 2.0",
+   "shortDescription": "xAI's Grok Imagine Image 2.0: text-to-image and multi-reference editing at 2K. Ranked #2 for image gen/editing, with legible typography and aspect ratios up to 21:9 and 5:2.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img"
+   ],
+   "tags": [
+    "2K",
+    "Grok",
+    "X",
+    "editing",
+    "photorealism",
+    "sc:featured",
+    "sc:third-party",
+    "text-to-image",
+    "typography",
+    "xAI"
+   ],
+   "status": "trained",
+   "createdAt": "2026-08-12T08:39:57.025Z",
+   "disableRefund": true,
+   "source": "other"
+  },
+  {
+   "id": "model_bytedance-seedream-5-0-pro-layerize",
+   "name": "Seedream 5.0 Pro Layerize",
+   "shortDescription": "Seedream 5.0 Pro Layerize by ByteDance splits a finished image into up to 17 layers: a clean base plus transparent PNG cutouts, with the background rebuilt behind what it lifts.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Layer Extraction",
+    "Layers",
+    "bytedance",
+    "editing",
+    "sc:featured",
+    "sc:third-party",
+    "seedream",
+    "tool"
+   ],
+   "status": "trained",
+   "createdAt": "2026-08-07T11:38:40.599Z",
+   "source": "other"
+  },
+  {
+   "id": "model_pruna-p-image-ideogram",
+   "name": "P-Image Ideogram",
+   "shortDescription": "Text-to-image with Ideogram-grade in-image text rendering, tuned by Pruna. Adjustable Thinking effort, 1K or 2K output, and eight aspect ratios for posters, logos, and packaging.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img"
+   ],
+   "tags": [
+    "Ideogram",
+    "Pruna",
+    "sc:featured",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2026-07-23T15:43:59.834Z",
+   "source": "other"
+  },
+  {
+   "id": "model_ideogram-v4-5",
+   "name": "Ideogram 4.5",
+   "shortDescription": "Generate posters, logos and packaging with accurate in-image text up to 2K, or edit an image with up to four references and an optional mask. Four quality tiers.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img"
+   ],
+   "tags": [
+    "Ideogram",
+    "editing",
+    "sc:featured",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2026-09-28T08:48:05.961Z",
+   "source": "other"
+  },
+  {
+   "id": "model_qwen-image",
+   "name": "Qwen Image",
+   "shortDescription": "Qwen Image by Alibaba is a text-to-image and image-to-image model with strong text rendering and broad artistic style support. Up to 2048x2048.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img"
+   ],
+   "tags": [
+    "Alibaba",
+    "Deprecated",
+    "Qwen",
+    "Text rendering",
+    "Text to Image",
+    "deprecated:model_alibaba-qwen-image-3-0",
+    "sc:legacy",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2025-08-07T16:31:06.438Z",
+   "source": "other"
+  },
+  {
+   "id": "model_bfl-flux-1-1-pro",
+   "name": "FLUX 1.1 (Pro)",
+   "shortDescription": "FLUX 1.1 (Pro) by Black Forest Labs is a fast text-to-image model that tops prompt-adherence and aesthetics benchmarks, generating photorealistic images in seconds.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img"
+   ],
+   "tags": [
+    "Black Forest Labs",
+    "Deprecated",
+    "Flux",
+    "Flux Pro 1.1",
+    "deprecated:model_bfl-flux-2-pro-editing",
+    "sc:legacy",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2025-12-08T12:38:50.248Z",
+   "source": "other"
+  },
+  {
+   "id": "model_bytedance-seedance-2-5",
+   "name": "Seedance 2.5",
+   "shortDescription": "ByteDance's multimodal video model: text-to-video, first/last frame, reference-to-video, editing and extension. 4 to 30 seconds, 480p to 1080p, with native audio.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2video",
+    "img2video",
+    "video2video"
+   ],
+   "tags": [
+    "Bytedance",
+    "Image to Video",
+    "Multimodal",
+    "Native Audio",
+    "Reference to Video",
+    "Seedance",
+    "Text to Video",
+    "Video",
+    "Video Editing",
+    "Video Extension",
+    "sc:featured",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2026-08-07T07:33:40.891Z",
+   "source": "other"
+  },
+  {
+   "id": "model_tripo-v3-1-image-to-3d",
+   "name": "Tripo 3.1",
+   "shortDescription": "Tripo 3.1 by Tripo AI converts a single image into a textured, game-ready 3D asset with PBR materials, adjustable geometry density, and quad mesh output.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img23d"
+   ],
+   "tags": [
+    "High Quality Textures",
+    "Image to 3D",
+    "Low Poly",
+    "PBR",
+    "Tripo",
+    "sc:featured",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2026-03-04T11:22:21.361Z",
+   "source": "other"
+  },
+  {
+   "id": "model_lyria-3-5",
+   "name": "Google Lyria 3.5",
+   "shortDescription": "Generate full songs with sung vocals and your own lyrics. Set the length in the prompt, script sections with timestamps, and add up to 10 reference images. MP3 output.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "txt2audio"
+   ],
+   "tags": [
+    "Audio",
+    "Google",
+    "Image to Music",
+    "Instrumental",
+    "Lyria",
+    "Lyrics",
+    "Song Generation",
+    "Structure Tags",
+    "Text to Music",
+    "Timestamps",
+    "Vocals",
+    "featured",
+    "music",
+    "sc:featured",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2026-10-05T09:14:38.796Z",
+   "source": "other"
+  },
+  {
+   "id": "model_JJ54CEwcWD5upeaCuLD83Ddh",
+   "name": "3D Platformer Environments 2.0",
+   "shortDescription": "A Flux 2 LoRA for 3D low-poly environments suited to platformers and adventure games, with geometric shapes, vibrant colors, and soft lighting.",
+   "type": "flux.2-dev-lora",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img"
+   ],
+   "tags": [
+    "Flux 2",
+    "Flux.2 LoRA",
+    "Low Poly Style"
+   ],
+   "status": "trained",
+   "createdAt": "2026-03-11T14:34:29.338Z",
+   "concepts": [
+    {
+     "modelId": "model_JJ54CEwcWD5upeaCuLD83Ddh",
+     "scale": 0.8
+    }
+   ],
+   "source": "scenario"
+  },
+  {
+   "id": "model_MYqiLuoTmgR2F1hzXPX3BBgY",
+   "name": "Sleek 3D Characters",
+   "shortDescription": "Flux.1 LoRA for polished, stylized 3D character art. Generates warriors, robots, and wizards with expressive faces and detailed outfits.",
+   "type": "flux.1-composition",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img",
+    "img2img_texture",
+    "txt2img_texture",
+    "controlnet",
+    "controlnet_texture",
+    "controlnet_img2img",
+    "controlnet_inpaint",
+    "inpaint",
+    "outpaint",
+    "txt2img_ip_adapter",
+    "img2img_ip_adapter",
+    "controlnet_ip_adapter"
+   ],
+   "tags": [
+    "3d",
+    "Flux.1 LoRA",
+    "cartoon",
+    "characters",
+    "sc:scenario",
+    "stylized"
+   ],
+   "status": "trained",
+   "createdAt": "2025-03-13T11:34:15.780Z",
+   "compliantModelIds": [
+    "flux.1-dev",
+    "flux.1-schnell"
+   ],
+   "concepts": [
+    {
+     "modelId": "model_MvBSFmTxgqq4R7UJDPBnQ1ZS",
+     "scale": 0.8
+    },
+    {
+     "modelId": "model_jSopiuVBC9oNFJu2hszHZRfT",
+     "scale": 0.8
+    }
+   ],
+   "source": "scenario"
+  },
+  {
+   "id": "model_sc-upscale-flux",
+   "name": "Scenario Flux Upscale",
+   "shortDescription": "Upscale images 2x to 8x with FLUX. Choose between precise, balanced, or creative presets to preserve structure or add imaginative detail.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Enhance",
+    "Flux",
+    "Image Upscale",
+    "Upscale",
+    "image-upscale",
+    "sc:scenario",
+    "tool"
+   ],
+   "status": "trained",
+   "createdAt": "2025-08-12T14:35:35.348Z",
+   "source": "other"
+  },
+  {
+   "id": "model_recraft-crisp-upscale",
+   "name": "Recraft Crisp Upscale",
+   "shortDescription": "Recraft Crisp Upscale by Recraft AI sharpens and enlarges images, recovering detail and removing compression artifacts for clean, web or print-ready results.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Recraft",
+    "image-upscale",
+    "sc:third-party"
+   ],
+   "status": "trained",
+   "createdAt": "2025-07-10T12:59:34.332Z",
+   "source": "other"
+  },
+  {
+   "id": "model_p-image-upscale",
+   "name": "P-Image Upscale",
+   "shortDescription": "P-Image Upscale by Pruna AI. Fast upscaling up to 8 MP via target megapixel or side-factor mode, with optional detail and realism enhancement.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Enhance",
+    "Pruna",
+    "image-upscale",
+    "sc:third-party",
+    "tool"
+   ],
+   "status": "trained",
+   "createdAt": "2026-04-03T14:47:30.352Z",
+   "source": "other"
+  },
+  {
+   "id": "model_photoroom-background-removal",
+   "name": "Photoroom Background Removal",
+   "shortDescription": "Photoroom Background Removal by Photoroom. Clean, precise subject cutouts from any photo, with optional shadow effects and HD mode for high-resolution images.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Image",
+    "Photoroom",
+    "remove-background",
+    "sc:third-party",
+    "sc:tool",
+    "tool",
+    "tools"
+   ],
+   "status": "trained",
+   "createdAt": "2025-12-18T12:33:49.959Z",
+   "source": "other"
+  },
+  {
+   "id": "model_pixelcut-video-background-removal",
+   "name": "Pixelcut Video Background Removal",
+   "shortDescription": "Pixelcut Video Background Removal by Pixelcut. Remove video backgrounds with flicker-free temporal consistency. No green screen needed.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "video2video"
+   ],
+   "tags": [
+    "Pixelcut",
+    "Video Background Removal",
+    "remove-background",
+    "sc:featured",
+    "sc:third-party",
+    "tool"
+   ],
+   "status": "trained",
+   "createdAt": "2026-06-12T11:52:44.674Z",
+   "source": "other"
+  },
+  {
+   "id": "model_scenario-gemini-reframe",
+   "name": "Reframe",
+   "shortDescription": "Reframe expands any image to a new aspect ratio or size, filling the added canvas with matching, coherent content generated from your original.",
+   "type": "custom",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Image",
+    "Outpaint",
+    "Post Processing",
+    "expand",
+    "reframe",
+    "sc:scenario",
+    "tool"
+   ],
+   "status": "trained",
+   "createdAt": "2025-11-27T10:02:25.135Z",
+   "source": "other"
+  },
+  {
+   "id": "model_YQrES2iPys22nYwh3YhVfMh8",
+   "name": "Neo3D Realism ",
+   "shortDescription": "A Flux.1 LoRA for 3D-style renders. Generates detailed figurines, props, game collectibles, and sculptures with realistic textures and lighting.",
+   "type": "flux.1-lora",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img",
+    "img2img_texture",
+    "txt2img_texture",
+    "controlnet",
+    "controlnet_texture",
+    "controlnet_img2img",
+    "controlnet_inpaint",
+    "inpaint",
+    "outpaint",
+    "txt2img_ip_adapter",
+    "img2img_ip_adapter",
+    "controlnet_ip_adapter"
+   ],
+   "tags": [
+    "3D",
+    "Flux.1 LoRA",
+    "sc:scenario"
+   ],
+   "status": "trained",
+   "createdAt": "2025-02-05T07:02:56.495Z",
+   "compliantModelIds": [
+    "flux.1-dev",
+    "flux.1-schnell"
+   ],
+   "concepts": [
+    {
+     "modelId": "model_YQrES2iPys22nYwh3YhVfMh8",
+     "scale": 0.8
+    }
+   ],
+   "source": "civitai"
+  },
+  {
+   "id": "model_XNM4XkZHCifSwJUE3JNs2Wnj",
+   "name": "Stage Dressing",
+   "shortDescription": "A Flux.1 LoRA for painterly fantasy environments: ancient ruins, stone arenas, and dramatic outdoor scenes with rich lighting and vibrant colors.",
+   "type": "flux.1-lora",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img",
+    "img2img_texture",
+    "txt2img_texture",
+    "controlnet",
+    "controlnet_texture",
+    "controlnet_img2img",
+    "controlnet_inpaint",
+    "inpaint",
+    "outpaint",
+    "txt2img_ip_adapter",
+    "img2img_ip_adapter",
+    "controlnet_ip_adapter"
+   ],
+   "tags": [
+    "Deacon",
+    "Digital Illustration & Painting",
+    "Environmental Design",
+    "Fantasy",
+    "Flux.1 LoRA",
+    "Stylized Art",
+    "sc:scenario"
+   ],
+   "status": "trained",
+   "createdAt": "2025-08-13T18:47:18.644Z",
+   "compliantModelIds": [
+    "flux.1-dev",
+    "flux.1-schnell"
+   ],
+   "concepts": [
+    {
+     "modelId": "model_XNM4XkZHCifSwJUE3JNs2Wnj",
+     "scale": 0.8
+    }
+   ],
+   "source": "scenario"
+  },
+  {
+   "id": "model_3EjKeTREL7CE4crBQ8BAAZXf",
+   "name": "Action Plastic 2.0",
+   "shortDescription": "A Flux.1 LoRA that renders characters in dynamic poses with a collectible action figure aesthetic. Bold colors, exaggerated features, clean backgrounds.",
+   "type": "flux.1-lora",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img",
+    "img2img_texture",
+    "txt2img_texture",
+    "controlnet",
+    "controlnet_texture",
+    "controlnet_img2img",
+    "controlnet_inpaint",
+    "inpaint",
+    "outpaint",
+    "txt2img_ip_adapter",
+    "img2img_ip_adapter",
+    "controlnet_ip_adapter"
+   ],
+   "tags": [
+    "3D",
+    "Characters",
+    "Deacon",
+    "Fantasy",
+    "Flux.1 LoRA",
+    "Stylized",
+    "sc:scenario"
+   ],
+   "status": "trained",
+   "createdAt": "2025-08-12T07:50:45.185Z",
+   "compliantModelIds": [
+    "flux.1-dev",
+    "flux.1-schnell"
+   ],
+   "concepts": [
+    {
+     "modelId": "model_3EjKeTREL7CE4crBQ8BAAZXf",
+     "scale": 0.8
+    }
+   ],
+   "source": "scenario"
+  },
+  {
+   "id": "model_hFh8M6nQbqGFSKJdP536GXhE",
+   "name": "Character Turnaround - Kontext",
+   "shortDescription": "Generate a four-view character turnaround sheet from any character image, showing every side on a clean background.",
+   "type": "flux.1-kontext-lora",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Flux Kontext LoRA",
+    "Image Editing",
+    "kontext",
+    "sc:scenario",
+    "signature"
+   ],
+   "status": "trained",
+   "createdAt": "2025-10-15T23:11:52.369Z",
+   "source": "scenario"
+  },
+  {
+   "id": "model_EEBngzDJAbd3e8DEq5MHkPeV",
+   "name": "Facial Expression Sheet - Kontext",
+   "shortDescription": "Turns a character image into a 9-emotion expression sheet, preserving their look and art style.",
+   "type": "flux.1-kontext-lora",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Flux Kontext LoRA",
+    "Kontext",
+    "Scenario",
+    "signature"
+   ],
+   "status": "trained",
+   "createdAt": "2025-10-22T14:07:57.336Z",
+   "source": "scenario"
+  },
+  {
+   "id": "model_CMUu7BjxV8TpdhG3FKoxZRxC",
+   "name": "Cartoon Costume Sets 2.0",
+   "shortDescription": "Flux.2 LoRA for stylized 3D costume sets. Renders outfit collections and equipment on invisible figures with detailed textures and studio lighting.",
+   "type": "flux.2-dev-lora",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img",
+    "img2img_texture",
+    "txt2img_texture",
+    "controlnet",
+    "controlnet_texture",
+    "controlnet_img2img",
+    "controlnet_inpaint",
+    "inpaint",
+    "outpaint",
+    "txt2img_ip_adapter",
+    "img2img_ip_adapter",
+    "controlnet_ip_adapter"
+   ],
+   "tags": [
+    "3D Render",
+    "Cartoon",
+    "Costumes",
+    "Flux.2 LoRA",
+    "Stylized",
+    "sc:scenario"
+   ],
+   "status": "trained",
+   "createdAt": "2026-03-23T21:22:17.793Z",
+   "concepts": [
+    {
+     "modelId": "model_CMUu7BjxV8TpdhG3FKoxZRxC",
+     "scale": 0.8
+    }
+   ],
+   "source": "scenario"
+  },
+  {
+   "id": "model_gfYngue5aG6VStfZnDggGLZ5",
+   "name": "Gem Icons v2",
+   "shortDescription": "Flux.2 LoRA for stylized game icons: gemstones, crystals, and enchanted loot rendered with vibrant colors and polished digital painting.",
+   "type": "flux.2-dev-lora",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img"
+   ],
+   "tags": [
+    "Flux 2",
+    "Flux.2 LoRA"
+   ],
+   "status": "trained",
+   "createdAt": "2026-03-11T14:34:16.735Z",
+   "concepts": [
+    {
+     "modelId": "model_gfYngue5aG6VStfZnDggGLZ5",
+     "scale": 0.8
+    }
+   ],
+   "source": "scenario"
+  },
+  {
+   "id": "model_pfi2CmX8He4Ay8zpBEHw5XEL",
+   "name": "🔴 Character to Multi-View Turnaround Sheet",
+   "type": "flux.2-dev-edit-lora",
+   "privacy": "public",
+   "capabilities": [
+    "img2img"
+   ],
+   "tags": [
+    "Flux.2 Edit LoRA"
+   ],
+   "status": "trained",
+   "createdAt": "2026-03-13T18:44:39.410Z",
+   "concepts": [
+    {
+     "modelId": "model_pfi2CmX8He4Ay8zpBEHw5XEL",
+     "scale": 0.8
+    }
+   ],
+   "source": "scenario"
+  },
+  {
+   "id": "model_EEDXdL4VrRjC5CDXbSddKqj3",
+   "name": "RPG Environment",
+   "shortDescription": "RPG Environment by Scenario. A Flux.1 LoRA for cohesive fantasy game assets: trees, ruins, props, and structures in a stylized top-down or side-scroller style.",
+   "type": "flux.1-composition",
+   "privacy": "public",
+   "capabilities": [
+    "txt2img",
+    "img2img",
+    "img2img_texture",
+    "txt2img_texture",
+    "controlnet",
+    "controlnet_texture",
+    "controlnet_img2img",
+    "controlnet_inpaint",
+    "inpaint",
+    "outpaint",
+    "txt2img_ip_adapter",
+    "img2img_ip_adapter",
+    "controlnet_ip_adapter"
+   ],
+   "tags": [
+    "Deacon",
+    "Flux.1 LoRA",
+    "fantasy",
+    "rpg props",
+    "sc:scenario",
+    "stylized",
+    "top-down"
+   ],
+   "status": "trained",
+   "createdAt": "2024-10-25T11:51:16.877Z",
+   "compliantModelIds": [
+    "flux.1-dev",
+    "flux.1-schnell"
+   ],
+   "concepts": [
+    {
+     "modelId": "model_CodJVa2wi5CJFRsTYYjvBBZ1",
+     "scale": 0.65
+    },
+    {
+     "modelId": "model_6TgsaYSpbZyGjBoStUo8YzME",
+     "scale": 0.2
+    },
+    {
+     "modelId": "model_MvBSFmTxgqq4R7UJDPBnQ1ZS",
+     "scale": 0.15
+    }
+   ],
+   "source": "scenario"
+  }
+ ]
+}

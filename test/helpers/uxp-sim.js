@@ -82,10 +82,10 @@ function runBundle(code, { port, secure = new Map(), files = new Map(), refuse, 
       app: {
         version: "27.11.0",
         documents: [
-          { id: 7, title: "cover.psd" },
-          { id: 8, title: "Untitled-2" }
+          { id: 7, title: "cover.psd", width: 2400, height: 1600 },
+          { id: 8, title: "Untitled-2", width: 1024, height: 1024 }
         ],
-        activeDocument: { id: 8, title: "Untitled-2" }
+        activeDocument: { id: 8, title: "Untitled-2", width: 1024, height: 1024 }
       }
     },
     os: { platform: () => "darwin", release: () => "25.5.0" },

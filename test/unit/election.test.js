@@ -99,7 +99,7 @@ test("owner exit: exactly one peer becomes the owner, the other relays through i
   assert.equal(other.role(), "peer");
   await waitFor(() => newOwner.owner.pluginInfo(), { label: "plugin relinked", timeout: 5000 });
   const r = await other.call("scenario_status", {});
-  assert.equal(r.plugin_version, "0.1.0");
+  assert.equal(r.plugin_version, require("../../plugin/src/main.js").VERSION);
 });
 
 test("helpers started at the same moment end with one owner and the rest as peers", async (t) => {
@@ -217,7 +217,7 @@ test("after a token reset, a rewritten token file reconnects the running helpers
   fileText = newTok;
   await waitFor(() => a.owner && a.owner.pluginInfo(), { label: "owner relinked with the new token", timeout: 8000 });
   await waitFor(() => b.role() === "peer" && b.peer && b.peer.ready, { label: "peer rejoined with the new token", timeout: 8000 });
-  assert.equal((await b.call("scenario_status", {})).plugin_version, "0.1.0");
+  assert.equal((await b.call("scenario_status", {})).plugin_version, require("../../plugin/src/main.js").VERSION);
 });
 
 test("no token yet: the helper waits, then starts as soon as the token file appears", async (t) => {

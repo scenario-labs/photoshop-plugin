@@ -1,0 +1,111 @@
+{
+  "$comment": "How the plugin reads Scenario's model catalog (docs/spec/SPEC.md sections 3.3, 3.4, 5.8 and 6.1). Data, not code: a catalog change needs no code change. Strings measured live on 2026-10-19 with an Editor Project key unless a comment says otherwise.",
+  "version": "2026-10-19",
+  "listing": {
+    "$comment": "GET /v1/models lists the key's project models; with privacy=public, Scenario's public models (728 on 2026-10-19, in two pages of 500). List rows carry no inputs: a model's schema is a second read, GET /v1/models/{id}.",
+    "path": "/models",
+    "page_size": 500,
+    "max_pages": 10,
+    "refresh_hours": 24,
+    "description_max_chars": 400
+  },
+  "tabs": {
+    "$comment": "SPEC 3.3. A model belongs to Image when its capabilities include txt2img and its type is custom; to Edit when they include img2img or inpaint, its type is custom and it carries none of the Enhance tags (every Enhance model is also img2img; GPT Image 2.5 takes a mask without listing inpaint). Enhance tools go by tag, and also need img2img, so a video model tagged remove-background stays out. Trained models are those whose type is not custom: every public model, base models included, has status trained.",
+    "base_types": ["custom"],
+    "image": { "capabilities": ["txt2img"] },
+    "edit": { "capabilities": ["img2img", "inpaint"], "exclude_tags": ["image-upscale", "remove-background", "expand"], "instruction_editors": [] },
+    "enhance": {
+      "requires_capabilities": ["img2img"],
+      "tools": {
+        "upscale": { "tags": ["image-upscale"], "models": [] },
+        "expand": { "tags": ["expand"], "models": ["model_openai-gpt-image-2-5-flare"] },
+        "remove_background": { "tags": ["remove-background"], "models": [] }
+      }
+    }
+  },
+  "hidden_tags": ["deprecated"],
+  "internal_tag_prefixes": ["sc:"],
+  "mask_capabilities": ["inpaint"],
+  "reference_capabilities": ["reference"],
+  "defaults": {
+    "$comment": "SPEC 6.1 step 3: lane defaults are models whose price is exact before upload, with price-affecting settings pinned. GPT Image 2.5's quality defaults to auto, which changes the price, so the presets name a level.",
+    "image": { "model_id": "model_openai-gpt-image-2-5-flare", "preset": { "quality": "low" }, "takes": 1 },
+    "edit": { "model_id": "model_openai-gpt-image-2-5-flare", "preset": { "quality": "low" }, "takes": 2 },
+    "upscale": { "model_id": "model_topaz-image-upscale", "preset": { "upscaleFactor": "2x" }, "takes": 1 },
+    "expand": { "model_id": "model_openai-gpt-image-2-5-flare", "preset": { "quality": "low" }, "takes": 1 },
+    "remove_background": { "model_id": "model_851-labs-background-remover", "preset": {}, "takes": 1 }
+  },
+  "picks": {
+    "$comment": "Scenario picks (SPEC 3.3 item 6): REST's recommendation filters by capability only, so Recommended shows the lane defaults, then the tab's models Scenario tags as featured, newest first, up to max.",
+    "featured_tag": "sc:featured",
+    "max": 6,
+    "image": ["model_openai-gpt-image-2-5-flare"],
+    "edit": ["model_openai-gpt-image-2-5-flare"],
+    "enhance": ["model_topaz-image-upscale", "model_openai-gpt-image-2-5-flare", "model_851-labs-background-remover"],
+    "trained": []
+  },
+  "models": {
+    "$comment": "Per-model facts the schema does not state. price_inputs: how a file input the person has not uploaded yet is priced (SPEC 6.1 step 3): count (stand-ins by count; the first `free` slots priced without a file), size (a blank stand-in at the source's size), any (one small blank stand-in), omit (left out). capture_input: the input that receives the capture when the schema has no image input. output_max_px: largest output side measured. All measured live on 2026-10-19 except where noted.",
+    "model_openai-gpt-image-2-5-flare": {
+      "capture_input": "referenceImages",
+      "price_inputs": { "referenceImages": { "rule": "count", "free": 1 }, "mask": { "rule": "omit" } },
+      "mask_polarity": "alpha",
+      "expand_route": "mask"
+    },
+    "model_topaz-image-upscale": {
+      "price_inputs": { "image": { "rule": "size" } },
+      "output_max_px": 4096
+    },
+    "model_851-labs-background-remover": {
+      "price_inputs": { "image": { "rule": "any" } },
+      "output_max_px": 2048
+    },
+    "model_photoroom-expand": {
+      "price_inputs": { "image": { "rule": "any" } },
+      "expand_route": "exact_size"
+    },
+    "model_bfl-flux-2-dev": { "capture_input": "referenceImages" },
+    "model_bfl-flux-2-klein-9b": { "capture_input": "referenceImages" },
+    "model_bfl-flux-2-klein-9b-base": { "capture_input": "referenceImages" },
+    "model_bfl-flux-2-klein-4b": { "capture_input": "referenceImages" },
+    "model_bfl-flux-2-klein-4b-base": { "capture_input": "referenceImages" },
+    "model_qwen-image-edit-2511": { "capture_input": "referenceImages" }
+  },
+  "price_kinds": {
+    "$comment": "SPEC 6.1 step 6. from: the charge can exceed the quote with no bound (M2.0 found none, so the list starts empty). range: the charge varies up to the price at the schema's maximum of bound_parameter.",
+    "from": [],
+    "range": []
+  },
+  "stand_ins": {
+    "$comment": "Blank images for price checks (SPEC 6.1 step 3): black RGB PNGs the plugin makes, uploaded once per project, hidden from the Library, named like the plugin's other uploads. read_cap_px is the Upscale and Remove BG lane read cap (SPEC 5.5).",
+    "small_px": 256,
+    "read_cap_px": 6144,
+    "name_prefix": "photoshop-standin-"
+  },
+  "capture": {
+    "$comment": "SPEC 5.5: Edit contexts and references use the model's maximum input from its schema, else this long side.",
+    "default_long_side_px": 2048
+  },
+  "trained": {
+    "$comment": "SPEC 3.4. List rows carry no inputs, so the plugin reads the schemas of these models to find which trained types each one takes (modelTypes on its loras and modelId inputs). The list says which models to read, never what they take. base_names maps compliantModelIds entries (base names, not catalog ids) to catalog ids.",
+    "base_probes": [
+      "model_bfl-flux-2-dev",
+      "model_bfl-flux-1-dev",
+      "model_bfl-flux-1-schnell",
+      "model_flux-kontext-editing",
+      "model_z-image",
+      "model_z-image-turbo",
+      "model_bfl-flux-2-klein-9b",
+      "model_bfl-flux-2-klein-9b-base",
+      "model_bfl-flux-2-klein-4b",
+      "model_bfl-flux-2-klein-4b-base",
+      "model_qwen-image-edit-2511"
+    ],
+    "base_names": {
+      "flux.1-dev": "model_bfl-flux-1-dev",
+      "flux.1-schnell": "model_bfl-flux-1-schnell",
+      "flux.2-dev": "model_bfl-flux-2-dev"
+    },
+    "default_scale": 0.75
+  }
+}

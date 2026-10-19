@@ -85,7 +85,7 @@ test("reads retry after 429 (Retry-After) and 503; other errors and paid calls d
       if (path === "/v1/models" && n === 1) return { status: 429, body: { code: "rate_limited", message: "slow down" }, headers: { "retry-after": "7" } };
       if (path === "/v1/models" && n === 2) return { status: 503, body: { message: "busy" } };
       if (path === "/v1/projects") return { status: 500, body: { message: "boom" } };
-      if (path === "/v1/generate") return { status: 429, body: {} };
+      if (path === "/v1/uploads") return { status: 429, body: {} };
       return undefined;
     }
   });
@@ -98,8 +98,12 @@ test("reads retry after 429 (Retry-After) and 503; other errors and paid calls d
   assert.deepEqual(waits, [7000, 1000]);
   await assert.rejects(c.request("GET", "/projects"), (e) => e.type === "Internal" && e.status === 500 && /HTTP 500: boom/.test(e.message));
   assert.equal(mock.requests.filter((q) => q.path === "/v1/projects").length, 1, "500 is not retried");
-  await assert.rejects(c.request("POST", "/generate", { body: { a: 1 }, paid: true }), (e) => e.type === "RateLimited");
-  assert.equal(mock.requests.filter((q) => q.path === "/v1/generate").length, 1, "a paid call is never retried");
+  await assert.rejects(c.request("POST", "/uploads", { body: { a: 1 }, paid: true }), (e) => e.type === "RateLimited");
+  assert.equal(mock.requests.filter((q) => q.path === "/v1/uploads").length, 1, "a paid call is never retried");
+  // This build sends nothing to /generate but price checks (scenario/dry-run.js).
+  await assert.rejects(c.request("POST", "/generate/custom/model_x", { body: { a: 1 }, paid: true }), (e) => e.type === "Internal" && /only price checks/.test(e.message));
+  await assert.rejects(c.request("POST", "/generate/custom/model_x", { body: {}, priceCheck: true, query: { dryRun: "true" } }), (e) => e.type === "Internal", "an equal copy of the constant is not the constant");
+  assert.equal(mock.requests.filter((q) => q.path.startsWith("/v1/generate")).length, 0, "refused before anything is sent");
   // Retry-After as an HTTP date, and the cap.
   assert.equal(errorsMod.retryAfter({ get: () => new Date(Date.now() + 9000).toUTCString() }) >= 8, true);
   mock.setHandler(() => ({ status: 429, body: {}, headers: { "retry-after": "999" } }));

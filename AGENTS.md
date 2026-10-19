@@ -9,16 +9,19 @@ Claims here are marked *verified live* (in Photoshop), *tested automated* (Node,
 | Path | What |
 |---|---|
 | `plugin/` | UXP plugin: `manifest.json`, `index.html`, `styles.css`, `src/` (plain JavaScript, CommonJS modules), `scripts/build.js` (bundler), `scripts/package.js` (`.ccx`) |
-| `plugin/src/util/` | SHA-256, HMAC, UTF-8, base64url, canonical JSON, random source. UXP has no `TextEncoder`, `TextDecoder` or `crypto.subtle` (*verified live* on 27.11 with a probe plugin) |
-| `plugin/src/bridge/` | Link to the helper (`link.js`), proofs and MACs (`protocol.js`), pairing token (`pairing.js`), `scenario_status` (`status.js`) |
-| `plugin/src/scenario/` | Scenario's REST API: `client.js` (HTTP Basic to the API base only, no redirects, read retries, timeouts) and `errors.js` (status plus known texts to error types). The catalog, schemas, price checks, runs and uploads go here next, on top of `client.request` |
+| `plugin/src/util/` | SHA-256, HMAC, UTF-8, base64url, canonical JSON, random source, blank PNG for price-check stand-ins (`png.js`). UXP has no `TextEncoder`, `TextDecoder` or `crypto.subtle` (*verified live* on 27.11 with a probe plugin) |
+| `plugin/src/bridge/` | Link to the helper (`link.js`), proofs and MACs (`protocol.js`), pairing token (`pairing.js`), `scenario_status` (`status.js`), `list_models`, `model_schema` and `estimate_cost` (`catalog-tools.js`) |
+| `plugin/src/scenario/` | Scenario's REST API: `client.js` (HTTP Basic to the API base only, no redirects, read retries, timeouts, and the guard that refuses generation requests other than price checks), `errors.js` (status plus known texts to error types), `dry-run.js` (the one price-check constant and how answers are read), `assets.js` (uploads and the stand-in cache) |
+| `plugin/src/catalog/` | Model list fetch, cache and daily refresh (`catalog.js`), tabs, chips, picks and search (`map.js`), trained models and their bases (`trained.js`) |
+| `plugin/src/forms/` | Model schemas made uniform (`schema.js`), validation before any price check (`validate.js`), what a lane prices (`requests.js`), quotes and stand-in rules (`quotes.js`), price display (`price.js`) |
 | `plugin/src/auth/` | Saved keys in secure storage (`accounts.js`), `key:secret` parsing (`split.js`), Save and test, Test connection, switch and sign out (`auth.js`) |
-| `plugin/src/ui/` | The link and lanes panel (`panel.js`, texts in `view.js`) and the account views: sign-in, projects, settings (`account-panel.js`, texts in `account-view.js`) |
+| `plugin/src/ui/` | The link and lanes panel (`panel.js`, texts in `view.js`), the lane forms and the Generate button (`lanes.js`), the model picker (`picker.js`), and the account views: sign-in, projects, settings (`account-panel.js`, texts in `account-view.js`) |
 | `plugin/src/diagnostics.js` | The Copy diagnostics text and the list of recent error types |
 | `helper/` | `scenario-photoshop`: stdio MCP server (`mcp.js`, `tools.js`), port owner and peer (`link/`), token file (`token-file.js`), setup command (`setup.js`, `toml-edit.js`). `npm-shrinkwrap.json` pins its dependency tree for npm users |
-| `shared/` | Tool catalog (`catalog.json`), error types (`errors.json`), link protocol (`protocol.json`), enums (`enums.json`), Scenario API settings, known error texts and links (`scenario-api.json`), a small JSON Schema checker used by both sides |
+| `shared/` | Tool catalog (`catalog.json`), catalog mapping, lane defaults and per-model price rules as data (`catalog-map.json`), error types (`errors.json`), link protocol (`protocol.json`), enums (`enums.json`), Scenario API settings, known error texts and links (`scenario-api.json`), a small JSON Schema checker used by both sides |
 | `test/unit`, `test/integration` | `npm test` runs every `*.test.js` there |
-| `test/helpers/` | Fake host and UXP-like WebSocket (`fakes.js`), a DOM built from the real `index.html` (`fake-dom.js`, with the macOS masked field), a mock of Scenario's API with random keys (`mock-scenario.js`), a UXP simulator that runs the built bundle (`uxp-sim.js`) |
+| `test/helpers/` | Fake host and UXP-like WebSocket (`fakes.js`), a DOM built from the real `index.html` (`fake-dom.js`, with the macOS masked field), a mock of Scenario's API with random keys (`mock-scenario.js`), the same mock answering from recorded API responses (`fixture-scenario.js`), a UXP simulator that runs the built bundle (`uxp-sim.js`) |
+| `test/fixtures/m2.0/` | Catalog rows, model records and price-check answers recorded from the live API on 2026-10-19, with account ids and links removed (`test/unit/png-fixtures.test.js` checks this) |
 | `test/vectors/pairing.json` | Known-answer vectors for the proofs, the session key and two frames |
 | `test/live/` | Manual checks against a running Photoshop; not part of `npm test` |
 
@@ -26,13 +29,13 @@ Claims here are marked *verified live* (in Photoshop), *tested automated* (Node,
 
 ```sh
 npm ci                 # installs ws, the helper's only run-time dependency
-npm test               # all unit and integration tests, about 4 s
+npm test               # all unit and integration tests, about 15 s
 node test/run.js setup # only the test files whose path contains "setup"
 npm run lint           # node --check, JSON, no em dashes, no machine paths or addresses, UXP rules
 npm run build          # plugin/dist/main.js (release bundle)
 npm run build:dev      # development bundle (adds the dev token import, below)
-npm run package        # build/scenario-photoshop-0.1.0.ccx
-npm run package:dev    # build/scenario-photoshop-0.1.0-dev.ccx
+npm run package        # build/scenario-photoshop-0.2.0.ccx
+npm run package:dev    # build/scenario-photoshop-0.2.0-dev.ccx
 ```
 
 `npm test` and `npm run lint` pass on Node 20 and 22 on macOS (*tested automated*). CI runs them on Node 20 and 22, on Ubuntu and macOS.
@@ -45,6 +48,8 @@ npm run package:dev    # build/scenario-photoshop-0.1.0-dev.ccx
 - **The pairing token is never logged, printed, put on a command line or sent over the socket.** Tests generate tokens; none is stored in the repository.
 - **Tool errors are one line, `Type: message`**, with a type from `shared/errors.json`.
 - **Scenario keys** (SPEC 2.10, Credentials): the key and secret go only to `base_url` in `shared/scenario-api.json`, as HTTP Basic, with `redirect: "error"`; `client.request` takes relative paths only. A redactor removes the exact key, secret and Basic value from log lines, error texts, copied text and diagnostics. Secure storage entry names are not encrypted, so a key is stored under `scenario.key.` plus a SHA-256 prefix of the key, and the index `scenario.accounts` holds the project name and id, the hash and the last 4 characters. Of the project listing, only the project name and id and the key's own role and scope are kept: it also lists members' emails and every key id. `test/unit/secret-leak.test.js` checks all of this on the release bundle; tests use random keys against `test/helpers/mock-scenario.js`, never a real key.
+- **Price checks and spending**: the dry-run flag appears once in the plugin, as `DRY_RUN_QUERY` in `plugin/src/scenario/dry-run.js`. `client.request` refuses every request to `/generate` that is not a `POST` marked as a price check and carrying that exact object, so this build cannot start a paid job. `test/unit/price-checks.test.js` checks that the flag appears nowhere else in `plugin/src` or `shared`, exactly once in the bundle, and that every price check the mock received had the query string `?dryRun=true`. A price check answered with a job id raises an alarm that stops all price checks until the plugin restarts. Rules that depend on the model (which inputs change the price, stand-ins, lane defaults) live in `shared/catalog-map.json` as data, from the measurements in `test/fixtures/m2.0/`.
+- **No Scenario call at launch**: the catalog and price checks start when the panel is shown (the `show` entrypoint), when the person uses the panel, or when an agent calls a tool. `test/unit/lanes-panel.test.js` and `test/unit/bundle-m2.test.js` check this.
 - **Scenario errors**: bodies carry `reason` or `message`, no code (measured live). Classify by HTTP status plus the known texts in `shared/scenario-api.json` (an unknown key answers 403 "Given APIKey does not exists"), and show Scenario's own text otherwise. Panel texts for each sign-in state are in `plugin/src/ui/account-view.js`, worded as SPEC 3.13.
 - **Client sessions** (SPEC 2.6): the owner gives each client a 16-byte session id when it connects and new ids to every client each time a plugin link opens; a name is set once, at the first `initialize`, cut to 64 characters. Calls carry only the session; the plugin takes names from the `clients` list and refuses a session it does not list. When a session leaves the list or the link drops, the plugin ends what was granted to it (in this build, the spending allowance). `test/unit/owner-checks.test.js` and `test/unit/plugin-link.test.js` cover this.
 - **Dependencies**: MIT-compatible only, pinned to exact versions, listed in `THIRD_PARTY_NOTICES.md`; change `package-lock.json` and `helper/npm-shrinkwrap.json` together. Workflows pin each action by full commit and declare least permissions. `test/unit/supply-chain.test.js` checks all of this.
@@ -58,12 +63,18 @@ npm run package:dev    # build/scenario-photoshop-0.1.0-dev.ccx
 1. `npm run package:dev`.
 2. Install the package with Adobe's installer (macOS path shown; the plugin loads at the next Photoshop launch). The installer needs an absolute path: a relative one fails with status -160 (*verified live* on 27.11).
    ```sh
-   "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/build/scenario-photoshop-0.1.0-dev.ccx"
+   "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/build/scenario-photoshop-0.2.0-dev.ccx"
    ```
-   When the same version is already installed, the installer reports success but keeps the old copy. Run it with `--remove Scenario` first: that also clears the plugin's data folder and secure storage (saved keys and the pairing token). Photoshop 27.11 then loaded the reinstalled plugin at once, without a restart (*verified live*).
+   When the same version is already installed, the installer reports success but keeps the old copy. Run it with `--remove Scenario` first: that also clears the plugin's data folder and secure storage (saved keys and the pairing token). Photoshop 27.11 then loaded the reinstalled plugin at once, without a restart (*verified live*). Installing a newer version over an older one (0.2.0-dev over 0.1.0-dev) also reported success and kept the data folder; the new version had not loaded a few seconds later, and loaded after a Photoshop restart (*verified live* on 27.11).
 3. `node test/live/m1-live-check.js`, then start or restart Photoshop. The script writes a fresh token as `dev-pairing-token` into the plugin's data folder; a development build adopts it at startup and deletes the file, so no one has to open the panel. The script then runs the helper with that token and calls `scenario_status` until Photoshop answers. It prints the status (document titles hidden unless `--show-titles`) and the `Host`, `Origin` and `User-Agent` the plugin's WebSocket sent.
 
 Release builds replace the dev import with an empty stub; `test/unit/bundle.test.js` checks that the release bundle does not contain it.
+
+## Check prices from an agent client (development)
+
+`node test/live/m2-live-check.js` runs the M2 exit check from a live Photoshop. Like the link check above, it writes a fresh `dev-pairing-token` (run it before installing or restarting), starts the helper with `SCENARIO_NO_SPEND=1` and waits for the plugin. It then needs the panel signed in: if `scenario_status` reports `signed_in: false`, it stops and changes nothing. Signed in, it calls `list_models` for three lanes and `estimate_cost` for the Image default (GPT Image 2.5 Flare, low, 1024 x 1024, 1 take; recorded at 2 CU), the Edit default with a mask (2 takes; 3 CU) and Remove BG (851 Labs; 1 CU), and prints each price. The script never contacts Scenario itself: the price checks go through the plugin and its one dry-run constant. The 851 Labs check uploads one blank 256 x 256 image to the project, hidden from the Library.
+
+*Verified live* on 27.11: the 0.2.0 development build loads, links and answers `scenario_status`. The price checks are *not tested* live: the panel was not signed in when the script ran.
 
 ## Try sign-in in Photoshop (development)
 

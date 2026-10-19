@@ -1,0 +1,275 @@
+{
+ "model": {
+  "id": "model_z-image",
+  "name": "Z-Image",
+  "shortDescription": "Z-Image by Alibaba Tongyi is a 6B open-source model for photorealistic image generation with best-in-class bilingual text rendering in English and Chinese.",
+  "type": "custom",
+  "privacy": "public",
+  "capabilities": [
+   "txt2img",
+   "img2img",
+   "controlnet"
+  ],
+  "tags": [
+   "Academia",
+   "Image to Image",
+   "Text to Image",
+   "sc:featured",
+   "sc:third-party"
+  ],
+  "status": "trained",
+  "createdAt": "2026-03-04T10:04:25.824Z",
+  "inputs": [
+   {
+    "description": "A single LoRA model ID. If provided, it will be added to the loras array.",
+    "modelTypes": [
+     "zimage-lora",
+     "zimage-turbo-lora",
+     "zimage-de-turbo-lora"
+    ],
+    "default": "",
+    "label": "LoRA Model",
+    "name": "modelId",
+    "costImpact": false,
+    "type": "model"
+   },
+   {
+    "description": "List of one or more LoRA model IDs. If modelId is a LoRA and this is not provided, it will be automatically populated with the modelId.",
+    "modelTypes": [
+     "zimage-lora",
+     "zimage-turbo-lora",
+     "zimage-de-turbo-lora"
+    ],
+    "default": [],
+    "label": "Z-Image LoRA",
+    "maxLength": 6,
+    "name": "loras",
+    "costImpact": false,
+    "type": "model_array"
+   },
+   {
+    "description": "Scales for the LoRA weights",
+    "label": "LoRA Scale",
+    "max": 2,
+    "min": 0,
+    "name": "lorasScale",
+    "costImpact": false,
+    "step": 0.05,
+    "type": "number_array"
+   },
+   {
+    "description": "Text prompt for image generation",
+    "label": "Prompt",
+    "maxLength": 2048,
+    "name": "prompt",
+    "costImpact": false,
+    "prompt": true,
+    "required": {
+     "always": true
+    },
+    "type": "string",
+    "promptSpark": true
+   },
+   {
+    "description": "Text prompt for what to avoid in the image",
+    "label": "Negative Prompt",
+    "maxLength": 2048,
+    "name": "negativePrompt",
+    "costImpact": false,
+    "prompt": true,
+    "type": "string"
+   },
+   {
+    "description": "Source image for img2img transformation",
+    "group": "Reference Image",
+    "kind": "image",
+    "label": "Reference Image",
+    "name": "image",
+    "costImpact": false,
+    "parent": true,
+    "type": "file"
+   },
+   {
+    "description": "How much to transform the reference image. 0 means no change, 1 means complete transformation",
+    "default": 0.6,
+    "group": "Reference Image",
+    "label": "Strength",
+    "max": 1,
+    "min": 0,
+    "name": "strength",
+    "costImpact": false,
+    "required": {
+     "when": {
+      "inferenceType": [
+       "img2img"
+      ]
+     }
+    },
+    "step": 0.01,
+    "type": "number"
+   },
+   {
+    "description": "Control images to use as input (edge, depth, or pose)",
+    "group": "ControlNet",
+    "kind": "image",
+    "label": "Control images",
+    "name": "controlImage",
+    "costImpact": false,
+    "parent": true,
+    "type": "file_array"
+   },
+   {
+    "description": "The scale of the controlnet conditioning",
+    "default": 0.75,
+    "group": "ControlNet",
+    "label": "Control Scale",
+    "max": 1,
+    "min": 0,
+    "name": "controlnetConditioningScale",
+    "costImpact": false,
+    "required": {
+     "when": {
+      "inferenceType": [
+       "controlnet"
+      ]
+     }
+    },
+    "step": 0.01,
+    "type": "number"
+   },
+   {
+    "description": "Number of images to generate",
+    "default": 4,
+    "group": "Settings",
+    "label": "Image Count",
+    "max": 4,
+    "min": 1,
+    "name": "numOutputs",
+    "costImpact": true,
+    "step": 1,
+    "type": "number"
+   },
+   {
+    "description": "Number of inference steps.",
+    "default": 28,
+    "group": "Settings",
+    "label": "Inference Steps",
+    "max": 100,
+    "min": 1,
+    "name": "numInferenceSteps",
+    "costImpact": true,
+    "step": 1,
+    "type": "number"
+   },
+   {
+    "description": "The width of the generated images, must be a multiple of 16",
+    "group": "Settings",
+    "label": "Width",
+    "max": 2048,
+    "min": 128,
+    "name": "width",
+    "costImpact": false,
+    "step": 16,
+    "type": "number"
+   },
+   {
+    "description": "The height of the generated images, must be a multiple of 16",
+    "group": "Settings",
+    "label": "Height",
+    "max": 2048,
+    "min": 128,
+    "name": "height",
+    "costImpact": false,
+    "step": 16,
+    "type": "number"
+   },
+   {
+    "description": "Controls how closely the generated image follows the prompt",
+    "default": 5,
+    "group": "Settings",
+    "label": "Guidance",
+    "max": 10,
+    "min": 1,
+    "name": "guidance",
+    "costImpact": false,
+    "step": 0.1,
+    "type": "number"
+   },
+   {
+    "description": "Used to reproduce previous results",
+    "group": "Settings",
+    "label": "Seed",
+    "max": 2147483647,
+    "min": 0,
+    "name": "seed",
+    "costImpact": false,
+    "type": "number"
+   }
+  ],
+  "uiConfig": {
+   "lorasComponent": {
+    "label": "Model",
+    "modelIdInput": "modelId",
+    "modelInput": "loras",
+    "scaleInput": "lorasScale"
+   },
+   "resolutionComponent": {
+    "heightInput": "height",
+    "label": "Dimensions",
+    "presets": [
+     {
+      "label": "Auto (match input)"
+     },
+     {
+      "height": 768,
+      "label": "16:9 (1344x768)",
+      "width": 1344
+     },
+     {
+      "height": 832,
+      "label": "3:2 (1216x832)",
+      "width": 1216
+     },
+     {
+      "height": 832,
+      "label": "4:3 (1104x832)",
+      "width": 1104
+     },
+     {
+      "height": 896,
+      "label": "5:4 (1088x896)",
+      "width": 1088
+     },
+     {
+      "height": 1024,
+      "label": "1:1 (1024x1024)",
+      "width": 1024
+     },
+     {
+      "height": 1088,
+      "label": "4:5 (896x1088)",
+      "width": 896
+     },
+     {
+      "height": 1104,
+      "label": "3:4 (832x1104)",
+      "width": 832
+     },
+     {
+      "height": 1216,
+      "label": "2:3 (832x1216)",
+      "width": 832
+     },
+     {
+      "height": 1344,
+      "label": "9:16 (768x1344)",
+      "width": 768
+     }
+    ],
+    "widthInput": "width"
+   }
+  },
+  "custom": true,
+  "source": "other"
+ }
+}
