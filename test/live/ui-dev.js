@@ -70,8 +70,11 @@ function windowId() {
     // All windows, not only on-screen ones: the capture works while another
     // app covers Photoshop or another Space shows.
     "ws = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll, Quartz.kCGNullWindowID)",
-    "ids = [int(w['kCGWindowNumber']) for w in ws if str(w.get('kCGWindowOwnerName', '')).startswith('Adobe Photoshop') and str(w.get('kCGWindowName', '')).startswith('Adobe Photoshop') and int(w.get('kCGWindowLayer', 0)) == 0]",
-    "print(ids[0] if ids else '')"
+    // The main window is titled after the active document, or "Adobe
+    // Photoshop 2026" with none open: take the largest titled window.
+    "ws = [w for w in ws if str(w.get('kCGWindowOwnerName', '')).startswith('Adobe Photoshop') and str(w.get('kCGWindowName', '')) and int(w.get('kCGWindowLayer', 0)) == 0]",
+    "ws.sort(key=lambda w: -int(w['kCGWindowBounds']['Width']) * int(w['kCGWindowBounds']['Height']))",
+    "print(int(ws[0]['kCGWindowNumber']) if ws else '')"
   ].join("\n");
   const out = execFileSync("uv", ["run", "-q", "--with", "pyobjc-framework-Quartz", "python", "-c", code], { encoding: "utf8" }).trim();
   if (!out) throw new Error("no Photoshop main window found");

@@ -82,9 +82,6 @@ function start(o) {
     var root = doc.getElementById("app") || doc.body;
     root.style.width = cmd.px ? cmd.px + "px" : "";
     root.style.marginLeft = cmd.shift ? -cmd.shift + "px" : "";
-    // mark: paints the root magenta for one capture, to find the panel in
-    // the window picture.
-    root.style.backgroundColor = cmd.mark ? "#ff00ff" : "";
     return { width: rect(root) };
   }
 
