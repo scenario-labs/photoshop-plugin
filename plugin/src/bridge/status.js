@@ -1,8 +1,9 @@
 "use strict";
-// The plugin's answer to scenario_status. In this build there is no sign-in,
-// no job ledger and no settings screen yet, so those fields report the
-// defaults the spec sets: not signed in, no project, every agent switch off,
-// spending "ask each time", no unknown jobs.
+// The plugin's answer to scenario_status. signed_in and project_name come
+// from the auth module (never the key, the secret or the project id). There
+// is no job ledger and no agent settings screen yet, so those fields report
+// the defaults the spec sets: every agent switch off, spending "ask each
+// time", no unknown jobs.
 
 var DEFAULT_SWITCHES = {
   agents_may_modify: false,
@@ -62,10 +63,26 @@ function createSettings() {
   };
 }
 
+var SIGNED_OUT = {
+  status: function () {
+    return { signed_in: false, project_name: null };
+  }
+};
+
 // host: { listDocuments() -> [{id, title}], activeDocumentId() -> id|null,
 //         photoshopVersion() -> string|null, osName() -> string|null }
-function createStatusHandler(host, settings, pluginVersion) {
+// account: { status() -> {signed_in, project_name} }; signed out when omitted.
+function createStatusHandler(host, settings, pluginVersion, account) {
+  account = account || SIGNED_OUT;
   return function scenarioStatus() {
+    var acc = { signed_in: false, project_name: null };
+    try {
+      var s = account.status();
+      acc.signed_in = s.signed_in === true;
+      acc.project_name = acc.signed_in && typeof s.project_name === "string" ? s.project_name : null;
+    } catch (e) {
+      acc = { signed_in: false, project_name: null };
+    }
     var switches = settings.switches();
     var docs = [];
     var active = null;
@@ -86,8 +103,8 @@ function createStatusHandler(host, settings, pluginVersion) {
         })
       : docs;
     return {
-      signed_in: false,
-      project_name: null,
+      signed_in: acc.signed_in,
+      project_name: acc.project_name,
       plugin_version: pluginVersion,
       photoshop_version: host.photoshopVersion(),
       os: host.osName(),

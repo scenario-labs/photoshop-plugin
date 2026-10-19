@@ -1,154 +1,26 @@
 "use strict";
 // The bundle UXP loads (plugin/dist/main.js), run in a fresh V8 context with a
-// fake UXP: the uxp, photoshop, os and fs modules, a UXP-like WebSocket, and a
-// small DOM for the panel. Also checks what the release bundle must not hold
-// and the .ccx package structure.
+// fake UXP (test/helpers/uxp-sim.js): the uxp, photoshop, os and fs modules, a
+// UXP-like WebSocket, and a DOM built from the real index.html. Also checks
+// what the release bundle must not hold and the .ccx package structure.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const vm = require("node:vm");
 const zlib = require("node:zlib");
 const { spawnSync } = require("node:child_process");
-const { webcrypto } = require("node:crypto");
 const { bundle } = require("../../plugin/scripts/build.js");
 const { packagePlugin, crc32 } = require("../../plugin/scripts/package.js");
 const { Owner } = require("../../helper/src/link/owner.js");
 const hp = require("../../helper/src/link/crypto.js");
 const P = require("../../shared/protocol.json");
-const { uxpWebSocket, freePort, newToken, waitFor, sleep } = require("../helpers/fakes.js");
+const { freePort, newToken, waitFor, sleep } = require("../helpers/fakes.js");
+const { runBundle } = require("../helpers/uxp-sim.js");
 
 const release = bundle({ dev: false });
 const dev = bundle({ dev: true });
-
-// A tiny DOM: what panel.js touches, nothing more.
-function fakeDocument() {
-  const els = new Map();
-  function el(id, attrs = {}) {
-    const handlers = {};
-    const node = {
-      id,
-      textContent: "",
-      className: "",
-      attrs: { ...attrs },
-      getAttribute: (k) => (k in node.attrs ? node.attrs[k] : null),
-      setAttribute: (k, v) => (node.attrs[k] = String(v)),
-      removeAttribute: (k) => delete node.attrs[k],
-      addEventListener: (type, fn) => (handlers[type] = fn),
-      click: () => handlers.click && handlers.click({ type: "click" })
-    };
-    return node;
-  }
-  for (const id of ["agent-dot", "link-dot", "link-headline", "link-detail", "token-value", "token-show", "token-copy", "token-reset", "token-note", "version", "lane-title", "lane-purpose", "lane-note", "project"]) {
-    els.set(id, el(id));
-  }
-  const lanes = ["image", "edit", "enhance", "trained", "library"].map((id) => el(`lane-${id}`, { "data-lane": id }));
-  return {
-    els,
-    lanes,
-    getElementById: (id) => els.get(id) || null,
-    querySelectorAll: (sel) => (sel === "[data-lane]" ? lanes : []),
-    text: (id) => els.get(id).textContent
-  };
-}
-
-// Runs a bundle as UXP would: hostRequire answers the UXP module names only.
-function runBundle(code, { port, secure = new Map(), files = new Map(), refuse } = {}) {
-  const timers = new Set();
-  const sockets = new Set();
-  let dead = false;
-  const Base = uxpWebSocket({ rewrite: (url) => url.replace(":9890", `:${port}`), refuse });
-  class TrackedWebSocket extends Base {
-    constructor(url) {
-      if (dead) throw new Error("Photoshop has quit");
-      super(url);
-      sockets.add(this);
-    }
-  }
-  const clipboard = { text: null, writeText: async (t) => (clipboard.text = t) };
-  const doc = fakeDocument();
-  const logs = [];
-  const entrypoints = [];
-  const enc = new TextEncoder();
-  const modules = {
-    uxp: {
-      host: { version: "27.11.0", name: "Photoshop" },
-      entrypoints: { setup: (def) => entrypoints.push(def) },
-      storage: {
-        secureStorage: {
-          // UXP returns a Uint8Array, not a string (verified live on 27.11).
-          getItem: async (k) => (secure.has(k) ? enc.encode(secure.get(k)) : null),
-          setItem: async (k, v) => secure.set(k, String(v))
-        }
-      }
-    },
-    photoshop: {
-      app: {
-        version: "27.11.0",
-        documents: [
-          { id: 7, title: "cover.psd" },
-          { id: 8, title: "Untitled-2" }
-        ],
-        activeDocument: { id: 8, title: "Untitled-2" }
-      }
-    },
-    os: { platform: () => "darwin", release: () => "25.5.0" },
-    fs: {
-      readFile: async (p) => {
-        const name = p.replace("plugin-data:/", "");
-        if (!files.has(name)) throw new Error(`ENOENT ${p}`);
-        return files.get(name);
-      },
-      writeFile: async (p, text) => files.set(p.replace("plugin-data:/", ""), String(text)),
-      unlink: async (p) => {
-        const name = p.replace("plugin-data:/", "");
-        if (!files.delete(name)) throw new Error(`ENOENT ${p}`);
-      }
-    }
-  };
-  const context = vm.createContext({
-    require: (name) => {
-      if (Object.prototype.hasOwnProperty.call(modules, name)) return modules[name];
-      throw new Error(`Cannot find module '${name}'`);
-    },
-    WebSocket: TrackedWebSocket,
-    crypto: webcrypto,
-    setTimeout: (fn, ms) => {
-      if (dead) return null;
-      const t = setTimeout(() => {
-        timers.delete(t);
-        fn();
-      }, ms);
-      timers.add(t);
-      return t;
-    },
-    clearTimeout: (t) => {
-      timers.delete(t);
-      clearTimeout(t);
-    },
-    navigator: { clipboard },
-    document: doc,
-    console: { log: (line) => logs.push(line), warn: () => {}, error: () => {} }
-  });
-  vm.runInContext(code, context, { filename: "dist/main.js" });
-  return {
-    doc,
-    secure,
-    files,
-    logs,
-    clipboard,
-    entrypoints,
-    // Photoshop quitting: every timer and socket of this plugin instance ends.
-    kill() {
-      dead = true;
-      for (const t of timers) clearTimeout(t);
-      timers.clear();
-      for (const s of sockets) s.terminate();
-    }
-  };
-}
 
 async function ownerOn(port, token) {
   const o = new Owner({ port, token: hp.parseToken(token), version: "0.1.0", hosts: ["127.0.0.1", "::1"] });

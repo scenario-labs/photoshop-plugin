@@ -14,7 +14,14 @@ var pairingMod = require("./bridge/pairing.js");
 var linkMod = require("./bridge/link.js");
 var statusMod = require("./bridge/status.js");
 var panelMod = require("./ui/panel.js");
+var accountPanelMod = require("./ui/account-panel.js");
 var devImport = require("./dev/import-token.js");
+var redactMod = require("./util/redact.js");
+var accountsMod = require("./auth/accounts.js");
+var authMod = require("./auth/auth.js");
+var clientMod = require("./scenario/client.js");
+var diagnosticsMod = require("./diagnostics.js");
+var API = require("../../shared/scenario-api.json");
 
 var VERSION = manifest.version;
 var LOG_FILE = "scenario-link.log";
@@ -28,9 +35,10 @@ function catalogHash() {
 }
 
 // A short local log in the plugin's data folder (the last 200 lines). It never
-// holds the token, prompts or document titles: only link phases and startup
-// facts, and anything token-like is redacted on the way in.
-function createLogger(host, consoleRef) {
+// holds the token, keys, secrets, prompts, document titles or project names:
+// only link phases, sign-in steps and startup facts. The exact key, secret
+// and token values, and anything token-like, are redacted on the way in.
+function createLogger(host, consoleRef, redactor) {
   var lines = [];
   var writeTimer = null;
   function flush() {
@@ -39,7 +47,9 @@ function createLogger(host, consoleRef) {
   }
   return {
     log: function (text) {
-      text = String(text).replace(TOKEN_LIKE, "[redacted]");
+      text = String(text);
+      if (redactor) text = redactor.apply(text);
+      text = text.replace(TOKEN_LIKE, "[redacted]");
       var line = new Date().toISOString() + " " + text;
       lines.push(line);
       if (lines.length > 200) lines.splice(0, lines.length - 200);
@@ -52,13 +62,28 @@ function createLogger(host, consoleRef) {
   };
 }
 
-// env: { hostRequire, global, document, console; tests also pass host and clipboardClearMs }
+// env: { hostRequire, global, document, console; tests also pass host,
+// clipboardClearMs and apiBaseUrl (a mock Scenario API) }
 function boot(env) {
   var host = env.host || hostMod.createHost(env.hostRequire, env.global);
-  var logger = createLogger(host, env.console);
+  var redactor = redactMod.createRedactor();
+  var logger = createLogger(host, env.console, redactor);
   var settings = statusMod.createSettings();
+  var errors = diagnosticsMod.createErrorLog();
+  var accounts = accountsMod.createAccounts(host, redactor);
+  var client = clientMod.createClient({
+    fetch: host.fetch,
+    AbortController: host.AbortController,
+    timers: host.timers,
+    credentials: accounts.credentials,
+    redactor: redactor,
+    baseUrl: env.apiBaseUrl
+  });
+  var auth = authMod.createAuth({ client: client, accounts: accounts, redactor: redactor, log: logger.log, recordError: errors.record });
   var panel = null;
+  var accountPanel = null;
   var link = null;
+  var diagnostics = null;
 
   // UXP wants entrypoints declared during the first synchronous run.
   host.setupEntrypoints({
@@ -96,6 +121,12 @@ function boot(env) {
         logger.log("pairing token unavailable: " + e.message);
       }
     }
+    try {
+      var acc = await accounts.load();
+      logger.log(acc.signed_in ? "signed in (" + acc.count + " project(s) saved)" : "not signed in");
+    } catch (e) {
+      logger.log("saved keys unavailable: " + e.message);
+    }
 
     link = linkMod.createLink({
       WebSocket: host.WebSocket,
@@ -108,7 +139,7 @@ function boot(env) {
       },
       catalogHash: catalogHash(),
       switches: settings.switches,
-      handlers: { scenario_status: statusMod.createStatusHandler(host, settings, VERSION) },
+      handlers: { scenario_status: statusMod.createStatusHandler(host, settings, VERSION, auth) },
       timers: host.timers,
       log: logger.log,
       onState: function (s) {
@@ -145,6 +176,24 @@ function boot(env) {
       }
     };
     panel = panelMod.createPanel(env.document, panelActions, VERSION);
+    diagnostics = diagnosticsMod.createDiagnostics({ version: VERSION, build: flags.BUILD, host: host, settings: settings, auth: auth, link: link, errors: errors });
+    accountPanel = accountPanelMod.createAccountPanel(env.document, {
+      auth: auth,
+      version: VERSION,
+      openLink: function (name) {
+        if (!Object.prototype.hasOwnProperty.call(API.links, name) || name.charAt(0) === "$") throw new Error("unknown link " + name);
+        return host.openExternal(API.links[name]);
+      },
+      copyText: function (text) {
+        return host.clipboardWrite(redactor.apply(text));
+      },
+      diagnostics: function () {
+        return redactor.apply(diagnostics.text());
+      }
+    });
+    accounts.onChange(function () {
+      if (accountPanel) accountPanel.refresh();
+    });
 
     link.start();
     return {
@@ -155,6 +204,13 @@ function boot(env) {
       settings: settings,
       random: random,
       logger: logger,
+      auth: auth,
+      accounts: accounts,
+      client: client,
+      accountPanel: accountPanel,
+      diagnostics: diagnostics,
+      errors: errors,
+      redactor: redactor,
       copyToken: panelActions.copyToken,
       resetToken: panelActions.resetToken
     };

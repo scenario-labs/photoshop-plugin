@@ -12,7 +12,7 @@ var LANES = [
 // SPEC 2.6: a client that has not sent its name yet shows as this.
 var DEFAULT_NAME = require("../../../shared/protocol.json").sessions.default_name;
 
-var NOT_BUILT = "Not available in this early build. This build links agent clients to Photoshop; sign-in and generation come next.";
+var NOT_BUILT = "Not available in this early build. This build signs in to Scenario and links agent clients to Photoshop; generation comes next.";
 
 function clientNames(clients) {
   var names = [];

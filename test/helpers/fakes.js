@@ -47,7 +47,10 @@ function fakeHost(over = {}) {
     active: over.active === undefined ? 101 : over.active,
     clipboard: null,
     entrypoints: null,
+    opened: [],
     WebSocket: over.WebSocket,
+    fetch: over.fetch === undefined ? globalThis.fetch : over.fetch,
+    AbortController: globalThis.AbortController,
     crypto: over.crypto === undefined ? crypto.webcrypto : over.crypto,
     timers: {
       setTimeout: (fn, ms) => setTimeout(fn, ms),
@@ -58,7 +61,15 @@ function fakeHost(over = {}) {
       return secure.has(key) ? secure.get(key) : null;
     },
     async secureSet(key, value) {
+      if (over.secureSetFails && over.secureSetFails(key)) throw new Error("secure storage refused");
       secure.set(key, value);
+    },
+    async secureRemove(key) {
+      secure.delete(key);
+    },
+    async openExternal(url) {
+      host.opened.push(url);
+      return "";
     },
     photoshopVersion: () => over.photoshopVersion || "27.11.0",
     osName: () => over.osName || "darwin 25.5.0",

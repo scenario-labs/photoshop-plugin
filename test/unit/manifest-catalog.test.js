@@ -66,9 +66,14 @@ test("manifest: the local link URL is declared, nothing broader than the specifi
   assert.equal(new Set(domains).size, domains.length);
   assert.equal(perms.localFileSystem, "request", "no fullAccess");
   assert.equal(perms.clipboard, "readAndWrite");
-  for (const key of ["allowCodeGenerationFromStrings", "webview", "ipc", "launchProcess", "enableUserInfo"]) {
+  for (const key of ["allowCodeGenerationFromStrings", "webview", "ipc", "enableUserInfo"]) {
     assert.equal(perms[key], undefined, `${key} is not requested`);
   }
+  // SPEC 2.10: https opens the pages the person asks for (cursor comes with
+  // section 7.4); no file extension, so no local file opens in another app.
+  assert.deepEqual(perms.launchProcess.extensions, []);
+  assert.ok(perms.launchProcess.schemes.length > 0);
+  for (const s of perms.launchProcess.schemes) assert.ok(["https", "cursor"].includes(s), `${s} is in the specification's list`);
   assert.ok(!JSON.stringify(manifest).includes('"all"'));
 });
 

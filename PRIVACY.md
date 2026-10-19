@@ -28,6 +28,8 @@ Before sending, the plugin converts captured pixels to sRGB at 8 bits per channe
 
 **Never sent to anyone but Scenario's API:** your key and secret. The helper, connected agents and the plugin's logs never receive them.
 
+**What the plugin keeps from the sign-in check.** To show your project's name, the plugin reads the project listing from Scenario's API. That answer also lists the project's members with their email addresses and the ids of its other API keys. The plugin keeps the project name, the project id and your key's own role, and drops the rest at once: it is never stored, logged or passed to the helper.
+
 **When you connect an agent**, that changes. A connected agent can read the names, layers, text and previews of every open document (only the active one, and the jobs made from it on this computer, if you turn on **Agents read the active document only**; images already in your Scenario project, such as generations and Library assets, stay readable), and what it reads goes to the agent's model provider. After you allow it, once per document or file in each agent session, it can also upload captures from that document, files you chose and results the plugin saved to your Scenario project. See "The local Scenario MCP server" below.
 
 ## Where it goes
@@ -49,7 +51,7 @@ The UXP plugin can reach only the hosts declared in its manifest. The local serv
 
 | Item | Where | How to remove |
 |---|---|---|
-| API keys and secrets | Photoshop's secure storage for this plugin, one entry per project, encrypted under your operating system account | Settings > Account > **Sign out**. This removes the key from this computer only; delete the key on app.scenario.com to revoke it |
+| API keys and secrets | Photoshop's secure storage for this plugin, one entry per project, encrypted under your operating system account. Entry names are not encrypted, so they hold a hash of the key, never the key | Settings > Account > **Sign out**. This removes the key from this computer only; delete the key on app.scenario.com to revoke it |
 | Pairing token | The same secure storage; the helper's token file, readable by your account only (`~/.config/scenario-photoshop/token` on macOS, `%APPDATA%\scenario-photoshop\token` on Windows); the config of clients that keep it themselves (Cursor, Claude Desktop, a manual entry); your shell history if you pasted a setup command; your clipboard after you copy it: the plugin clears it after 60 s, and clipboard managers or synced clipboards may keep a copy | Settings > Agents > **Reset pairing token**, then delete the token file and remove the `scenario-photoshop` entry from each client |
 | Job records: prompts, settings, model and job ids, asset ids, prices quoted and charged, who started the job (you, or the name an agent client reported), target document name and position | The plugin data folder. On macOS: `~/Library/Application Support/Adobe/UXP/PluginsStorage/PHSP/<version>/External/<plugin id>/PluginData/`; the equivalent folder on Windows | Delete the folder. Uninstalling the plugin may not remove it |
 | Captures sent to Scenario | The plugin's temporary folder | Deleted automatically 7 days after the job finishes |

@@ -7,24 +7,148 @@
   <body>
     <header class="header">
       <span class="mark">Scenario</span>
-      <sp-body size="S" class="project" id="project">Not signed in</sp-body>
+      <sp-action-button quiet class="project" id="project">Not signed in</sp-action-button>
       <span id="agent-dot" class="dot off" title="No agent connected"></span>
       <sp-action-button quiet disabled id="jobs">Jobs</sp-action-button>
+      <sp-action-button quiet id="open-settings">Settings</sp-action-button>
     </header>
 
-    <nav class="lanes">
-      <sp-action-button data-lane="image" selected>Image</sp-action-button>
-      <sp-action-button data-lane="edit">Edit</sp-action-button>
-      <sp-action-button data-lane="enhance">Enhance</sp-action-button>
-      <sp-action-button data-lane="trained">Trained</sp-action-button>
-      <sp-action-button data-lane="library">Library</sp-action-button>
-    </nav>
+    <section class="view" id="view-signin">
+      <sp-action-button quiet id="signin-back">Back</sp-action-button>
+      <sp-heading size="XS" id="signin-title"></sp-heading>
+      <sp-body size="S" id="signin-disclosure"></sp-body>
+      <sp-body size="S" id="signin-plan"></sp-body>
 
-    <main class="lane-body">
-      <sp-heading size="XS" id="lane-title">Image</sp-heading>
-      <sp-body size="S" id="lane-purpose"></sp-body>
-      <sp-body size="S" class="muted" id="lane-note"></sp-body>
-    </main>
+      <sp-body size="S" id="signin-step1"></sp-body>
+      <div class="row">
+        <sp-button variant="secondary" id="signin-create-key">Create an API key</sp-button>
+      </div>
+      <sp-body size="XS" class="muted" id="signin-admins"></sp-body>
+      <div class="row">
+        <sp-action-button id="signin-copy-request">Copy a request for your admin</sp-action-button>
+      </div>
+      <sp-body size="XS" class="muted" id="signin-no-account"></sp-body>
+      <div class="row wrap">
+        <sp-action-button id="signin-see-plans">See plans</sp-action-button>
+        <sp-action-button id="signin-create-account">Create a Scenario account</sp-action-button>
+      </div>
+      <sp-body size="XS" id="signin-note"></sp-body>
+
+      <sp-body size="S" id="signin-step2"></sp-body>
+      <sp-detail>API KEY</sp-detail>
+      <sp-textfield class="field" id="signin-key" placeholder="Paste key, or key:secret"></sp-textfield>
+      <sp-detail>API SECRET</sp-detail>
+      <sp-textfield class="field" type="password" id="signin-secret"></sp-textfield>
+      <div class="row">
+        <sp-button variant="cta" id="signin-save">Save and test</sp-button>
+        <sp-body size="XS" class="progress" id="signin-progress"></sp-body>
+      </div>
+
+      <div class="banner" id="signin-status">
+        <sp-body size="S" id="signin-status-text"></sp-body>
+        <sp-body size="XS" id="signin-status-detail"></sp-body>
+        <div class="row wrap">
+          <sp-action-button id="signin-act-enter_again"></sp-action-button>
+          <sp-action-button id="signin-act-create_key"></sp-action-button>
+          <sp-action-button id="signin-act-open_plans"></sp-action-button>
+          <sp-action-button id="signin-act-copy_admin_request"></sp-action-button>
+          <sp-action-button id="signin-act-copy_error"></sp-action-button>
+          <sp-action-button id="signin-act-retry"></sp-action-button>
+        </div>
+        <div class="row" id="signin-links">
+          <sp-action-button quiet id="signin-report">Report a problem</sp-action-button>
+          <sp-action-button quiet id="signin-help">Get help</sp-action-button>
+        </div>
+      </div>
+
+      <sp-body size="XS" class="muted" id="signin-storage"></sp-body>
+      <sp-action-button quiet id="signin-privacy">Privacy</sp-action-button>
+    </section>
+
+    <section class="view" id="view-main">
+      <div class="banner" id="account-banner">
+        <sp-body size="S" id="account-banner-1"></sp-body>
+        <sp-body size="XS" id="account-banner-2"></sp-body>
+        <sp-body size="XS" id="account-banner-3"></sp-body>
+        <sp-action-button quiet id="account-banner-close">Close</sp-action-button>
+      </div>
+
+      <nav class="lanes">
+        <sp-action-button data-lane="image" selected>Image</sp-action-button>
+        <sp-action-button data-lane="edit">Edit</sp-action-button>
+        <sp-action-button data-lane="enhance">Enhance</sp-action-button>
+        <sp-action-button data-lane="trained">Trained</sp-action-button>
+        <sp-action-button data-lane="library">Library</sp-action-button>
+      </nav>
+
+      <main class="lane-body">
+        <sp-heading size="XS" id="lane-title">Image</sp-heading>
+        <sp-body size="S" id="lane-purpose"></sp-body>
+        <sp-body size="S" class="muted" id="lane-note"></sp-body>
+      </main>
+    </section>
+
+    <section class="view" id="view-projects">
+      <div class="row">
+        <sp-action-button quiet id="projects-back">Back</sp-action-button>
+        <sp-heading size="XS">Projects</sp-heading>
+      </div>
+      <div class="list" id="projects-list"></div>
+      <sp-action-button id="projects-add">Add a key for another project</sp-action-button>
+      <sp-body size="XS" class="muted" id="projects-note"></sp-body>
+      <sp-body size="XS" id="projects-error"></sp-body>
+    </section>
+
+    <section class="view" id="view-settings">
+      <div class="row">
+        <sp-action-button quiet id="settings-back">Back</sp-action-button>
+        <sp-heading size="XS">Settings</sp-heading>
+      </div>
+
+      <sp-detail>ACCOUNT</sp-detail>
+      <div class="list" id="settings-accounts"></div>
+      <sp-body size="S" id="settings-none"></sp-body>
+      <sp-action-button id="settings-add">Add a key for another project</sp-action-button>
+      <div class="row">
+        <sp-action-button id="settings-test">Test connection</sp-action-button>
+        <sp-action-button id="settings-signout">Sign out</sp-action-button>
+      </div>
+      <sp-body size="XS" class="muted" id="settings-signout-note"></sp-body>
+      <sp-body size="XS" class="progress" id="settings-progress"></sp-body>
+      <sp-body size="XS" id="settings-note"></sp-body>
+      <div class="banner" id="settings-status">
+        <sp-body size="S" id="settings-status-text"></sp-body>
+        <sp-body size="XS" id="settings-status-detail"></sp-body>
+        <div class="row wrap">
+          <sp-action-button id="settings-act-enter_again"></sp-action-button>
+          <sp-action-button id="settings-act-create_key"></sp-action-button>
+          <sp-action-button id="settings-act-open_plans"></sp-action-button>
+          <sp-action-button id="settings-act-copy_admin_request"></sp-action-button>
+          <sp-action-button id="settings-act-copy_error"></sp-action-button>
+          <sp-action-button id="settings-act-retry"></sp-action-button>
+        </div>
+        <div class="row" id="settings-links">
+          <sp-action-button quiet id="settings-report">Report a problem</sp-action-button>
+          <sp-action-button quiet id="settings-help">Get help</sp-action-button>
+        </div>
+      </div>
+
+      <sp-detail>DIAGNOSTICS</sp-detail>
+      <sp-action-button id="diag-copy">Copy diagnostics</sp-action-button>
+      <div class="banner" id="diag-preview">
+        <sp-body size="XS">This text will be copied. It holds no prompts, names, ids, paths, keys or tokens.</sp-body>
+        <sp-body size="XS" class="token pre" id="diag-text"></sp-body>
+        <div class="row">
+          <sp-action-button id="diag-cancel">Cancel</sp-action-button>
+          <sp-action-button id="diag-confirm">Copy</sp-action-button>
+        </div>
+      </div>
+      <sp-body size="XS" id="diag-note"></sp-body>
+
+      <sp-detail>ABOUT</sp-detail>
+      <sp-body size="XS" id="settings-about"></sp-body>
+      <sp-action-button quiet id="settings-privacy">Privacy</sp-action-button>
+    </section>
 
     <section class="agents">
       <sp-detail>AGENTS</sp-detail>

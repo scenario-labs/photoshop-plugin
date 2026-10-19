@@ -26,9 +26,13 @@ function createHost(hostRequire, g) {
   var secure = uxp && uxp.storage && uxp.storage.secureStorage;
   var DATA = "plugin-data:/";
 
+  var shell = uxp && uxp.shell;
+
   return {
     WebSocket: g.WebSocket,
     crypto: g.crypto,
+    fetch: typeof g.fetch === "function" ? g.fetch.bind(g) : null,
+    AbortController: typeof g.AbortController === "function" ? g.AbortController : null,
     timers: {
       setTimeout: function (fn, ms) {
         return g.setTimeout(fn, ms);
@@ -51,6 +55,22 @@ function createHost(hostRequire, g) {
     secureSet: async function (key, value) {
       if (!secure) throw new Error("secureStorage is not available");
       await secure.setItem(key, value);
+    },
+    // removeItem where UXP offers it; otherwise the entry is overwritten
+    // with an empty value, which every reader treats as absent.
+    secureRemove: async function (key) {
+      if (!secure) throw new Error("secureStorage is not available");
+      if (typeof secure.removeItem === "function") {
+        await secure.removeItem(key);
+        return;
+      }
+      await secure.setItem(key, "");
+    },
+
+    // Opens a page in the browser. Photoshop asks the person first, every time.
+    openExternal: async function (url) {
+      if (!shell || typeof shell.openExternal !== "function") throw new Error("this Photoshop cannot open links");
+      return shell.openExternal(url, "Opens a Scenario page in your browser.");
     },
 
     photoshopVersion: function () {

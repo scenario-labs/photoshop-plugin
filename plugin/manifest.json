@@ -29,6 +29,7 @@
       ]
     },
     "localFileSystem": "request",
+    "launchProcess": { "schemes": ["https"], "extensions": [] },
     "clipboard": "readAndWrite"
   }
 }

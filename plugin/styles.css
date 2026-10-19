@@ -25,6 +25,46 @@ body {
   flex: 1;
 }
 
+/* Views and banners start hidden; the account panel shows one view at a
+   time and each banner when it has something to say. */
+.view,
+.banner {
+  display: none;
+}
+
+.view {
+  padding: 8px 0;
+}
+
+.banner {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--uxp-host-border-color);
+}
+
+.field {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.row.wrap {
+  flex-wrap: wrap;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.progress {
+  margin-left: 8px;
+}
+
+.pre {
+  white-space: pre-wrap;
+}
+
 .dot {
   width: 8px;
   height: 8px;

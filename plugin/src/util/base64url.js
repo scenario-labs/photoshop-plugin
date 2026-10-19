@@ -60,4 +60,12 @@ function decode(text) {
   return out;
 }
 
-module.exports = { encode: encode, decode: decode };
+// Standard base64 with padding (RFC 4648 section 4), for the HTTP Basic
+// Authorization header. Same bytes as encode(), other alphabet.
+function encodeStandard(bytes) {
+  var out = encode(bytes).replace(/-/g, "+").replace(/_/g, "/");
+  while (out.length % 4) out += "=";
+  return out;
+}
+
+module.exports = { encode: encode, decode: decode, encodeStandard: encodeStandard };
