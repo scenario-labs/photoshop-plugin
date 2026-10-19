@@ -64,7 +64,7 @@ function record(spec, outputs, n) {
   };
 }
 
-// ctx: { host, app }
+// ctx: { host, app, doc }
 async function run(what, args, ctx) {
   args = args || {};
   var lanes;
@@ -116,6 +116,12 @@ async function run(what, args, ctx) {
       var acc = need("account");
       acc.renderFailure(args.prefix || "signin", args.state ? { state: args.state, type: "Demo" } : null);
       return { failure: args.state || null };
+    }
+    case "project": {
+      // A sample project name in the header, for pictures of the panel.
+      var label = ctx.doc ? ctx.doc.getElementById("project-label") : null;
+      if (label) label.textContent = String(args.label || "");
+      return { project: !!label };
     }
     case "adding": {
       need("account").startAdding();

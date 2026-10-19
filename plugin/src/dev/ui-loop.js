@@ -126,7 +126,7 @@ function start(o) {
       o.app.panel.renderLink(cmd.args || {});
       return { demo: "link" };
     }
-    return { demo: cmd.what, out: await uiDemo.run(cmd.what, cmd.args || {}, { host: host, app: o.app }) };
+    return { demo: cmd.what, out: await uiDemo.run(cmd.what, cmd.args || {}, { host: host, app: o.app, doc: doc }) };
   }
 
   function menu(cmd) {
