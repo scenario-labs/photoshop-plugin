@@ -1,81 +1,100 @@
 # Privacy
 
-This page describes what the Scenario plugin for Adobe Photoshop and its local Scenario MCP server, `scenario-photoshop`, send and store. It applies to version 1.0. The plugin is a client of your own Scenario account: what Scenario does with what it receives is governed by Scenario's Terms and Privacy Policy, which this page does not replace.
+This page describes what the Scenario plugin for Adobe Photoshop and its local Scenario MCP server, `scenario-photoshop`, send and store. It applies to the first public release, 0.1.0. The plugin is a client of your own Scenario account: what Scenario does with what it receives is governed by Scenario's [Terms](https://www.scenario.com) and [Privacy Policy](https://www.scenario.com/privacy-policy), which this page does not replace.
 
-Status: written against the v1 specification ([docs/spec/SPEC.md](docs/spec/SPEC.md)). It is checked against the released build before each release.
+Status: written against the v1 specification ([docs/spec/SPEC.md](docs/spec/SPEC.md)). It is checked against the released build before each release. It sits at the root of the repository so the panel's About link points to one short path.
 
 ## What leaves your machine, and when
 
 | What | When | Sent to |
 |---|---|---|
-| Your API key and secret | With every request to Scenario, as HTTP Basic authentication over HTTPS | Scenario API |
-| Prompt, model choice and settings | While you edit a form, for price checks (shortly after you stop typing), and when you click Generate | Scenario API |
-| Pixels from your document | Only when you click Generate or add a reference that needs an upload, or when an agent you connected uploads a capture. What is sent depends on the source you chose: the selected area plus a margin of surrounding pixels, one layer, or the visible composite. Edits also send a mask made from your selection | Scenario API |
-| Files you pick | When you add them as references | Scenario API |
-| Catalog, Library and job lookups | When you open the model picker, the Library lane or Jobs > On Scenario, and while jobs run | Scenario API |
+| Your API key and secret | With every request to Scenario's API, as HTTP Basic authentication over HTTPS. Never with downloads or uploads to other hosts | Scenario's API |
+| Prompt, model choice and settings | While you edit a form, for price checks (shortly after you stop typing), and when you click Generate | Scenario's API |
+| Pixels from your document | When you click Generate, or when an agent you allowed uploads a capture (below). What is sent depends on the source: the selected area plus a margin of surrounding pixels, one layer, or the visible composite. Edits also send a mask made from your selection. References are captured when you add them and sent when you click Generate | Scenario's API for images under 4 MB; Scenario's upload storage for larger ones |
+| Files you pick | When you click Generate with them as references. PNG and JPEG only, with their EXIF, XMP, IPTC and text metadata (such as GPS position, camera serial or author) removed first | As above |
+| Catalog, Library and job lookups | When you open the model picker, the Library lane or Jobs > On Scenario, and while jobs run | Scenario's API |
 | Download requests | When a job finishes, and for thumbnails in lists | Scenario's content delivery hosts |
 | Update check | At most once a day, unless turned off in Settings > Updates | GitHub API |
 | Links you click | Only when you click; Photoshop asks before opening your browser | The linked site |
 
-Price checks never upload pixels. Pixels are sent when you click Generate. If the exact price after the upload differs from the one shown, nothing is spent and the plugin asks you again, but the upload has already happened. Uploaded images are stored by Scenario as assets of your project, like uploads made in the Scenario web app.
+Price checks never upload pixels. If the exact price after the upload differs from the one shown, nothing is spent and the plugin asks you again, but the upload has already happened. Uploaded images are stored by Scenario as assets of your project, like uploads made in the Scenario web app, and the members of that project can see them.
 
-Before sending, the plugin converts captured pixels to sRGB at 8 bits per channel. Your document's color profile is not sent.
+Before sending, the plugin converts captured pixels to sRGB at 8 bits per channel. Your document's color profile is not sent. Uploads are named `photoshop-<purpose>-<date>-<short id>`.
 
-**Never sent by the plugin:**
-- Your PSD file, or any layer or area you did not choose as a source.
-- Document names, layer names, file paths or other open documents.
-- Your key or secret to anyone other than Scenario's API. The helper, connected agents and the plugin's logs never receive them.
-- Usage analytics or telemetry. Version 1.0 sends none. If a later version adds them, they will be off until you turn them on.
+**Never sent to Scenario by the plugin:**
+- Your PSD file, or any layer or area that was not chosen as a source.
+- Document names, layer names or file paths.
+- Usage analytics or telemetry. This release sends none. If a later version adds them, they will be off until you turn them on.
 
-What a connected agent reads through the local server goes to that agent's model provider, not through the plugin. See "The local Scenario MCP server" below.
+**Never sent to anyone but Scenario's API:** your key and secret. The helper, connected agents and the plugin's logs never receive them.
+
+**When you connect an agent**, that changes. A connected agent can read the names, layers, text and previews of every open document (only the active one if you turn on **Agents read the active document only**), and what it reads goes to the agent's model provider. After you allow it once per session, it can also upload captures from those documents to your Scenario project. See "The local Scenario MCP server" below.
 
 ## Where it goes
 
 | Destination | Purpose |
 |---|---|
-| `https://api.cloud.scenario.com` | Scenario's API: sign-in check, catalog, prices, uploads, generations, jobs, Library |
+| `https://api.cloud.scenario.com` | Scenario's API: sign-in check, catalog, prices, uploads under 4 MB, generations, jobs, Library |
+| Scenario's upload storage (the host is listed in the plugin manifest) | Uploads of 4 MB and more, through upload links that Scenario signs |
 | Scenario's content delivery hosts (listed in the plugin manifest) | Downloads of results and thumbnails, through signed links that expire |
 | `https://api.github.com` | Update check. GitHub receives an ordinary HTTPS request, which includes your IP address |
 | Your browser | Pages you open from the plugin, such as the API key page on app.scenario.com |
 | Agent clients you connect | Whatever they read through the local server (below) |
 
-The plugin's network permissions are declared in its manifest. It cannot reach other hosts. Photoshop's own handling of your data is covered by Adobe's terms, not by this page.
+The UXP plugin can reach only the hosts declared in its manifest. The local server opens only a socket on your computer's loopback interface; when your agent client starts it with `npx`, npx contacts the npm registry to fetch it. Photoshop's own handling of your data is covered by Adobe's terms, not by this page.
+
+**What Scenario does with it.** Scenario runs your request with the provider of the model you chose. Scenario lists its sub-processors and model providers at [trust.scenario.com](https://trust.scenario.com). Scenario's Privacy Policy (last updated July 16, 2026) says Scenario may use your content to operate, secure and improve its services and AI models. Enterprise customers with a signed agreement get the commitments set out in that agreement instead. Read the policy for the details that apply to your plan.
 
 ## What is stored on your machine
 
 | Item | Where | How to remove |
 |---|---|---|
-| API key and secret | Photoshop's secure storage for this plugin, encrypted under your operating system account | Settings > Account > **Sign out** |
-| Pairing token | The same secure storage, and the config files of the agent clients you set up | Settings > Agents > **Reset pairing token**, then remove the `scenario-photoshop` entry from each client |
-| Job records: prompts, settings, model and job ids, asset ids, prices, who started the job (you, or the name an agent client reported), target document name and position | The plugin data folder. On macOS: `~/Library/Application Support/Adobe/UXP/PluginsStorage/PHSP/<version>/External/<plugin id>/PluginData/`; the equivalent folder on Windows | Uninstall the plugin, or delete the folder |
+| API keys and secrets | Photoshop's secure storage for this plugin, one entry per project, encrypted under your operating system account | Settings > Account > **Sign out**. This removes the key from this computer only; delete the key on app.scenario.com to revoke it |
+| Pairing token | The same secure storage; the config files of the agent clients you set up; and your shell history if you pasted a setup command | Settings > Agents > **Reset pairing token**, then remove the `scenario-photoshop` entry from each client |
+| Job records: prompts, settings, model and job ids, asset ids, prices, who started the job (you, or the name an agent client reported), target document name and position | The plugin data folder. On macOS: `~/Library/Application Support/Adobe/UXP/PluginsStorage/PHSP/<version>/External/<plugin id>/PluginData/`; the equivalent folder on Windows | Delete the folder. Uninstalling the plugin may not remove it |
 | Captures sent to Scenario | The plugin's temporary folder | Deleted automatically 7 days after the job finishes |
 | Downloaded results | The Output Folder: inside the plugin data folder by default, or the folder you chose | Delete the files; placed results are embedded in your documents and do not depend on them |
-| Copy of the job records | `<Output Folder>/.scenario/jobs/`, only when you chose an Output Folder | Delete the folder |
-| Model list cache, settings, agent activity log | The plugin data folder | Uninstall the plugin, or delete the folder |
-| Provenance in your documents | Metadata on each result layer: model, prompt, settings, asset and job ids, price, date, and who started it | Delete the layer, or turn on Settings > Results > **Leave prompts out of layer metadata** for future results |
+| Copy of the job records | `<Output Folder>/.scenario/jobs/`, only when you chose an Output Folder. It holds prompts and document names, and travels with the folder if the folder is synced or shared | Delete the folder |
+| Logs | The plugin data folder, `logs/`: kept 7 days, at most 5 MB. Keys, secrets, tokens and request and response bodies are never written | Delete the folder |
+| Model list cache, settings, agent activity log | The plugin data folder | Delete the folder |
+| Provenance in your documents | Metadata on each result layer: model, prompt, settings, asset and job ids, prices, date, and who started it. Layer names include the first words of the prompt | Delete the layer. For future results, Settings > Results > **Leave prompts out of documents** removes the prompt, every free-text setting and the prompt words in layer names; **Leave prices out of documents** removes the prices |
 
-Layer metadata travels with the PSD when you share it. It never contains your key, secret, pairing token, team or project ids, or file paths.
+Signed download and upload links are kept in memory only, never on disk.
+
+Layer metadata travels with the PSD when you share it. It never contains your key, secret, pairing token, team or project ids, or file paths. The Scenario skills for Photoshop write the same metadata, so the panel can read layers placed either way.
+
+**Copy diagnostics** (Settings > Diagnostics) shows its text before copying it. It holds versions, your operating system, switch states, job counts and recent error types, and no prompts, document or project names, ids, paths, keys or tokens.
+
+## Deleting your data
+
+- **On this computer:** sign out, reset the pairing token, and delete the plugin data folder and any Output Folder you chose (paths above).
+- **On Scenario:** delete uploaded images and results from your project in the Scenario web app. For anything else Scenario holds about you, including deletion of your account data, write to privacy@scenario.com as Scenario's Privacy Policy describes.
+- **API keys:** delete them on app.scenario.com. Signing out of the plugin does not revoke a key.
+- **Agent providers:** what an agent read is held under your agreement with that provider.
 
 ## The local Scenario MCP server
 
-- `scenario-photoshop` is a small program that your agent client (Claude Code, Codex, Cursor, Claude Desktop) starts. It listens on `127.0.0.1:9878`, which other computers cannot reach. The plugin connects to it; the server never receives your Scenario key or secret.
-- Only helpers configured with the pairing token are accepted. Programs running under your own account can read client config files, so the token does not protect against them.
-- With both agent switches off, a connected agent can:
-  - read document information: size, mode, layers and layer names, the selection, and Scenario metadata;
-  - get previews of your document, which contain its pixels;
+- `scenario-photoshop` is a small program that your agent client (Claude Code, Codex, Cursor, Claude Desktop) starts. The first one listens on port 9890 of your computer's loopback interface (`127.0.0.1` and `::1`), which other computers cannot reach. The plugin connects to it. It never receives your Scenario key or secret.
+- **Pairing.** The plugin and each helper prove to each other that they hold the pairing token, without sending it, and every later message carries a code that only holders of the token can produce. Web pages are refused by the origin checks. A program that does not hold the token cannot act as the plugin or as the helper; it can only take port 9890 first and block agents, which the panel reports. Messages are authenticated, not encrypted. Programs running under your own account can read client config files, so the token does not protect against them.
+- **With all agent switches off**, a connected agent can:
+  - read document information: size, mode, layers and layer names, text layers, the selection, and Scenario metadata;
+  - get previews of your documents, which contain their pixels;
   - list models, get prices, and read jobs and Library items;
-  - capture a selection, layer or composite and upload it to Scenario;
-  - request generations, which spend your Creative Units. By default the plugin asks you in the panel before each one. Setting `SCENARIO_NO_SPEND=1` in the server's environment blocks agent spending.
+  - capture a selection, layer or composite and, after you allow it once in the panel for that session, upload it to Scenario;
+  - request generations, which spend your CU. By default the plugin asks you in the panel before each one. You can instead give one connected client an allowance with a limit per call and a total; it ends when that client disconnects or Photoshop quits;
+  - cancel jobs it started, and add a finished job of your project to the plugin's list.
+- `SCENARIO_NO_SPEND=1` in the server's environment blocks agent spending and uploads.
 - Everything an agent reads goes to that agent's model provider, under your agreement with that provider.
-- With **Agents may modify the document** on, agents can place results and change selections and layers, one undoable History step each. With it off, their changes arrive as proposals you apply or dismiss.
-- With **Agents may run Photoshop scripts** on, agents can run batchPlay commands that change anything in the open document. The plugin refuses save, close, quit and export commands, but this is a guard against mistakes, not a security boundary.
-- Agents can never read your key, secret or pairing token, save or close documents, resolve uncertain jobs, or upload files you did not choose and the plugin did not make.
-- Settings > Agents > **Activity log** lists every agent action that spent, uploaded or changed a document.
+- **Agents may modify the document**: agents can place results and change selections and layers, one undoable History step each. With it off, their changes arrive as proposals you apply or dismiss.
+- **Agents may run Photoshop commands** (off by default, turns off when Photoshop quits): agents can run batchPlay commands on open documents: layers, selections, masks, adjustments, filters and transforms, one undoable History step per call. Commands outside an allow-list are refused, including any that save, close, export or print, play Actions, run scripts, use Adobe's generative features or change Photoshop's settings.
+- Agents can never read your key, secret or pairing token, save, close or export documents, resolve uncertain jobs, approve their own spending or uploads, cancel jobs they did not start, or upload files you did not choose and the plugin did not make.
+- Settings > Agents > **Activity log** lists every agent preview read, upload, spend and document change.
 
-## Terms
+## Terms and contact
 
-- Scenario's Terms and Privacy Policy: linked from [scenario.com](https://www.scenario.com).
+- Scenario's [Privacy Policy](https://www.scenario.com/privacy-policy) and Terms: linked from [scenario.com](https://www.scenario.com).
 - Scenario Trust Portal: [trust.scenario.com](https://trust.scenario.com).
 - Scenario documentation: [docs.scenario.com](https://docs.scenario.com).
+- Privacy requests to Scenario: privacy@scenario.com.
 - Photoshop is covered by Adobe's terms.
-- The plugin is open source under the MIT license; its network calls can be checked in this repository. Report security issues as described in `SECURITY.md`, and never paste keys or secrets in issues.
+- The plugin is open source under the MIT license; its network calls can be checked in this repository. Report security issues privately as described in `SECURITY.md` (shipped with the first release), and never paste keys or secrets in issues.

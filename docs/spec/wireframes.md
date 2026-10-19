@@ -1,32 +1,39 @@
 # Wireframes (spec v1)
 
-Status: draft for review, 2026-10-19. Companion to [SPEC.md](SPEC.md), section 3.
+Status: draft for review, revision 2, 2026-10-19. Companion to [SPEC.md](SPEC.md), section 3. Section numbers here follow the screen list in SPEC 3.15.
 
-- Every frame is drawn at the default docked width, 320 px, as 40 columns of 8 px. The minimum width is 280 px (35 columns); below 320 px the lane tabs drop to icons with tooltips.
-- `[ Label ]` is a button, `[v]` a dropdown, `( )` and `(o)` radio buttons, `[ ]` and `[x]` checkboxes, `(Chip)` a filter chip, `[th]` a thumbnail, `>` a disclosure row.
-- All Creative Unit figures are placeholders (`N CU`, `M CU`). Model names are placeholders: the plugin shows names and descriptions from the Scenario catalog.
-- UXP has no CSS transitions, so state changes are immediate; every progress bar carries text.
-
+- Frames are drawn at the default docked width, 320 px, as 40 columns of 8 px. Section 2 also draws the 280 px minimum (35 columns); below 320 px the lane tabs show icons with tooltips.
+- `[ Label ]` is a button, `[v]` a dropdown, `( )` and `(o)` radio buttons, `[ ]` and `[x]` checkboxes, `(Chip)` a filter chip, `[th]` a thumbnail, `>` a collapsed row, `v` an expanded row.
+- CU figures are placeholders (`N CU`, `M CU`). Model names are placeholders: the plugin shows names and descriptions from the Scenario catalog. Project names, file names and key endings are invented examples.
+- UXP has no CSS transitions, so state changes are immediate; every progress bar carries text. Cards and notices are inline banners in the panel's flow, never overlays near a text field. Only the spend confirmation is a modal dialog.
 
 ## 1. First run and sign-in
 
-Shown when no key is saved. **Create an API key** opens the key page on app.scenario.com in the browser; Photoshop asks for consent on that click. Pasting `key:secret` or two lines into the first field fills both fields.
+Shown when no key is saved. **Create an API key** opens the API keys page on app.scenario.com; Photoshop asks for consent on that click. Pasting `key:secret`, or two lines, into the key field moves the secret to the masked field at once.
 
 ```
 +--------------------------------------+
 | [S] Scenario                         |
 +--------------------------------------+
 | Connect your Scenario account        |
-| to generate in Photoshop.            |
+| Generative AI by Scenario.           |
 |                                      |
-| 1. Create an API key on Scenario.    |
+| Needs a Scenario plan with API       |
+| access (Starter or above).           |
+|                                      |
+| 1. Create a Project key with the     |
+|    Editor role, in the project you   |
+|    want to use.                      |
 |    [ Create an API key ]             |
+|    Only team admins and project      |
+|    owners can create keys.           |
+|    [ Copy a request for your admin ] |
 | 2. Paste the key and its secret.     |
 |                                      |
 | API key                              |
 | [ Paste key, or key:secret        ]  |
 | API secret                           |
-| [ ************************  Show  ]  |
+| [ ******************************* ]  |
 |                                      |
 | [ Save and test                   ]  |
 |                                      |
@@ -36,15 +43,30 @@ Shown when no key is saved. **Create an API key** opens the key page on app.scen
 +--------------------------------------+
 ```
 
-States of the same screen after **Save and test**:
+**Save and test** makes two free calls: an authenticated read, then a price check of the default model, which proves the key can run models. Its states:
 
 ```
 +--------------------------------------+
-| [ Save and test ]   Testing...       |
+| [ Save and test ]   Testing 1 of 2   |
 +--------------------------------------+
 | x Scenario did not accept this key   |
 |   and secret.                        |
-|   [ Enter key again ] [ Create key ] |
+|   [ Enter key again ]                |
+|   [ Create an API key ]              |
++--------------------------------------+
+| x API keys need a Starter plan or    |
+|   above. This team's plan has no     |
+|   API access.     [ Open plans ]     |
++--------------------------------------+
+| x This key can't run models. Create  |
+|   a Project key with the Editor or   |
+|   Admin role.                        |
+|   [ Create an API key ]              |
+|   [ Copy error ]                     |
++--------------------------------------+
+| x This is a team (Organization) key. |
+|   Generating needs a Project key.    |
+|   [ Create an API key ]              |
 +--------------------------------------+
 | x No connection to Scenario.         |
 |   Check your network.  [ Retry ]     |
@@ -53,34 +75,47 @@ States of the same screen after **Save and test**:
 | Project: Fall campaign               |
 | Key ....7KQ2                         |
 +--------------------------------------+
-```
-
-Then the ready card, shown once, above the Image lane:
-
-```
-+--------------------------------------+
-| Ready.                               |
-| 1  Pick a lane: Image, Edit, Enhance.|
-| 2  Select an area, or nothing for    |
-|    the whole canvas.                 |
-| 3  Describe it. The price is on the  |
-|    Generate button.                  |
-|                           [ Got it ] |
+| Connected to Scenario                |
+| Project: Scenario project ....7KQ2   |
+| (the API returned no project name)   |
 +--------------------------------------+
 ```
 
-## 2. Main view with lanes
-
-Header, lane tabs, lane body (scrolls), results tray, prompt bar (fixed). The dot before **Jobs** is the agent connection: hollow when no agent is connected, filled when one is. The Image lane with a selection active:
+After **Copy a request for your admin**:
 
 ```
 +--------------------------------------+
-| [S] Fall campaign     * Jobs 2   [=] |
+| Copied. Send it to your Scenario     |
+| admin, then paste the key and secret |
+| they give you here.                  |
 +--------------------------------------+
-| [Image] Edit  Enhance Trained Library|
+```
+
+Then the ready banner, above the Image lane. It does not block anything and goes away at the first Generate or on its close button. The Image prompt holds a sample prompt, selected, so a click on Generate is the first generation:
+
+```
++--------------------------------------+
+| Ready. Describe a new image below,   |
+| or select an area and use Edit to    |
+| change it.                       [x] |
++--------------------------------------+
+```
+
+## 2. Main view
+
+Header, lane tabs, lane body (scrolls), results tray (collapses to one line), prompt bar (fixed). The project name opens the Projects view. The dot before **Jobs** is the agent connection: `o` when no agent is connected, `*` when one is. The Image lane with a selection active:
+
+```
++--------------------------------------+
+| [S] Fall campaign v  * Jobs 2    [=] |
++--------------------------------------+
+| [Image] Edit Enhance Trained Library |
 +--------------------------------------+
 | Target  Selection 928 x 928     [v]  |
 |         lands masked to selection    |
+| Makes a new picture, masked to the   |
+| selection. To change what is inside  |
+| it, use Edit.                        |
 |                                      |
 | Model                                |
 | +------+ Model name                  |
@@ -92,27 +127,103 @@ Header, lane tabs, lane body (scrolls), results tray, prompt bar (fixed). The do
 | [th] [th] [ + Add ]                  |
 | > Advanced (6 settings)              |
 +--------------------------------------+
-| Latest: 4 takes, placed              |
+| v Latest: 4 takes, placed            |
 | [t1*] [t2] [t3] [t4]                 |
 | Seam ok                              |
-| [ Keep this take ]  [ Details ]      |
+| [ Keep this take ]                   |
+| [ Reuse settings ] [ More v ]        |
 +--------------------------------------+
 | Describe the image...                |
 |                                      |
 | Takes [4 v]   Size [3:2 v]           |
-| [ Generate N CU                   ]  |
+| [ Generate (N CU)                 ]  |
 +--------------------------------------+
 ```
 
-**+ Add** on references opens a menu: Selection, Current layer, All visible, From Library, File... The Enhance lane puts its tool selector where the model card sits:
+**+ Add** on references opens a menu: Selection, Current layer, All visible, From Library, File. A reference is captured when added and uploaded when Generate is clicked.
+
+The Image lane with no document open. The result opens as a new document at the Size preset:
 
 ```
 +--------------------------------------+
-| [S] Fall campaign     * Jobs 2   [=] |
+| [S] Fall campaign v  o Jobs      [=] |
 +--------------------------------------+
-| Image  Edit [Enhance] Trained Library|
+| [Image] Edit Enhance Trained Library |
 +--------------------------------------+
-| Tool  (Upscale) (Expand) (Remove BG) |
+| Target  New document 1024 x 1024     |
+|         No document is open.         |
+|                                      |
+| Model   Model name       [ Change ]  |
+| > Advanced (6 settings)              |
++--------------------------------------+
+| A lighthouse on a cliff at sunrise,  |
+| painterly                            |
+| Takes [1 v]   Size [1:1 v]           |
+| [ Generate (N CU)                 ]  |
++--------------------------------------+
+```
+
+Edit and Enhance with no document open:
+
+```
++--------------------------------------+
+| Image [Edit] Enhance Trained Library |
++--------------------------------------+
+| Open or create a document to use     |
+| this lane.                           |
+|                   [ New document ]   |
++--------------------------------------+
+```
+
+At the 280 px minimum width. Lane tabs show icons (drawn here as two letters) with tooltips, the tray is collapsed to one line, and the lane body keeps at least 120 px:
+
+```
++---------------------------------+
+| [S] Fall cam... v * Jobs 2  [=] |
++---------------------------------+
+| [Im]  Ed   En   Tr   Li         |
++---------------------------------+
+| Target Selection 928 x 928  [v] |
+|                                 |
+| Model  Model name  [ Change ]   |
+| References (2 of 4)             |
+| [th] [th] [ + ]                 |
+| > Advanced (6)                  |
++---------------------------------+
+| > Latest: 4 takes, placed       |
++---------------------------------+
+| Describe the image...           |
+| Takes [4 v]  Size [3:2 v]       |
+| [ Generate (N CU)            ]  |
++---------------------------------+
+```
+
+The Projects view, from the project name in the header:
+
+```
++--------------------------------------+
+| < Projects                           |
++--------------------------------------+
+| (o) Fall campaign          ....7KQ2  |
+| ( ) Mascot training        ....A1C9  |
+|                                      |
+| [ Add a key for another project ]    |
+|                                      |
+| Switching changes trained models,    |
+| the Library and where results go.    |
+| Running jobs keep their project.     |
++--------------------------------------+
+```
+
+## 3. Enhance lane
+
+A tool selector sits where the model card sits in other lanes. Upscale:
+
+```
++--------------------------------------+
+| Image Edit [Enhance] Trained Library |
++--------------------------------------+
+| Tool  [Upscale] Expand  Remove BG    |
 |                                      |
 | Source  All visible 3000 x 2000 [v]  |
 | Model   Model name       [ Change ]  |
@@ -121,37 +232,117 @@ Header, lane tabs, lane body (scrolls), results tray, prompt bar (fixed). The do
 |         ( ) Layer in this document   |
 | > Advanced (3 settings)              |
 +--------------------------------------+
-| [ Generate N CU                   ]  |
+| [ Generate (N CU)                 ]  |
 +--------------------------------------+
 ```
 
-## 3. Model picker
+Expand with an aspect preset. The anchor sets where the current image sits on the new canvas:
 
-A full panel view (text fields render above overlays in UXP, so the picker cannot float over the form). Type tabs follow the lanes; chips come from the catalog plus three plugin chips.
+```
++--------------------------------------+
+| Image Edit [Enhance] Trained Library |
++--------------------------------------+
+| Tool  Upscale [Expand]  Remove BG    |
+|                                      |
+| Model   Model name       [ Change ]  |
+| Canvas  (o) Aspect   ( ) Per side    |
+| (1:1) [4:5] (3:2) (2:3) (16:9)       |
+| (9:16) (Custom)                      |
+| Anchor  [ ][ ][ ]                    |
+|         [ ][x][ ]                    |
+|         [ ][ ][ ]                    |
+| Size    3000 x 2000 to 3000 x 3750   |
+| > Advanced (overlap 32 px, 2 more)   |
++--------------------------------------+
+| Describe the new area (optional)     |
+| [ Generate (N CU)                 ]  |
++--------------------------------------+
+```
+
+Expand per side, past the model's limit:
+
+```
++--------------------------------------+
+| Canvas  ( ) Aspect   (o) Per side    |
+| Left [    0 ] px  Right  [    0 ] px |
+| Top  [  600 ] px  Bottom [ 1150 ] px |
+| Size    3000 x 2000 to 3000 x 3750   |
++--------------------------------------+
+| ! Bottom adds 1150 px; this model    |
+|   adds at most 1024 px per side.     |
++--------------------------------------+
+| [ Generate (N CU)  disabled       ]  |
++--------------------------------------+
+```
+
+Remove BG on a pixel layer, and on a layer that already has a mask:
+
+```
++--------------------------------------+
+| Image Edit [Enhance] Trained Library |
++--------------------------------------+
+| Tool  Upscale  Expand  [Remove BG]   |
+|                                      |
+| Source  Layer "Product shot"    [v]  |
+| Model   Model name       [ Change ]  |
+| Lands   (o) Mask on the layer        |
+|         ( ) New cutout layer         |
++--------------------------------------+
+| [ Generate (N CU)                 ]  |
++--------------------------------------+
+| Source  Layer "Bottle"          [v]  |
+| Lands   New cutout layer             |
+|         This layer already has a     |
+|         mask; it stays as it is.     |
++--------------------------------------+
+```
+
+## 4. Model picker
+
+A full panel view (text fields render above overlays in UXP, so the picker cannot float over the form). Tabs and tools come from the mapping in SPEC 3.3. Chips per tab:
+
+| Tab | Chips |
+|---|---|
+| Image | All, Favorites, Recommended, References, Tags menu |
+| Edit | All, Favorites, Recommended, Mask input, References, Tags menu |
+| Enhance | All, Favorites, Upscale, Expand, Remove BG, Tags menu |
+| Trained | All, Favorites, Tags menu |
 
 ```
 +--------------------------------------+
 | < Models                             |
 | [ Search models                   ]  |
 | [Image] Edit  Enhance  Trained       |
-| (Favorites) (Mask input) (References)|
-| (Category A) (Category B) (more v)   |
+| (All) (Favorites) (Recommended)      |
+| (References)           [ Tags v ]    |
 +--------------------------------------+
 | [th] * Model name                    |
 |        Two-line description from     |
 |        the catalog.                  |
-|        Mask input . 4 refs . 4096 px |
+|        4 refs . 4096 px              |
 +--------------------------------------+
-| [th]   Model name                    |
+| [th]   Model name      Experimental  |
 |        Two-line description from     |
 |        the catalog.                  |
 |        4 refs . 2048 px              |
 +--------------------------------------+
-| [th]   Trained model name   Trained  |
-|        Your team's model, runs on    |
-|        its base model.               |
-+--------------------------------------+
 |              [ Load more ]           |
++--------------------------------------+
+```
+
+The highlighted row expands:
+
+```
++--------------------------------------+
+| [th] * Model name                    |
+|        Full description from the     |
+|        catalog, on as many lines as  |
+|        it takes.                     |
+|        Inputs: prompt, up to 4       |
+|        references, mask              |
+|        Output up to 4096 x 4096      |
+|        Price: N to M CU per image    |
+|        [ Use this model ]            |
 +--------------------------------------+
 ```
 
@@ -160,7 +351,7 @@ Empty result:
 ```
 +--------------------------------------+
 | < Models                             |
-| [ Search: neon logo                ] |
+| [ Search: neon logo               ]  |
 | (Mask input x)                       |
 +--------------------------------------+
 | No models in this lane match these   |
@@ -169,9 +360,121 @@ Empty result:
 +--------------------------------------+
 ```
 
-## 4. Prompt bar
+## 5. Trained lane
 
-Fixed at the bottom of every generating lane. Enter generates when the price is current; Shift+Enter adds a line; Up and Down in an empty field recall recent prompts. The button states:
+Make new with two LoRAs stacked on their base:
+
+```
++--------------------------------------+
+| Image Edit Enhance [Trained] Library |
++--------------------------------------+
+| Project  Fall campaign               |
+| (o) Make new   ( ) Edit Experimental |
+|                                      |
+| Trained models (2 of 6)              |
+| [th] Brand style v3  LoRA            |
+|      Strength [ 0.80 ]  0 to 2       |
+|                         [ Remove ]   |
+| [th] Ink outline     LoRA            |
+|      Strength [ 0.50 ]  0 to 2       |
+|                         [ Remove ]   |
+| [ + Add another ]                    |
+| Runs on Flux.2 Dev                   |
+|                                      |
+| References (1 of 4)                  |
+| [th] [ + Add ]                       |
+| > Advanced (5 settings)              |
++--------------------------------------+
+| Describe the image...                |
+| Takes [2 v]   Size [1:1 v]           |
+| [ Generate (N CU)                 ]  |
++--------------------------------------+
+```
+
+A composition replaces any LoRAs. Edit is offered because its base takes an aligned image:
+
+```
++--------------------------------------+
+| Project  Fall campaign               |
+| ( ) Make new   (o) Edit Experimental |
+|                                      |
+| Source  Selection 600 x 400     [v]  |
+| Sample  All visible             [v]  |
+| [th] Fall mascot   Composition       |
+|      Runs on Flux.1 Dev              |
+|                    [ Change ]        |
++--------------------------------------+
+| Edits with trained models are        |
+| experimental: check the seam badge.  |
++--------------------------------------+
+```
+
+A trained model that cannot edit an area:
+
+```
++--------------------------------------+
+| (o) Make new   ( ) Edit (off)        |
+| This model can't edit an area. Use   |
+| Make new, or use its result as a     |
+| reference in Edit.                   |
++--------------------------------------+
+```
+
+No trained models in this project:
+
+```
++--------------------------------------+
+| No trained models in project Fall    |
+| campaign. Models trained in other    |
+| projects appear when you switch      |
+| project.                             |
+| [ Open Scenario ] [ Switch project ] |
++--------------------------------------+
+```
+
+## 6. Library lane
+
+Browsing lists the project's images, newest first. Selecting a thumbnail shows its actions:
+
+```
++--------------------------------------+
+| Image Edit Enhance Trained [Library] |
++--------------------------------------+
+| Project  Fall campaign               |
+| Collection [ All images         v ]  |
+| [ Search images                   ]  |
++--------------------------------------+
+| [th]       [th]       [th]           |
+| [th]       [th*]      [th]           |
+| [th]       [th]       [th]           |
+|             [ Load more ]            |
++--------------------------------------+
+| logo-mark . 2048 x 2048 . Oct 12     |
+| [ Place ]  [ Use as reference v ]    |
+| [ Open as document ]  [ Details ]    |
++--------------------------------------+
+```
+
+**Use as reference** offers "in Image" and "in Edit". **Place** fits the asset to the selection box or the canvas. Search that finds nothing:
+
+```
++--------------------------------------+
+| [ Search: harbor night            ]  |
++--------------------------------------+
+| No images match "harbor night".      |
+| Search can miss recent assets.       |
+|                 [ Show all ]         |
++--------------------------------------+
+| No images in project Fall campaign   |
+| yet.                                 |
++--------------------------------------+
+| This collection has no images.       |
++--------------------------------------+
+```
+
+## 7. Prompt bar
+
+Fixed at the bottom of every generating lane. Cmd+Enter (Ctrl+Enter on Windows) generates when the price is current; Enter adds a line; Up and Down in an empty field recall recent prompts. The button states:
 
 ```
 +--------------------------------------+
@@ -179,11 +482,14 @@ Fixed at the bottom of every generating lane. Enter generates when the price is 
 | lights, wet cobblestones             |
 | Takes [2 v]   Size [3:2 v]           |
 +--------------------------------------+
-| [ Generate N CU                   ]  |
+| [ Generate (N CU)                 ]  |
 |   exact price, quote valid 120 s     |
 +--------------------------------------+
-| [ Generate from N CU              ]  |
-|   charge can be higher: per take     |
+| [ Generate (N to M CU)            ]  |
+|   charge depends on outputs returned |
++--------------------------------------+
+| [ Generate (from N CU)            ]  |
+|   charge can be higher               |
 +--------------------------------------+
 | [ Checking price...               ]  |
 +--------------------------------------+
@@ -191,27 +497,32 @@ Fixed at the bottom of every generating lane. Enter generates when the price is 
 |   this model prices the uploaded     |
 |   image; first click uploads it      |
 +--------------------------------------+
-| [ Confirm N CU                    ]  |
+| [ Confirm (N CU)                  ]  |
 |   selection uploaded; price exact    |
 +--------------------------------------+
 | [ Price unavailable               ]  |
 |   Prompt is required by this model.  |
 +--------------------------------------+
+| [ Generate (12.4K CU)             ]  |
+|   K and M from 10,000 CU             |
++--------------------------------------+
 ```
 
-## 5. Selection-aware edit
+## 8. Selection edit
 
-The Edit lane with a selection. The source chip follows the selection (coalesced at 200 ms). The capture is recorded when Generate is clicked, so changing the selection afterwards does not change the job.
+The Edit lane with a selection, on a 16-bit document. The source chip follows the selection (coalesced at 200 ms). The capture is recorded when Generate is clicked, so changing the selection afterwards does not change the job:
 
 ```
 +--------------------------------------+
-| [S] Fall campaign     * Jobs 2   [=] |
+| [S] Fall campaign v  * Jobs 2    [=] |
 +--------------------------------------+
 | Image [Edit] Enhance Trained Library |
 +--------------------------------------+
 | Source  Selection 928 x 928     [v]  |
 | Sample  All visible             [v]  |
 | Margin  auto (464 px)   Feather 2 px |
+| ! 16-bit document: edits are 8-bit   |
+|   sRGB inside the selection.         |
 |                                      |
 | Model   Model name       [ Change ]  |
 |         Mask input                   |
@@ -220,7 +531,17 @@ The Edit lane with a selection. The source chip follows the selection (coalesced
 | Replace the sky with dusk clouds     |
 |                                      |
 | Takes [2 v]                          |
-| [ Generate N CU                   ]  |
+| [ Generate (N CU)                 ]  |
++--------------------------------------+
+```
+
+Without a selection:
+
+```
++--------------------------------------+
+| Source  Layer "Background copy" [v]  |
+|         No selection: edits the      |
+|         whole layer, lands unmasked. |
 +--------------------------------------+
 ```
 
@@ -240,19 +561,44 @@ While the job runs, the panel stays usable and the person can keep working in th
 +--------------------------------------+
 ```
 
-Results landed as a group with take 1 visible. Clicking a thumbnail shows that take. Badges come from the checks in SPEC section 3.6:
+Results landed as a group with take 1 visible and the mask on the group. Clicking a thumbnail shows that take. The selection is left as it was. **More** offers Upscale, Remove BG, Expand, Use as reference and Open as document with this take as the source:
 
 ```
 +--------------------------------------+
-| Latest: 2 takes, placed              |
+| v Latest: 2 takes, placed            |
 | [t1*] [t2]                           |
 | t1  Seam ok                          |
 | t2  Edge tone differs                |
 | [ Keep this take ]  [ Details ]      |
+| [ Reuse settings ]  [ More v ]       |
 +--------------------------------------+
 | Placed as "Scenario edit dusk-sky    |
-| (2 takes)" above Sky. Ctrl+Z undoes  |
-| it in one step.                      |
+| (2 takes)" above Sky, masked to the  |
+| selection. Ctrl+Z undoes it in one   |
+| step.                                |
++--------------------------------------+
+```
+
+A job whose document is open but not active waits in the tray:
+
+```
++--------------------------------------+
+| Ready for poster.psd: 2 takes        |
+| [t1] [t2]                            |
+| [ Place ]  [ Open as document ]      |
++--------------------------------------+
+```
+
+After the first placed result, once:
+
+```
++--------------------------------------+
+| Prompts and prices are saved in      |
+| layer metadata and travel with the   |
+| PSD. Settings > Results can leave    |
+| them out.                            |
+| Agents can work here too:            |
+| [ Connect a client ]        [ OK ]   |
 +--------------------------------------+
 ```
 
@@ -263,34 +609,99 @@ Special cases:
 | ! Quick Mask is on.                  |
 |   [ Use Quick Mask as selection ]    |
 +--------------------------------------+
+| ! Layer "Sky" is hidden. Show it to  |
+|   use it as the source.              |
+|   [ Show layer ]                     |
++--------------------------------------+
+| ! Selection is too small to edit.    |
++--------------------------------------+
 | ! The canvas changed since this edit |
-|   started. The masked placement is   |
-|   no longer exact.                   |
-|   [ Place unmasked ] [ Open as doc ] |
+|   started.                           |
+|   [ Place unmasked ]                 |
+|   [ Open as document ]               |
 +--------------------------------------+
 | ! Unchanged inside: the model may    |
 |   have read the mask inverted.       |
 |   [ Details ]                        |
 +--------------------------------------+
 | ! Pixels outside the selection       |
-|   changed.               [ Undo ]    |
+|   changed.                [ Undo ]   |
++--------------------------------------+
+| ! May be misaligned: the result's    |
+|   shape differs; placed inside the   |
+|   box.                               |
++--------------------------------------+
+| ! Input reduced to 1400 px to fit    |
+|   the upload limit.                  |
 +--------------------------------------+
 ```
 
-## 6. Price before spend
+## 9. Details
 
-The person's click on a priced button is the approval. Three extra screens exist. Above the confirm limit (Settings > Spending, default 100 CU), a modal dialog:
+From a tray card, a Jobs row, the header menu or the chip that appears when the active layer carries Scenario metadata:
+
+```
++--------------------------------------+
+| Image [Edit] Enhance Trained Library |
++--------------------------------------+
+| Scenario layer: edit dusk-sky        |
+|                        [ Details ]   |
++--------------------------------------+
+```
+
+```
++--------------------------------------+
+| [S] Fall campaign v  * Jobs 2    [=] |
+|                 +------------------+ |
+|                 | Settings         | |
+|                 | Details of       | |
+|                 |  selected layer  | |
+|                 | Help             | |
+|                 | Report a problem | |
+|                 +------------------+ |
++--------------------------------------+
+```
+
+```
++--------------------------------------+
+| < Details                            |
+| Scenario edit dusk-sky a1b2c3        |
++--------------------------------------+
+| Model     Model name                 |
+| Trained   none                       |
+| Prompt    Replace the sky with dusk  |
+|           clouds                     |
+| Settings  2 takes, 1024 x 1024       |
+|           > All settings             |
+| Inputs    [ctx] [mask]               |
+| Price     quoted N, charged N CU     |
+| Created   2026-10-19 14:02           |
+| Origin    You                        |
+| Checks    Seam ok, outside unchanged |
+| Ids       job ....9c1e, asset a1b2c3 |
+| Plugin    0.1.0                      |
++--------------------------------------+
+| [ Reuse settings ] [ Select layer ]  |
+| [ Copy ids ]                         |
++--------------------------------------+
+```
+
+When the document left prompts or prices out, those rows read "left out of this document". For a layer without Scenario metadata: "The selected layer has no Scenario metadata."
+
+## 10. Approvals
+
+The person's click on a priced button is the approval. Above the confirm limit (Settings > Spending, default 100 CU), a modal dialog:
 
 ```
 +--------------------------------------+
 | Confirm spend                        |
 +--------------------------------------+
-| This generation costs N CU, above    |
-| your confirm limit of 100 CU.        |
+| This generation costs up to N CU,    |
+| above your confirm limit of 100 CU.  |
 |                                      |
 | Model name . 4 takes . 4096 x 4096   |
 |                                      |
-| [ Cancel ]           [ Spend N CU ]  |
+| [ Cancel ]         [ Spend (N CU) ]  |
 +--------------------------------------+
 ```
 
@@ -301,11 +712,27 @@ When the exact price after upload differs from the price shown on the button:
 | Price changed after upload.          |
 | Now N CU (was M CU). Nothing was     |
 | spent.                               |
-| [ Cancel ]        [ Generate N CU ]  |
+| [ Cancel ]      [ Generate (N CU) ]  |
 +--------------------------------------+
 ```
 
-When an agent asks to spend and Agent spending is **Ask each time** (the default). The card sits at the top of the panel and in Jobs:
+An agent's first upload in a session:
+
+```
++--------------------------------------+
+| ! Allow Claude Code to send pixels   |
+|   from poster.psd to Scenario for    |
+|   this session?                      |
++--------------------------------------+
+| First upload: selection 928 x 928    |
+| [ctx] [mask]                         |
+| Later uploads from this client are   |
+| listed in the activity log.          |
+| [ Deny ]                  [ Allow ]  |
++--------------------------------------+
+```
+
+An agent asks to spend, with Agent spending set to **Ask each time** (the default). The card sits at the top of the panel and in Jobs:
 
 ```
 +--------------------------------------+
@@ -315,41 +742,60 @@ When an agent asks to spend and Agent spending is **Ask each time** (the default
 | "Replace the sky with dusk clouds"   |
 | Inputs  [ctx] [mask]                 |
 | Target  poster.psd, above Sky        |
-|                                      |
 | Client name as reported by the       |
 | client.                              |
-| [ Decline ]       [ Approve N CU ]   |
+| [ Decline ]     [ Approve (N CU) ]   |
 +--------------------------------------+
 ```
 
-## 7. Jobs view
+While an allowance runs, the header shows what is left:
 
-Opened from **Jobs** in the header. Two tabs. **On this computer** is the ledger:
+```
++--------------------------------------+
+| [S] Fall campaign v  * Jobs 2    [=] |
+| Agent allowance: Claude Code,        |
+| 180 of 300 CU left          [ End ]  |
++--------------------------------------+
+```
+
+## 11. Jobs
+
+Opened from **Jobs** in the header. **On this computer** is the ledger:
 
 ```
 +--------------------------------------+
 | < Jobs                               |
 | [On this computer]  On Scenario      |
 | (All) (Needs attention 1) (Agents)   |
+| (This document: N CU charged)        |
 +--------------------------------------+
 | [th] Edit "dusk-sky"     generating  |
 |      You . quoted N CU . 14:02       |
-|      [====      ] 1 of 2  [ Cancel ] |
+|      [====     ] 1 of 2  [ Cancel ]  |
++--------------------------------------+
+| [!]  Image "skyline"                 |
+|      awaiting approval               |
+|      Codex . N CU . 13:58            |
+|      [ Decline ] [ Approve (N CU) ]  |
 +--------------------------------------+
 | [th] Image "forest-plate"    placed  |
 |      Claude Code . N / N CU . 13:40  |
-|      [ Select layer ]  [ Details ]   |
+|      [ Select layer ] [ Details ]    |
+|      [ Reuse settings ]              |
 +--------------------------------------+
 | [!]  Upscale "poster"       Unknown  |
 |      You . quoted N CU . 13:12       |
 |      [ Resolve ]                     |
 +--------------------------------------+
-| [th] Expand "banner"  downloading    |
-|      2 of 4      [ Stop download ]   |
+| [th] Expand "banner"                 |
+|      downloading results 2 of 4      |
+|      [ Stop download ]               |
 +--------------------------------------+
 | [x]  Image "logo"            Failed  |
-|      Charged N CU, no refund         |
-|      [ Copy error ] [ Edit, retry ]  |
+|      Charged N CU, no refund on      |
+|      failure                         |
+|      [ Copy error ]                  |
+|      [ Edit and retry ]              |
 +--------------------------------------+
 ```
 
@@ -364,7 +810,7 @@ Resolving an Unknown job. Only the person can do this; agents get `UnknownNeedsP
 | retried until you decide.            |
 |                                      |
 | Sent 13:12 . Model name . N CU       |
-| Jobs on Scenario, same model:        |
+| Jobs on Scenario around that time:   |
 | (o) 13:12:41  same inputs     [th]   |
 | ( ) 13:31:05  other inputs    [th]   |
 |                                      |
@@ -373,48 +819,83 @@ Resolving an Unknown job. Only the person can do this; agents get `UnknownNeedsP
 +--------------------------------------+
 ```
 
-**On Scenario** lists the project's recent jobs, including ones made elsewhere. Nothing here spends:
+**On Scenario** lists the current project's recent jobs, including ones made elsewhere. Nothing here spends:
 
 ```
 +--------------------------------------+
 | < Jobs                               |
 | On this computer  [On Scenario]      |
-| Fall campaign . last 30 days         |
+| Fall campaign . newest first         |
 +--------------------------------------+
-| [th] Model name . 12:01 . done       |
+| [th] "harbor at night" . 12:01       |
+|      Model name . success            |
 |      [ Place ] [ Open as document ]  |
 |      [ Use as reference ]            |
 |      [ Add to this computer ]        |
 +--------------------------------------+
-| [th] Model name . 11:40 . done       |
+| [th] 11:40 . success                 |
 |      [ Place ] [ Open as document ]  |
-|      [ Use as reference ]            |
 +--------------------------------------+
 |              [ Load more ]           |
 +--------------------------------------+
 ```
 
-## 8. Error and empty states
+Empty ledger:
 
-Each message names what happened and the next action. Full list in SPEC section 3.9.
+```
++--------------------------------------+
+| Jobs you start here or from an agent |
+| appear here. Jobs from another       |
+| Photoshop version are on the On      |
+| Scenario tab.    [ On Scenario ]     |
++--------------------------------------+
+```
+
+## 12. Errors and empty states
+
+Each message names what happened and the next action. The full list is SPEC 3.13. Under every error, **Report a problem** opens the repository's issue form with nothing attached.
+
+Account and limits:
+
+```
++--------------------------------------+
+| Scenario refused this request:       |
+| <Scenario's message>. The key may    |
+| not have access to this model or     |
+| action.            [ Copy error ]    |
++--------------------------------------+
+| This key's or this plan's CU limit   |
+| is reached. Nothing was sent.        |
+| [ Open plans ]     [ Copy error ]    |
++--------------------------------------+
+| Not enough CU for this job.          |
+|                   [ Open plans ]     |
++--------------------------------------+
+| Not sent: Scenario asked to wait     |
+| 30 s.       [ Try again ] (in 30 s)  |
++--------------------------------------+
+| Scenario is busy. Retrying in 5 s.   |
++--------------------------------------+
+| This model is no longer available    |
+| to this key.                         |
+|            [ Choose another model ]  |
++--------------------------------------+
+```
+
+Connection, documents and jobs:
 
 ```
 +--------------------------------------+
 | Offline. Price checks paused; jobs   |
 | resume when the connection returns.  |
-+--------------------------------------+
-| Scenario refused this request:       |
-| <Scenario's message>  [ Copy error ] |
-+--------------------------------------+
-| Not enough Creative Units for this   |
-| job.                [ Open plans ]   |
-+--------------------------------------+
-| Not sent: Scenario asked to wait     |
-| 30 s.                [ Try again ]   |
+|                        [ Retry ]     |
 +--------------------------------------+
 | This lane reads RGB, Gray or Lab     |
 | documents. This one is CMYK.         |
 |                 [ Make RGB copy ]    |
++--------------------------------------+
+| 32-bit documents are not supported   |
+| yet. Convert a copy to 16-bit.       |
 +--------------------------------------+
 | Photoshop is busy. Placing when it   |
 | is free.                             |
@@ -422,31 +903,41 @@ Each message names what happened and the next action. Full list in SPEC section 
 | Download stopped after 3 attempts.   |
 |                 [ Resume download ]  |
 +--------------------------------------+
+| This result is no longer available   |
+| on Scenario.         [ Details ]     |
++--------------------------------------+
 | Scenario blocked this request        |
 | (content policy).    [ Details ]     |
 +--------------------------------------+
+| <Scenario's failure text>            |
+| Charged N CU.                        |
+| [ Copy error ] [ Edit and retry ]    |
++--------------------------------------+
 ```
 
-Empty states:
+Agent connection:
 
 ```
 +--------------------------------------+
-| Jobs you start here or from an agent |
-| appear here.                         |
+| Agent connection unavailable:        |
+| another program uses port 9890.      |
+|               [ Copy diagnostics ]   |
 +--------------------------------------+
-| Your team has no trained models      |
-| yet. Train one on app.scenario.com.  |
-|                 [ Open Scenario ]    |
+| The program on port 9890 is not the  |
+| Scenario helper.                     |
+|               [ Copy diagnostics ]   |
 +--------------------------------------+
-| No assets in this project yet.       |
+| A client tried to connect with an    |
+| old pairing token. Copy its setup    |
+| again.       [ Connect a client ]    |
++--------------------------------------+
+```
+
+Empty and loading:
+
+```
 +--------------------------------------+
 | Models could not load.  [ Retry ]    |
-+--------------------------------------+
-```
-
-Loading: skeleton rows, never a bare spinner:
-
-```
 +--------------------------------------+
 | Loading models...                    |
 | [th] ======================          |
@@ -456,9 +947,72 @@ Loading: skeleton rows, never a bare spinner:
 +--------------------------------------+
 ```
 
-## 9. The "agents may modify the document" switch
+## 13. Settings
 
-Settings > Agents. Both switches are off by default; the second needs the first. The person's choice persists across restarts.
+```
++--------------------------------------+
+| < Settings                           |
++--------------------------------------+
+| Account                              |
+| (o) Fall campaign          ....7KQ2  |
+| ( ) Mascot training        ....A1C9  |
+| [ Add a key for another project ]    |
+| [ Test connection ]  [ Sign out ]    |
+| Sign out removes the key from this   |
+| computer. Delete it on               |
+| app.scenario.com to revoke it.       |
++--------------------------------------+
+| Spending                             |
+| Confirm above [ 100 ] CU             |
+| [ ] No-spend mode                    |
+| A key can carry its own CU cap, set  |
+| on app.scenario.com.                 |
++--------------------------------------+
+| Results                              |
+| Output Folder: plugin folder         |
+| [ Choose Output Folder ]             |
+| Choose a folder to keep a copy of    |
+| job records that survives Photoshop  |
+| upgrades.                            |
+| [x] Place when ready                 |
+| [ ] Leave prompts out of documents   |
+| [ ] Leave prices out of documents    |
+| Mask feather [ 2 ] px                |
++--------------------------------------+
+| > Agents                             |
+| > Updates                            |
+| > Diagnostics                        |
+| > About                              |
++--------------------------------------+
+```
+
+Diagnostics and About. **Copy diagnostics** shows the text before copying:
+
+```
++--------------------------------------+
+| Diagnostics                          |
+| [ Run self-test ]  free              |
+| [ Copy diagnostics ]                 |
++--------------------------------------+
+| This text will be copied. It holds   |
+| no prompts, names, ids, paths, keys  |
+| or tokens.                           |
+| plugin 0.1.0 . helper 0.1.0          |
+| Photoshop 27.11.0 . macOS X.Y        |
+| switches: modify off, commands off   |
+| jobs: placed 12, failed 1, unknown 0 |
+| last errors: RateLimited, Offline    |
+| [ Cancel ]                [ Copy ]   |
++--------------------------------------+
+| About                                |
+| Scenario for Photoshop 0.1.0         |
+| Generative AI by Scenario            |
+| MIT license . Privacy . Scenario     |
+| terms . Report a problem             |
++--------------------------------------+
+```
+
+Settings > Agents. All three switches are off by default. The second needs the first and turns off when Photoshop quits; the others persist:
 
 ```
 +--------------------------------------+
@@ -471,16 +1025,33 @@ Settings > Agents. Both switches are off by default; the second needs the first.
 |     Off: agent changes arrive as     |
 |     proposals you apply.             |
 |                                      |
-| [ ] Agents may run Photoshop scripts |
-|     Needs the switch above. Scripts  |
-|     can change anything except       |
-|     saving, closing and exporting.   |
+| [ ] Agents may run Photoshop         |
+|     commands                         |
+|     Lets agents run Photoshop        |
+|     commands (batchPlay) on open     |
+|     documents: layers, selections,   |
+|     masks, adjustments, filters and  |
+|     transforms. Each call is one     |
+|     History step. Commands that      |
+|     save, close, export or print,    |
+|     play Actions, run scripts, use   |
+|     Adobe's generative features or   |
+|     change Photoshop's settings are  |
+|     always refused. Turn on only for |
+|     agents you trust.                |
+|     Needs the switch above. Turns    |
+|     off when Photoshop quits.        |
+|                                      |
+| [ ] Agents read the active document  |
+|     only                             |
 +--------------------------------------+
 | Agent spending                       |
 | (o) Ask me each time                 |
-| ( ) Allow without asking, up to      |
-|     [ 100 ] CU per call, until       |
-|     Photoshop quits                  |
+| ( ) Allow without asking for         |
+|     [ Claude Code             v ]    |
+|     up to [  50 ] CU per call and    |
+|     [ 300 ] CU in total, until it    |
+|     disconnects or Photoshop quits   |
 +--------------------------------------+
 | [ Connect a client ]                 |
 | [ Activity log ]                     |
@@ -488,7 +1059,24 @@ Settings > Agents. Both switches are off by default; the second needs the first.
 +--------------------------------------+
 ```
 
-With the switch off, an agent's apply becomes a proposal card:
+The activity log lists what agents read, sent, spent and changed:
+
+```
++--------------------------------------+
+| < Activity log                       |
++--------------------------------------+
+| 14:05 Claude Code  read preview      |
+|       poster.psd                     |
+| 14:05 Claude Code  upload selection  |
+|       (allowed for this session)     |
+| 14:06 Claude Code  spend N CU        |
+|       (approved)                     |
+| 14:07 Claude Code  place edit        |
+|       (proposal applied)             |
++--------------------------------------+
+```
+
+With **Agents may modify the document** off, an agent's apply becomes a proposal card:
 
 ```
 +--------------------------------------+
@@ -504,11 +1092,11 @@ With the switch off, an agent's apply becomes a proposal card:
 +--------------------------------------+
 ```
 
-With the switch on, the header says so, and each agent change shows a toast:
+With it on, the header says so, and each agent change shows an inline banner:
 
 ```
 +--------------------------------------+
-| [S] Fall campaign     * Jobs 2   [=] |
+| [S] Fall campaign v  * Jobs 2    [=] |
 | ! Agents can edit            [ Off ] |
 +--------------------------------------+
 | Claude Code placed "Scenario image   |
@@ -516,16 +1104,16 @@ With the switch on, the header says so, and each agent change shows a toast:
 +--------------------------------------+
 ```
 
-## 10. Connect a client
+## 14. Connect a client
 
-Settings > Agents > Connect a client. The plugin cannot write client config files from its sandbox (SPEC section 7.4), so each client gets the shortest path that works from the panel. Status comes from the clients the helper reports.
+Settings > Agents > Connect a client. The plugin cannot write client config files from its sandbox (SPEC 7.4), so each client gets the shortest path that works from the panel. Commands pin the exact helper version. Status comes from the clients the helper reports.
 
 ```
 +--------------------------------------+
 | < Connect a client                   |
 | Agents reach Photoshop through the   |
-| scenario-photoshop helper, which     |
-| runs on this computer.               |
+| scenario-photoshop helper 0.1.0,     |
+| which runs on this computer.         |
 +--------------------------------------+
 | Claude Code              Connected   |
 | [ Copy command ]                     |
@@ -541,11 +1129,16 @@ Settings > Agents > Connect a client. The plugin cannot write client config file
 +--------------------------------------+
 | Other clients                        |
 | [ Copy JSON ]  [ Copy TOML ]         |
+| Add it to your user-level config,    |
+| not to a project file that may be    |
+| committed.                           |
 | With Node: [ Copy setup command ]    |
 | Skills:    [ Copy skills command ]   |
 +--------------------------------------+
 | Commands need Node 20 or later; the  |
 | Claude Desktop extension does not.   |
+| The token grants access to this      |
+| plugin's agent link only.            |
 | Pairing token ....9F3A  [ Reset ]    |
 +--------------------------------------+
 ```
@@ -554,9 +1147,18 @@ After **Copy command**:
 
 ```
 +--------------------------------------+
-| Copied. Paste it in a terminal,      |
-| then restart Claude Code. The row    |
-| turns to Connected on the first      |
-| call.                                |
+| Copied. Paste it in a terminal, then |
+| restart Claude Code. The row turns   |
+| to Connected on the first call.      |
++--------------------------------------+
+```
+
+When a client runs an older helper:
+
+```
++--------------------------------------+
+| ! Claude Code runs helper 0.1.0;     |
+|   this plugin needs 0.2.0.           |
+|   [ Copy new command ]               |
 +--------------------------------------+
 ```
