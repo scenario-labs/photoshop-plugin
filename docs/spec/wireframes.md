@@ -1,6 +1,6 @@
 # Wireframes (spec v1)
 
-Status: draft for review, revision 3, 2026-10-19. Companion to [SPEC.md](SPEC.md), section 3. Section numbers here follow the screen list in SPEC 3.15.
+Status: draft for review, revision 4, 2026-10-19. Companion to [SPEC.md](SPEC.md), section 3. Section numbers here follow the screen list in SPEC 3.15.
 
 - Frames are drawn at the default docked width, 320 px, as 40 columns of 8 px. Section 2 also draws the 280 px minimum (35 columns); below 320 px the lane tabs show icons with tooltips.
 - `[ Label ]` is a button, `[v]` a dropdown, `( )` and `(o)` radio buttons, `[ ]` and `[x]` checkboxes, `(Chip)` a filter chip, `[th]` a thumbnail, `>` a collapsed row, `v` an expanded row.
@@ -23,7 +23,9 @@ Shown when no key is saved. **Create an API key** opens the API keys page on app
 |                                      |
 | 1. Create a Project key with the     |
 |    Editor role, in the project you   |
-|    want to use.                      |
+|    want to use. A CU limit on the    |
+|    key caps what this plugin and     |
+|    agents can spend.                 |
 |    [ Create an API key ]             |
 |    Only team admins and project      |
 |    owners can create keys.           |
@@ -60,6 +62,7 @@ Shown when no key is saved. **Create an API key** opens the API keys page on app
 | x API keys need a Starter plan or    |
 |   above. This team's plan has no     |
 |   API access.     [ Open plans ]     |
+|   [ Copy a request for your admin ]  |
 +--------------------------------------+
 | x This key can't run models. Create  |
 |   a Project key with the Editor or   |
@@ -239,6 +242,17 @@ A tool selector sits where the model card sits in other lanes. Upscale:
 +--------------------------------------+
 ```
 
+A source larger than the read cap is read reduced, and the Output line says so (SPEC 5.8):
+
+```
++--------------------------------------+
+| Source  All visible 9000 x 6000 [v]  |
+| Factor  [2x v]  Output 12288 x 8192  |
+|         1.4x of this document: the   |
+|         source is read at 6144 px.   |
++--------------------------------------+
+```
+
 With **Selection box** as the source, **Lands** offers **Layer over the box** (the default, for detail repair) and **New document**.
 
 Expand with a model that takes a mask (the default), so every anchor and Per side work. The anchor sets where the current image sits on the new canvas:
@@ -273,9 +287,9 @@ When the new canvas is larger than the model's maximum output, the warning shows
 +--------------------------------------+
 | Size    6000 x 4000 to 6000 x 7500   |
 +--------------------------------------+
-| ! New area at about 55% of this      |
+| ! New area at about 51% of this      |
 |   document's resolution: the model   |
-|   outputs at most 4096 px. Upscale   |
+|   outputs at most 3840 px. Upscale   |
 |   the result if you need more.       |
 +--------------------------------------+
 | [ Generate (N CU)                 ]  |
@@ -326,7 +340,7 @@ A full panel view (text fields render above overlays in UXP, so the picker canno
 | Image | All, Favorites, Recommended, References, Tags menu |
 | Edit | All, Favorites, Recommended, Mask input, References, Tags menu |
 | Enhance | All, Favorites, Upscale, Expand, Remove BG, Tags menu |
-| Trained | All, Favorites, Tags menu |
+| Trained | All, Favorites, This project, Public, Tags menu |
 
 ```
 +--------------------------------------+
@@ -347,6 +361,15 @@ A full panel view (text fields render above overlays in UXP, so the picker canno
 |        4 refs . 2048 px              |
 +--------------------------------------+
 |              [ Load more ]           |
++--------------------------------------+
+```
+
+A trained row names its kind and first base:
+
+```
++--------------------------------------+
+| [th]   Ink outline         Public    |
+|        LoRA via FLUX.2 Dev           |
 +--------------------------------------+
 ```
 
@@ -445,6 +468,20 @@ An edit LoRA on a base that requires reference images: in Edit the capture is th
 +--------------------------------------+
 ```
 
+A style LoRA on a base that takes reference images edits through the reference route (SPEC 3.4):
+
+```
++--------------------------------------+
+| ( ) Make new   (o) Edit Experimental |
+| [th] Brand style v3  LoRA            |
+|      Runs on FLUX.2 Dev              |
+| References  Capture + 1 of 5         |
+| [cap] [th] [ + Add ]                 |
++--------------------------------------+
+| Say what to change and what to keep  |
++--------------------------------------+
+```
+
 A trained model whose base can't take the capture, and one this version does not know:
 
 ```
@@ -454,7 +491,7 @@ A trained model whose base can't take the capture, and one this version does not
 | Make new, then use the result as a   |
 | reference in Edit.                   |
 +--------------------------------------+
-| [th] Old style   (greyed)            |
+| [th] Old style   (grayed)            |
 |      This trained model type isn't   |
 |      supported by this version of    |
 |      the plugin.                     |
@@ -505,7 +542,7 @@ The plugin's own uploads (captures, masks, references) are hidden unless **Show 
 | [ Search: harbor night            ]  |
 +--------------------------------------+
 | No images match "harbor night".      |
-| Search can miss recent assets.       |
+| Search can miss assets.              |
 |                 [ Show all ]         |
 +--------------------------------------+
 | No images in project Fall campaign   |
@@ -528,8 +565,11 @@ Fixed at the bottom of every generating lane. Cmd+Enter (Ctrl+Enter on Windows) 
 | [ Generate (N CU)                 ]  |
 |   exact price, quote valid 120 s     |
 +--------------------------------------+
+| [ Generate (N CU)                 ]  |
+|   No refund if it fails              |
++--------------------------------------+
 | [ Generate (N to M CU)            ]  |
-|   charge depends on outputs returned |
+|   the charge varies within a bound   |
 +--------------------------------------+
 | [ Generate (from N CU)            ]  |
 |   charge can be higher; always       |
@@ -568,7 +608,7 @@ The Edit lane with a selection, on a 16-bit document. The source chip follows th
 +--------------------------------------+
 | Source  Selection 928 x 928     [v]  |
 | Sample  All visible             [v]  |
-| Margin  auto (464 px)   Feather 2 px |
+| Margin [auto v] 464 px  Feather 2 px |
 | Context 1856 x 1856, shaped to model |
 | ! 16-bit document: edits are 8-bit   |
 |   sRGB inside the selection.         |
@@ -624,9 +664,9 @@ Results landed as a group with take 1 visible and the mask on the group. Clickin
 | [ Reuse settings ]  [ More v ]       |
 +--------------------------------------+
 | Placed as "Scenario edit dusk-sky    |
-| (2 takes)" above Sky, masked to the  |
-| selection. Ctrl+Z undoes it in one   |
-| step.                                |
+| (2 takes)" at the top of poster.psd, |
+| masked to the selection. Ctrl+Z      |
+| undoes it in one step.               |
 +--------------------------------------+
 ```
 
@@ -708,6 +748,7 @@ From a tray card, a Jobs row, the header menu or the chip that appears when the 
 |                 | Details of       | |
 |                 |  selected layer  | |
 |                 | Help             | |
+|                 | Get help         | |
 |                 | Report a problem | |
 |                 +------------------+ |
 +--------------------------------------+
@@ -747,14 +788,16 @@ The person's click on a priced button is the approval. Above the confirm limit (
 +--------------------------------------+
 | Confirm spend                        |
 +--------------------------------------+
-| This generation costs up to N CU,    |
-| above your confirm limit of 100 CU.  |
+| This generation costs N CU, above    |
+| your confirm limit of 100 CU.        |
 |                                      |
 | Model name . 4 takes . 4096 x 4096   |
 |                                      |
 | [ Cancel ]      [ Generate (N CU) ]  |
 +--------------------------------------+
 ```
+
+For a range the dialog reads "This generation costs N to M CU; M is above your confirm limit" with **Generate (N to M CU)**. When the model gives no refund on failure, the dialog adds "No refund if it fails".
 
 For a `from` price, whatever the limit:
 
@@ -814,7 +857,7 @@ An agent asks to spend, with Agent spending set to **Ask each time** (the defaul
 +--------------------------------------+
 ```
 
-The card and its button state the price kind: "asks to spend N to M CU" with **Approve (up to M CU)**, or "asks to spend from N CU, no upper bound" with **Approve (from N CU)**. A `from` price shows this card even under an allowance.
+The card and its button state the price kind: "asks to spend N to M CU" with **Approve (N to M CU)**, or "asks to spend from N CU, no upper bound" with **Approve (from N CU)**. A `from` price shows this card even under an allowance. Each client has one pending card at a time: later requests wait behind it, and the card offers **Decline all from Claude Code**. A card expires after 10 minutes, or when the client's session ends.
 
 The person gives an allowance in Settings > Agents (section 13). While it runs, the header shows what is left, and **End** stops it:
 
@@ -857,7 +900,8 @@ Opened from **Jobs** in the header. **On this computer** is the ledger:
 |      [ Decline ] [ Approve (N CU) ]  |
 +--------------------------------------+
 | [th] Image "forest-plate"    placed  |
-|      Claude Code . N / N CU . 13:40  |
+|      Claude Code . 13:40             |
+|      quoted N, charged N CU          |
 |      [ Select layer ] [ Details ]    |
 |      [ Reuse settings ]              |
 +--------------------------------------+
@@ -871,7 +915,7 @@ Opened from **Jobs** in the header. **On this computer** is the ledger:
 +--------------------------------------+
 | [x]  Image "logo"            Failed  |
 |      Refunded by Scenario            |
-|      [ Copy error ]                  |
+|      [ Details ] [ Copy error ]      |
 |      [ Edit and retry ]              |
 +--------------------------------------+
 ```
@@ -932,7 +976,7 @@ Empty ledger:
 
 ## 12. Errors and empty states
 
-Each message names what happened and the next action. The full list is SPEC 3.13. Under every error, **Report a problem** opens the repository's issue form with nothing attached.
+Each message names what happened and the next action. The full list is SPEC 3.13. Under every error, **Report a problem** opens the repository's issue form with nothing attached, and **Get help** opens Scenario's help center.
 
 Account and limits:
 
@@ -1096,7 +1140,7 @@ Diagnostics and About. **Copy diagnostics** shows the text before copying:
 | Scenario for Photoshop 0.1.0         |
 | Generative AI by Scenario            |
 | MIT license . Privacy . Scenario     |
-| terms . Report a problem             |
+| terms . Get help . Report a problem  |
 +--------------------------------------+
 ```
 
@@ -1138,8 +1182,8 @@ Settings > Agents. All three switches are off by default. The second needs the f
 | ( ) Allow without asking for         |
 |     [ Claude Code, since 14:02  v ]  |
 |     up to [  50 ] CU per call and    |
-|     [ 300 ] CU in total, until it    |
-|     disconnects, Photoshop quits     |
+|     [ 300 ] CU in total, until its   |
+|     session ends, Photoshop quits    |
 |     or you end it. Prices with no    |
 |     upper bound always ask.          |
 +--------------------------------------+
@@ -1196,7 +1240,7 @@ With it on, the header says so, and each agent change shows an inline banner:
 
 ## 14. Connect a client
 
-Settings > Agents > Connect a client. The plugin cannot write client config files from its sandbox (SPEC 7.4), so each client gets the shortest path that works from the panel. Commands pin the exact helper version. Status comes from the clients the helper reports.
+Settings > Agents > Connect a client. The plugin cannot write client config files from its sandbox (SPEC 7.4), so each client gets the shortest path that works from the panel. Commands pin the exact helper version. Status comes from the clients the helper reports. On Windows the copy buttons give the PowerShell form of each command (SPEC 7.4).
 
 ```
 +--------------------------------------+

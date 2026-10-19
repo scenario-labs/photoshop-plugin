@@ -1,6 +1,6 @@
 # Scenario for Photoshop: Spec v1
 
-Status: draft for review, revision 3, 2026-10-19. Scope: the Scenario plugin for Adobe Photoshop (a UXP panel) and its local Scenario MCP server `scenario-photoshop`, feature scope v1.
+Status: draft for review, revision 4, 2026-10-19. Scope: the Scenario plugin for Adobe Photoshop (a UXP panel) and its local Scenario MCP server `scenario-photoshop`, feature scope v1.
 
 Companion files: [wireframes.md](wireframes.md), [MCP.md](MCP.md), [PRIVACY.md](../../PRIVACY.md).
 
@@ -9,6 +9,7 @@ Companion files: [wireframes.md](wireframes.md), [MCP.md](MCP.md), [PRIVACY.md](
 | Tag | Meaning |
 |---|---|
 | verified live (27.11) | Measured in Photoshop 27.11.0 with UXP 9.4.1 on macOS. When the measurement ran through ExtendScript rather than UXP, the claim says so. |
+| verified live (macOS) | Measured on macOS with the system's own command-line tools, outside Photoshop. |
 | seen through hosted Scenario MCP | Observed on Scenario through hosted Scenario MCP (mcp.scenario.com) signed in with OAuth. Not measured through the REST API with an API key, which is what the plugin calls. Rechecked on REST in M2.0 (section 12.3). |
 | documented | Stated in public Adobe, Scenario or client documentation. Not measured for this spec. |
 | assumed | A design assumption. The build tests it at the milestone named (section 12.3), and this spec changes if it fails. |
@@ -64,7 +65,7 @@ The choices this spec makes where the research left options open are listed at t
 
 ### 1.4 Use cases and v1 coverage
 
-Ranked from a study of about 200 recent Photoshop tutorials and posts that involve generated images. Score = how often the use case appears x the pain shown on screen x Scenario's fit against Photoshop's own features.
+Ranked from a study of about 200 Photoshop video tutorials that involve generated images. Score = how often the use case appears x the pain shown on screen x Scenario's fit against Photoshop's own features.
 
 | Rank | Use case | Coverage | Release |
 |---|---|---|---|
@@ -151,7 +152,7 @@ A UXP plugin (panel plus startup code) and a small Node helper process. Nothing 
 | Module | Owns | Notes |
 |---|---|---|
 | `auth` | Keys and secrets in `secureStorage` (one entry per project, named by a hash of the key id: entry names are not encrypted, documented), **Save and test**, 401 and 403 handling | The secret is never shown again after save and never logged |
-| `scenario` | REST client: catalog, schemas, dry runs, runs, jobs, assets, uploads (`POST /v1/assets` under the upload limit, `POST /v1/uploads` multipart above it, section 5.5), downloads | Retries reads only; the paid request has a 45 s timeout (section 6.1). Sends `Authorization` to `api.cloud.scenario.com` only |
+| `scenario` | REST client: catalog, schemas, dry runs, runs, jobs, assets, uploads (`POST /v1/assets` under the upload limit, `POST /v1/uploads` multipart above it, section 5.5), downloads | Retries reads only; the paid request has a 60 s timeout (section 6.1). Sends `Authorization` to `api.cloud.scenario.com` only |
 | `catalog` | Model cache, private models, picker search, the tab mapping | Private models filtered client-side (section 3.3) |
 | `forms` | Form generated from the model schema, validation, quotes | Validates names and types before any dry run |
 | `jobs` | Ledger, state machine, polling, downloads, recovery | Durable in the plugin data folder |
@@ -180,7 +181,7 @@ One JSON file per job in `PluginData/jobs/<local_id>.json`, written atomically (
 | `local_id` | UUID from `crypto.randomUUID` |
 | `idempotency_key` | Quote id or the agent's key (section 6.2) |
 | `fingerprint` | SHA-256 of the canonical request (section 6.1) |
-| `origin` | `person` or `agent`, the client name the agent reported, and the helper session id |
+| `origin` | `person` or `agent`; for an agent, its session id and that session's client name (section 2.6) |
 | `project` | Project name and a hash of the key id |
 | `lane`, `model_id`, `model_name`, `trained_model_ids`, `parameters` | `model_id` is the model called (the base model for trained models); parameters as canonical JSON, file inputs as asset ids |
 | `inputs` | Capture ids, uploaded asset ids, Library asset ids |
@@ -188,17 +189,19 @@ One JSON file per job in `PluginData/jobs/<local_id>.json`, written atomically (
 | `state`, `revision` | Status (below) and a counter bumped on each write |
 | `job_id`, `remote_status`, `progress` | From Scenario |
 | `cu_quoted`, `cu_quoted_max`, `price_kind`, `quote_mode` | The quote: decimal strings, `exact`, `range` or `from`, and the dry-run mode |
-| `cu_record`, `cu_charged`, `refunded`, `no_refund` | The charge, defined below |
+| `cu_record`, `cu_discount`, `cu_charged`, `refunded`, `no_refund` | The charge, defined below |
 | `outputs` | Asset ids, file paths, download state per file. Signed URLs are never stored |
 | `placement` | Layer ids, group id, History state name, check results |
 | `error` | `Type: message`, as shown to the person |
 | `claimed_at`, `submitted_at`, `finished_at` | ISO 8601 |
 
 **Charges.** This is the one definition; every view, total and tool uses it.
-- `cu_record` is what the job record reports once Scenario gives a final status: `billing.cuCost` plus the sum of `billing.cuCostDetails` (the add-ons).
+- `cu_record` is what the job record reports once Scenario gives a final status: `billing.cuCost` plus the sum of `billing.cuCostDetails` (the add-ons), net of discount as the next item says. `cu_discount` keeps `billing.cuDiscount`.
+- **Discount.** Quotes are net of discount: the run-model reference returns `creativeUnitsDiscount` with each quote and says `costDetails` are "after discount" and sum to `creativeUnitsCost` (documented). The jobs reference lists `billing.cuDiscount` without saying whether `cuCost` is counted before or after it. M2.0 reads both on every job (item 3); if `cuCost` is before discount, `cu_record` subtracts `cu_discount`. Until that is settled the plugin subtracts nothing, so a team with a discount may see a charge above its quote, which errs toward ending an allowance (section 6.3).
+- **Above its quote** means `cu_record` greater than the quote (M for a range), both net of discount, compared as integer thousandths of a CU.
 - `no_refund` copies `billing.disableRefund`.
-- `cu_charged` is what the person paid. On success it equals `cu_record`. On `failed`, `blocked` or `canceled` it is 0 and `refunded` is true, unless `no_refund` is true; then it equals `cu_record`. It is null before a final status.
-- Totals (Jobs "This document", Details, the agent allowance) add `cu_charged` only. Jobs shows "quoted N, charged M", "Refunded by Scenario", or "Charged N CU, no refund on failure".
+- `cu_charged` is what the person paid. With nothing on record (`cu_record` null or 0, as for `not_sent` or a refusal before any job existed) it is 0 and `refunded` is false. On success it equals `cu_record`. On `failed`, `blocked` or `canceled` it is 0 and `refunded` is true, unless `no_refund` is true; then it equals `cu_record`. It is null before a final status.
+- Jobs "This document" and Details add `cu_charged` only; the agent allowance counts as section 6.3 says. Jobs shows "quoted N, charged M", "Refunded by Scenario", or "Charged N CU, no refund on failure".
 - Basis: Scenario's run-model reference says `cuCost` is the main action alone, that a failed or canceled job's add-ons read 0 while `cuCost` keeps the main action's original charge, and that a failed generation is refunded unless `disableRefund` is true (documented). One failed job, seen through hosted Scenario MCP, kept its `cuCost` while the usage ledger netted it out. The refund of a canceled job's main charge is assumed: M2.0 checks a failed and a canceled job against usage.
 
 **Statuses.** Machine values are the Blender plugin's where the meaning is the same (`submitting`, `cancel_requested`, `succeeded`, `downloading`, `download_failed`, `ready`, `applying`, `apply_failed`, `applied`, `failed`, `canceled`, `uncertain`). Photoshop adds `uploading_inputs`, `awaiting_approval`, `blocked` and `not_sent`, and splits Blender's `remote` into `queued` and `generating`. Agents see the machine value; the panel shows the label.
@@ -206,15 +209,15 @@ One JSON file per job in `PluginData/jobs/<local_id>.json`, written atomically (
 | Machine value | Panel label | Meaning |
 |---|---|---|
 | `uploading_inputs` | uploading inputs | Captures or files are being sent; no job exists |
-| `awaiting_approval` | awaiting approval | An agent's paid request waits for the person |
+| `awaiting_approval` | awaiting approval | A paid request waits for the person: an agent's card, or the person's **Confirm** after an upload set or changed the price (section 6.1, step 3) |
 | `submitting` | sending | Ledger written; the paid request is in flight |
 | `queued` | queued | Scenario accepted the job |
 | `generating` | generating | Scenario reports progress |
 | `cancel_requested` | canceling | One cancel request sent; polling continues |
 | `succeeded` | finished on Scenario | Results exist on Scenario |
 | `downloading` | downloading results | Files are downloading |
-| `download_failed` | download stopped | Stopped by the person or after 3 attempts |
-| `ready` | results saved | Files are on disk, not placed |
+| `download_failed` | download stopped | Stopped by the person, after 3 attempts, or because the result can't be fetched (`ResultUnreachable`: an undeclared host, section 2.10; `ResultExpired`: gone from Scenario) |
+| `ready` | results saved | Files are on disk, not placed. **Open as document** leaves a job here |
 | `applying` | placing | Waiting for Photoshop's modal state, or placing |
 | `apply_failed` | place failed | The apply rolled back; **Place** tries again |
 | `applied` | placed | Results landed in a document |
@@ -225,18 +228,25 @@ One JSON file per job in `PluginData/jobs/<local_id>.json`, written atomically (
 | `uncertain` | Unknown | A job may exist; only the person resolves it |
 
 ```
-uploading_inputs -> submitting, or awaiting_approval -> submitting
-uploading_inputs, awaiting_approval -> not_sent   (Cancel, Decline, expiry, upload failure)
+(new) -> uploading_inputs | awaiting_approval | submitting
+(dry-run alarm, section 6.1 step 4) -> uncertain
+(Add to this computer, recover_cloud_job) -> succeeded
+uploading_inputs -> submitting | awaiting_approval   (Confirm needed after upload)
+awaiting_approval -> submitting
+uploading_inputs, awaiting_approval -> not_sent      (Cancel, Decline, expiry, upload failure, session end)
 submitting -> queued | not_sent | uncertain
 queued -> generating -> succeeded -> downloading -> ready -> applying -> applied
-downloading <-> download_failed                    (Stop download or 3 failures; Resume download)
-applying -> apply_failed -> applying               (Place)
-queued, generating -> cancel_requested -> canceled | succeeded | failed
+queued -> succeeded                                  (finished between two polls)
+succeeded, downloading -> download_failed            (Stop download, 3 failures, ResultUnreachable, ResultExpired)
+download_failed -> downloading                       (Resume download)
+download_failed -> ready                             (recover_download: every file verified on disk)
+applying -> apply_failed -> applying                 (Place)
+queued, generating -> cancel_requested -> canceled | succeeded | failed | blocked
 queued, generating -> failed | blocked | canceled
 uncertain -> the linked job's status (Link this job) | not_sent (Mark not sent)
 ```
 
-Restart transitions are listed once, in section 6.4.
+A person's job starts in `uploading_inputs`, or in `submitting` when nothing needs uploading; an agent's starts in `awaiting_approval` (a card) or `submitting` (under its allowance). A `download_failed` job with `ResultUnreachable` or `ResultExpired` offers no **Resume download**. Restart transitions are listed once, in section 6.4.
 
 | Scenario job status | Plugin status |
 |---|---|
@@ -250,25 +260,31 @@ Basis: the eight Scenario job statuses and the job's `metadata.error` and `metad
 
 ### 2.6 Helper and plugin link
 
-1. **Start.** An agent client starts the helper over stdio: `npx -y @scenario-labs/photoshop-mcp@<exact version>`, or the Claude Desktop extension. The helper takes the pairing token from `SCENARIO_PHOTOSHOP_TOKEN` when its client sets it, otherwise from its token file: `~/.config/scenario-photoshop/token` (mode 0600 in a 0700 folder) on macOS, `%APPDATA%\scenario-photoshop\token` on Windows, written by the setup command (section 7.4). `SCENARIO_NO_SPEND=1` is optional.
-2. **Election.** The helper tries to bind `127.0.0.1:9890`, and `[::1]:9890` where IPv6 loopback exists (Windows often resolves `localhost` to `::1` first). If every address binds, it is the owner. If any is in use, it releases what it bound and becomes a peer: it connects to `ws://127.0.0.1:9890` (Node is not bound by the UXP rule). A peer that cannot connect, or whose holder fails the proof, reports `PortInUse` to its client.
+1. **Start.** An agent client starts the helper over stdio: `npx -y @scenario-labs/photoshop-mcp@<exact version>`, or the Claude Desktop extension. The helper takes the pairing token from `SCENARIO_PHOTOSHOP_TOKEN` when its client sets it, otherwise from its token file: `~/.config/scenario-photoshop/token` (mode 0600 in a 0700 folder) on macOS, `%APPDATA%\scenario-photoshop\token` on Windows, written by the setup command (section 7.4); the helper refuses a token file that group or others can read. `SCENARIO_NO_SPEND=1` is optional.
+2. **Election.** The helper tries to bind `127.0.0.1:9890`, and `[::1]:9890` where IPv6 loopback exists (Windows often resolves `localhost` to `::1` first). If every address binds, it is the owner. If any is in use, it releases what it bound and becomes a peer: it connects to `ws://127.0.0.1:9890` (Node is not bound by the UXP rule). While nothing answers there, it runs the election again after 20 to 200 ms, up to 12 times, since two helpers starting together can each bind one address. A peer that still cannot connect, or whose holder fails the proof, reports `PortInUse` to its client. No bind sets `reusePort`.
 3. **Token.** The plugin makes the pairing token from 256 random bits (`crypto.getRandomValues`; if M1 finds it missing, SHA-256 over three `crypto.randomUUID` values and the time). It is shown as 43 base64url characters and stored in `secureStorage`. The token itself never travels over any socket.
-4. **Mutual proof.** The owner speaks first on every new connection: `challenge {protocol, role: "owner", nonce_o}` with 32 random bytes. The connecting side answers `{role, nonce_c, proof}`, where `role` is `plugin` or `peer` and `proof = HMAC-SHA-256(token, role | nonce_o | nonce_c)`. The owner checks it in constant time, then answers `proof_o = HMAC-SHA-256(token, "owner" | nonce_c | nonce_o)`. The connecting side checks `proof_o` before it sends anything else. Role labels stop a proof made on one link from being replayed on another. Bytes: the HMAC key is the token's 32 raw bytes; each input is the UTF-8 label, one 0x00 byte, then the two raw 32-byte nonces in the order shown.
-   - When the owner rejects a proof, it sends `pairing_failed` and closes. A peer that receives it reports `PairingFailed` to its client ("this client's token differs from the plugin's: run the setup command again"); an owner whose plugin's proof failed reports the same, and the plugin shows "A client uses an old pairing token". The message is unauthenticated, so at worst a squatter changes which error a peer shows.
+4. **Mutual proof.** The owner speaks first on every new connection: `challenge {protocol, role: "owner", nonce_o}` with 32 random bytes (nonces travel as 43 base64url characters). The connecting side answers `{role, nonce_c, proof}`, where `role` is `plugin` or `peer` and `proof = HMAC-SHA-256(token, role | nonce_o | nonce_c)`. The owner checks it in constant time, then answers `proof_o = HMAC-SHA-256(token, "owner" | nonce_c | nonce_o)`. The connecting side checks `proof_o` before it sends anything else. Role labels stop a proof made on one link from being replayed on another. Bytes: the HMAC key is the token's 32 raw bytes; each input is the UTF-8 label, one 0x00 byte, then the two raw 32-byte nonces in the order shown.
+   - When the owner rejects a proof, it sends `pairing_failed` and closes. A peer that receives it reports `PairingFailed` to its client ("this client's token differs from the plugin's: run the setup command again"); an owner whose plugin's proof failed reports the same, and the plugin shows "A client tried to connect with an old pairing token" (section 3.13). The message is unauthenticated, so at worst a squatter changes which error a peer shows.
    - When the connecting side rejects `proof_o`, the plugin shows "The program on port 9890 is not the Scenario helper" and a peer reports `PortInUse`.
-5. **Message MACs.** Both sides derive `K = HMAC-SHA-256(token, "session" | 0x00 | nonce_o | nonce_c)`. Each later message is one WebSocket text frame `<counter>.<mac>.<body>`: a decimal counter per direction, the base64url MAC, and the JSON body. The MAC is `HMAC-SHA-256(K, direction | 0x00 | counter as 8 bytes big-endian | body)`, with direction `o2c` or `c2o` and the body's UTF-8 bytes exactly as received, never re-serialized. A bad MAC or a counter that does not increase closes the link. Section 12.1 holds test vectors for the proofs and the MACs.
+5. **Message MACs.** Both sides derive `K = HMAC-SHA-256(token, "session" | 0x00 | nonce_o | nonce_c)`. Each later message is one WebSocket text frame `<counter>.<mac>.<body>`: a decimal counter per direction, the base64url MAC, and the JSON body. The MAC is `HMAC-SHA-256(K, direction | 0x00 | counter as 8 bytes big-endian | body)`, with direction `o2c` or `c2o` and the body's UTF-8 bytes exactly as received, never re-serialized. A bad MAC or a counter that does not increase closes the link. Test vectors for the proofs and the MACs live in `test/vectors/pairing.json`; the plugin and the helper are both tested against them (section 12.1).
 6. **Dial.** The plugin's startup code dials `ws://localhost:9890` every 3 s while disconnected. If the `localhost` constructor throws, it tries `ws://127.0.0.1:9890`.
 7. **Hello.** After the proofs, the owner sends `hello {protocol, helper_version, clients}` and the plugin answers `welcome {plugin_version, photoshop_version, os, catalog_hash, switches}`.
-8. **Calls.** Each tool call travels as `{id, session, client_name, tool, args}` and returns `{id, ok, result | error}`. The owner gives each peer a session id when its proof passes and relays its calls on the plugin link under that id. The plugin trusts the owner's session ids because the owner proved the token.
-9. **Owner exit.** Peers race to bind the port; the winner becomes the owner and the plugin reconnects within 3 s, with new proofs. A program without the token that wins the race fails the plugin's check and can only block agents.
+8. **Calls.** Each tool call travels as `{id, session, tool, args}` and returns `{id, ok, result | error}`. The owner relays each peer's calls on the plugin link under that peer's session id (Client sessions, below). The plugin trusts the owner's session ids because the owner proved the token, and refuses a call whose session is not in its current list with `NotConnected` ("this client's session ended; call again").
+9. **Owner exit.** Peers race to bind the port; the winner becomes the owner and the plugin reconnects within 3 s, with new proofs and new session ids. A program without the token that wins the race fails the plugin's check and can only block agents.
 10. **Catalog.** The helper serves `tools/list` from the catalog packaged with it, so a client sees the full list even when Photoshop is closed. Calls without a plugin return `NotConnected: open Photoshop with the Scenario plugin installed`. If the plugin's catalog hash differs, calls to tools the plugin does not know return `VersionMismatch` with both versions.
 
 Checks before the challenge, at the owner:
 - The `Host` header names `localhost:9890`, `127.0.0.1:9890` or `[::1]:9890`. The local relay did not record the Host the UXP WebSocket sends; M1 logs it.
 - A plugin connection carries exactly `Origin: file://` and a `User-Agent` starting with `WebSocket++`. A peer connection carries no `Origin`. Anything else, `Origin: null` included, is closed. That browsers never send `Origin: file://` is assumed: 12.1 tests pages opened from a `file://` URL in a Chromium-based browser and in Safari. A page cannot set the WebSocket `User-Agent`, and the proof is the real gate either way.
-- Limits: 10 MiB per message, 2 s to finish the proofs, 8 peers at most, idle peers closed after 60 s without a ping.
+- Limits: 10 MiB per message, 2 s to finish the proofs, 8 peers at most, idle links closed after 60 s without a ping, and one plugin link: a second plugin that passes the proof (another Photoshop open at the same time) is closed with the reason `plugin_busy` and shows "Agents are connected to another Photoshop".
 
-**Threat model.** The proofs keep out programs that do not hold the token: programs under another account on the same machine (they can reach the port; the token sits in secure storage, a user-only file or a client config, and never on a command line, which other accounts can list, section 7.4), web pages (Origin and Host checks, then the proof), and unrelated software holding the port. Such a program can take the port first and block agents (denial of service); it cannot act as the plugin or as a helper. Messages are authenticated, not encrypted: a party that fails the proof receives nothing but a challenge or a proof, from which a 256-bit token cannot be recovered. A program that forwarded bytes unchanged between the plugin and a real owner would pass the proofs and could read the traffic, previews included. The election leaves it no place to stand: an owner holds every loopback address on the port or none, so while another program holds one of them no owner exists to relay to. This rests on exclusive binds (assumed: macOS refuses a second bind without `SO_REUSEPORT`; on Windows the helper binds with exclusive address use, and the Windows pass tests it). Encrypting the link with a bundled public-domain cipher stays an option if testing finds such a gap. The token does not protect against programs running under the same account, which can read client config files. Agents reach only the tools in MCP.md, under the switches in section 6.6.
+**Client sessions.** The allowance, upload consent and job ownership (section 6.3) belong to a client session:
+- **Id.** The owner gives every client a session, its own client included, with an id of 128 random bits, never reused. Ids last for one plugin link: when a plugin link opens, the owner gives every client a new id.
+- **Name.** Set once, from the client's first `initialize`, cut to 64 characters; until then the session shows as "Agent client". Later names, from the client or on calls, are ignored, so a name the person has seen cannot change.
+- **List.** `hello` carries the current list, `clients: [{session, client_name, connected_at}]`, and the owner sends `clients` with the whole list whenever a session opens, closes or gets its name. The plugin takes client names from this list, never from a call.
+- **End.** A session ends when it leaves the list or when the plugin link closes for any reason (owner exit, Photoshop quit, a token reset). The plugin then ends what was tied to it: its allowance, its upload consents, its pending cards (spend requests become `not_sent`, uploads `declined`) and its job ownership, so its jobs can be canceled, stopped or resumed by the person only.
+
+**Threat model.** The proofs keep out programs that do not hold the token: programs under another standard account on the same machine (they can reach the port; the token sits in secure storage, a user-only file or a client config, and never on a command line, which other accounts can list, section 7.4), web pages (Origin and Host checks, then the proof), and unrelated software holding the port. Such a program can take the port first and block agents (denial of service); it cannot act as the plugin or as a helper. Messages are authenticated, not encrypted: a party that fails the proof receives nothing but a challenge or a proof, from which a 256-bit token cannot be recovered. A program that forwarded bytes unchanged between the plugin and a real owner would pass the proofs and could read the traffic, previews included. The election leaves it no place to stand: an owner holds every loopback address on the port or none, so while another program holds one of them no owner exists to relay to. This rests on exclusive binds (assumed: macOS refuses a second bind without `SO_REUSEPORT`; whether Node's bind gives exclusive use on Windows is tested in the Windows pass). Encrypting the link with a bundled public-domain cipher stays an option if testing finds such a gap. The token does not protect against an administrator, or against programs running under the same account. Those include agent clients that run shell commands as the person (Claude Code, Codex, Cursor): they can read the token file and client configs, change the plugin's stored settings, and may be able to read its secure storage, which Adobe says can be decrypted with the user's privileges (documented). Through the local server, agents reach only the tools in MCP.md, under the switches in section 6.6; a CU limit on the key (section 4.1) also holds outside it.
 
 ### 2.7 How agents act safely
 
@@ -279,7 +295,7 @@ A summary; each rule lives in the section named.
 3. **Uploading** (6.3). Captures the plugin made, files the person chose in the panel this session, and results the plugin saved. The first upload from each document or file in a client session asks the person.
 4. **Spending** (6.1 to 6.3; the check order is MCP.md section 3).
 5. **Document changes and Photoshop commands** (6.6): two switches, off by default.
-6. **Never.** No tool saves, closes, exports or prints a document, plays an Action, runs a script, calls Adobe's generative features or changes Photoshop's settings, and `execute_batchplay` refuses those commands. Agents also cannot resolve Unknown jobs, approve their own spending or uploads, change the plugin's settings or switches, read the key, secret or token, or cancel, withdraw, stop or resume jobs another client session or the person started.
+6. **Never.** No tool saves, closes, exports or prints a document, plays an Action, runs a script, calls Adobe's generative features or changes Photoshop's settings, and `execute_batchplay` refuses those commands. Through the local server, agents also cannot resolve Unknown jobs, approve their own spending or uploads, change the plugin's settings or switches, read the key, secret or token, or cancel, withdraw, stop or resume jobs another client session or the person started.
 7. **Visible.** Every agent call that spends, uploads, reads a preview or changes a document appears in the activity log with the client name the client reported; spends and changes also show as an inline banner. Text an agent supplies (client names, prompts, labels) is rendered as plain text only, and client names are cut to 64 characters.
 
 ### 2.8 Toolkit behavior the plugin relies on
@@ -347,11 +363,11 @@ Other UXP differences the build must respect:
 }
 ```
 
-- **Downloads and thumbnails.** `cdn.cloud.scenario.com` served signed image URLs (seen through hosted Scenario MCP); a video asset came as a signed CloudFront URL whose host was not recorded. Model, asset and collection thumbnails are remote images, which UXP also limits to declared hosts (documented). M2.0 item 7 reads every such host and fixes this list; requests go only to hosts in it. A host that varies by subdomain is declared as `https://*.<domain>` (only top-level wildcards are documented as refused; the subdomain form is assumed and checked in M2.0). Where no pattern fits, those files are not fetched: the tray and Library show "Stored on a host this plugin can't reach" with **Open on Scenario**, and thumbnails show a placeholder. The manifest never declares `"all"`.
+- **Downloads and thumbnails.** `cdn.cloud.scenario.com` served signed image URLs (seen through hosted Scenario MCP); a video asset came as a signed CloudFront URL whose host was not recorded. Model, asset and collection thumbnails are remote images, which UXP also limits to declared hosts (documented). M2.0 item 7 reads every such host and fixes this list; requests go only to hosts in it. A host that varies by subdomain is declared as `https://*.<domain>` (only top-level wildcards are documented as refused, and Adobe's own examples use the subdomain form, such as `https://*.adobe.io`: documented in examples, checked in M2.0). Where no pattern fits, those files are not fetched: the tray and Library show "Stored on a host this plugin can't reach" with **Open on Scenario**, and thumbnails show a placeholder. The manifest never declares `"all"`.
 - **Uploads.** `<upload-storage-host>` is the host of the signed part URLs that `POST /v1/uploads` returns (the docs' example is an Amazon S3 host; documented). M2.0 item 6 reads it and applies the outcome stated there.
 - **Credentials.** `Authorization` goes to `api.cloud.scenario.com` only, never to download or upload links. From 26.9 on, Photoshop drops it if a request is redirected to another origin (documented); a mock-server test asserts that no redirected request carries it. M2.0 records whether any API call answers with a redirect.
 - `api.github.com` serves the update check (section 10.6), which a setting turns off.
-- `launchProcess`: `https` opens pages the person asks for, `cursor` opens Cursor's install link (section 7.4). No file extensions: the plugin opens no local files in other apps. `clipboard`: manifest v5 documents `read` and `readAndWrite` only, and the copy buttons need write.
+- `launchProcess`: `https` opens pages the person asks for, `cursor` opens Cursor's install link (section 7.4). No file extensions: the plugin opens no local files in other apps. `clipboard`: manifest v5 documents `read` and `readAndWrite` only; the copy buttons write, and the 60 s clear of section 4.3 reads the clipboard only to check that it still holds the token.
 - Not requested: `fullAccess`, `allowCodeGenerationFromStrings`, `webview`, `ipc`. Basis for the permission model: documented (manifest v5).
 - Dev builds add a mock API host for tests. Release builds are checked in CI for the exact list above.
 
@@ -383,7 +399,7 @@ Every v1 screen named in this section has a wireframe; section 3.15 maps screens
 
 Default docked width 320 px, minimum 280 px. Top to bottom:
 
-1. **Header**: Scenario mark (black and white), project name (opens the Projects view, section 4.5), agent status dot, **Jobs** with the count of active jobs, and a menu: **Settings**, **Details of selected layer**, **Help**, **Get help** (Scenario's help center), **Report a problem**.
+1. **Header**: Scenario mark (black and white), project name (opens the Projects view, section 4.5), agent status dot, **Jobs** with the count of active jobs, and a menu: **Settings**, **Details of selected layer**, **Help** (the plugin's user guide), **Get help** (Scenario's help center), **Report a problem**.
 2. **Lane tabs**: Image, Edit, Enhance, Trained, Library. Below 320 px the tabs show icons with tooltips.
 3. **Lane body** (scrolls): source chip, model card, references, lane options, **Advanced** (every other schema parameter).
 4. **Results tray**: takes of the latest job of this lane. It collapses to one line.
@@ -416,19 +432,19 @@ Opens from **Change** on the model card, as a full panel view with a back arrow 
 
 | Tab or tool | A model belongs when | Basis |
 |---|---|---|
-| Image | its capabilities include text to image, and it is not a trained model | field names seen through hosted Scenario MCP (`capabilities`, `tags`, `type`, `runs_as`); exact strings confirmed in M2.0 |
+| Image | its capabilities include text to image, and it is not a trained model | field names seen through hosted Scenario MCP (`capabilities`, `tags`, `type`); exact strings confirmed in M2.0 |
 | Edit | its capabilities include image to image or inpainting, or it is listed in the mapping as an instruction editor taking reference images; not a trained model | same |
 | Enhance > Upscale | tag `image-upscale` | seen through hosted Scenario MCP |
 | Enhance > Expand | tag `expand`, or listed in the mapping as an exact-size outpaint model | seen through hosted Scenario MCP |
 | Enhance > Remove BG | tag `remove-background` | seen through hosted Scenario MCP |
-| Trained | trained models (`runs_as` set) with status trained and an image type: the current project's, then public ones (section 3.4) | seen through hosted Scenario MCP |
+| Trained | models with status trained whose `type` a catalog base takes (section 3.4): the current project's, then public ones | documented (REST model record); listings checked in M2.0 |
 
 Models that fit no tab (video, audio, 3D) are not shown.
 
-3. **Chips**, fixed per tab: **All**, **Favorites**, **Recommended** (Scenario's recommendation for the lane, when the API offers one), **Mask input** (Edit), **References** (Image, Edit), and in Enhance the tool chips **Upscale**, **Expand**, **Remove BG**. A **Tags** menu lists the catalog tags found among the tab's models, most common first (data, never hard-coded).
-4. **Rows**: 56 px thumbnail loaded at 2x, name, two-line description, badges (Mask input, up to N references, max output size, Trained, Experimental). A star marks a favorite (stored locally).
+3. **Chips**, fixed per tab: **All**, **Favorites**, **Recommended** (Scenario's recommendation for the lane, when the API offers one), **Mask input** (Edit), **References** (Image, Edit), in Enhance the tool chips **Upscale**, **Expand**, **Remove BG**, and in Trained **This project** and **Public**. A **Tags** menu lists the catalog tags found among the tab's models, most common first (data, never hard-coded).
+4. **Rows**: 56 px thumbnail loaded at 2x, name, two-line description, badges (Mask input, up to N references, max output size, Trained, Experimental); a trained row names its kind and first base ("LoRA via FLUX.2 Dev") and **Public** when it is. A star marks a favorite (stored locally).
 5. **Highlighted row** expands to the full description, the input limits and the price range Scenario gives.
-6. **Order**: favorites, then Scenario's recommendation for the lane, then the newest. Whether REST offers a recommendation is checked in M2.0; without one, **Recommended** shows a short "Scenario picks" list per tab, shipped as data with the default models.
+6. **Order**: favorites, then Scenario's recommendation for the lane, then the newest; in Trained, the project's models, then public ones. Whether REST offers a recommendation is checked in M2.0; without one, **Recommended** shows a short "Scenario picks" list per tab, shipped as data with the default models.
 7. Choosing a model returns to its lane (a trained model switches to the Trained lane), fetches its schema and runs a price check.
 
 The catalog is cached in the plugin data folder and refreshed in the background every 24 h and on demand. Private models come from the general list and are filtered locally, because a `filters.type` filter on private models was refused (seen through hosted Scenario MCP). Model records are large, so the cache keeps display fields only.
@@ -438,29 +454,33 @@ The catalog is cached in the plugin data folder and refreshed in the background 
 The plugin ships no table of trained families: families change, so each trained model's record and its base's schema decide everything below.
 
 - **Scope.** The current project's trained models, then Scenario's public trained models marked **Public**, as the Blender plugin lists them. Private models are project-scoped: the same listing returned none in one project and ten in another (seen through hosted Scenario MCP). **Switch project** in the header reaches models trained elsewhere (section 4.5). If M2.0 finds no REST listing of public trained models, the lane lists the project's only and says so.
-- **Base.** A trained model is never the model called. Its record gives `runs_as` (`lora` or `composition`) and `run_with`, the base to call: a public FLUX.2 Dev LoRA read `runs_as: lora`, and its `run_with` sends the run to `model_bfl-flux-2-dev` with `loras: [its id]` (seen through hosted Scenario MCP; REST fields read in M2.0). A LoRA runs with `loras` and `lorasScale`. A composition runs with `modelId` and replaces any LoRAs.
-- **Unknown types.** A record without `run_with`, or with a `runs_as` value this version does not know, is listed greyed: "This trained model type isn't supported by this version of the plugin." Nothing is guessed.
-- **Run with.** Some LoRA types run on several bases: Z-Image and Z-Image Turbo accept the same Z-Image LoRA types, and FLUX.2 Klein 9B and Klein 9B Base the same Klein types (base schemas seen through hosted Scenario MCP). The candidates are the `run_with` base plus every base whose schema lists the model's type among the LoRA types it takes, read with the catalog. With more than one candidate, the card shows **Run with**, set to the `run_with` base by default and remembered per trained model on this computer.
+- **Base.** A trained model is never the model called; it runs on a base model. Its REST record gives its `type` (such as `flux.1-lora`) and, for some types, `compliantModelIds`, "base model IDs compliant with the model" (documented, retrieve-model reference). No field names the base to call: hosted Scenario MCP returns a `run_with` instruction built on its side, which REST does not carry. The plugin derives the bases from the catalog it already reads:
+  - **Candidates**: catalog models whose `loras` input or `modelId` input lists the trained model's `type` in its `modelTypes` (documented for model-array inputs), with `compliantModelIds` entries first, in their order. When the bases' inputs carry no `modelTypes` (the docs give them on model-array inputs, so a `modelId` input may lack them), the record's `compliantModelIds` are the candidates.
+  - **Kind**: a LoRA when a `loras` input lists the type; it runs with `loras` and `lorasScale`. A composition when a `modelId` input lists it, or when the record carries `concepts`; it runs with `modelId` and replaces any LoRAs.
+  - Example: a public FLUX.2 Dev LoRA runs on `model_bfl-flux-2-dev` with `loras: [its id]` (seen through hosted Scenario MCP).
+- **Unknown types.** A trained model with no candidate base is listed grayed: "This trained model type isn't supported by this version of the plugin." Nothing is guessed, and each model stands on its own record: the lane never grays as a whole.
+- **Run with.** Some types run on several bases: Z-Image and Z-Image Turbo take the same Z-Image LoRA types, and FLUX.2 Klein 9B and Klein 9B Base the same Klein types (base schemas seen through hosted Scenario MCP). With more than one candidate, the card shows **Run with**, set to the first candidate and remembered per trained model on this computer.
+- **Stacking.** **Add another** lists only trained models whose type the chosen base takes, up to its limit (6 on current bases), and **Run with** then offers the bases that take every model in the stack. Choosing a composition replaces the stack; the panel says so before it does.
 - **Make new or Edit**, a switch at the top of the lane, decided from the chosen base's schema:
-  - **Make new** works as the Image lane when the base runs without file inputs. A base that requires reference images, such as Qwen Edit 2511, keeps Generate disabled until a reference is added: "This model edits an image. Add a reference, or use Edit."
-  - **Edit** runs the capture, shaping, mask and checks of the Edit lane (sections 3.8 and 5.8). No current base takes a `mask` (FLUX.2 Dev, Klein 9B and 4B, Z-Image, Z-Image Turbo and Qwen Edit 2511, seen through hosted Scenario MCP), so Photoshop's mask keeps the change inside the selection. The route follows the base:
+  - **Make new** works as the Image lane when the base runs without file inputs. A base that requires reference images, such as Qwen Edit 2511, keeps Generate disabled until a reference is added: "This model edits an image. Add a reference, or use Edit." Agents see this as `make_new: "needs_reference"`.
+  - **Edit** runs the capture, shaping, mask and checks of the Edit lane (sections 3.8 and 5.8). No current base takes a `mask` (FLUX.2 Dev, Klein 9B and 4B, Z-Image, Z-Image Turbo and Qwen Edit 2511, seen through hosted Scenario MCP), so Photoshop's mask keeps the change inside the selection. The route follows the base, first match:
     - `image` plus `strength` (today Z-Image and Z-Image Turbo): the capture goes as `image`, and **Change amount** shows;
-    - reference images, when the base requires them or the model's trained type is an edit type (its type contains `edit`, such as `flux.2-dev-edit-lora` or `qwen-image-edit-2511-lora`): the capture goes as the first reference, and the prompt says what to change and what to keep;
+    - reference images, when the base takes them (FLUX.2 Dev, Klein 9B, 9B Base and 4B, Qwen Edit 2511), for style and edit types alike (such as `flux.2-dev-lora` and `flux.2-dev-edit-lora`): the capture goes as the first reference, and the prompt field reads "Say what to change and what to keep". These schemas give a reference count but do not say that the first reference is the image edited (seen through hosted Scenario MCP), so `shared/catalog-map.json` records it per base (assumed, M4);
     - a `mask` input (no base today): the mask goes in the base's polarity, as in the Edit lane;
     - otherwise Edit is disabled: "This model can't edit an area. Use Make new, then use the result as a reference in Edit." That fallback sends the patch to an Edit model that takes a mask.
-  - Edit with a trained model is labeled **Experimental** until a trained selection edit passes the seam and alignment checks live on each route (M4).
+  - Edit with a trained model is labeled **Experimental** until a trained selection edit passes the seam and alignment checks live on each route, with a style LoRA and an edit LoRA on the reference route (M4).
 - **Controls**, two strengths named apart:
-  - **Style strength** per LoRA (`lorasScale`), within the base's range (0 to 2 on FLUX.2 Dev); default the model's own scale when the record has one, else 0.75, a design choice revisited in M7.
+  - **Style strength** per LoRA (`lorasScale`), within the base's range (0 to 2 on FLUX.2 Dev); default the model's own scale when the record has one, else 0.75, the Scenario web app's default (documented in the Blender plugin's public MCP.md).
   - **Change amount**, on the `image` plus `strength` route: the base's `strength`, with its default and range from the schema (Z-Image 0.6 and Z-Image Turbo 0.75, both 0 to 1, seen through hosted Scenario MCP), and the line "Lower keeps closer to your layer."
-  - **Add another** stacks LoRAs up to the base's limit (6 on current bases). Reference slots appear when the base takes references; on the reference route the capture fills the first slot ("Capture + 2 of 5").
+  - Reference slots appear when the base takes references; on the reference route the capture fills the first slot ("Capture + 2 of 5").
 - **Records.** The ledger and layer metadata keep the base as `modelId`, the trained models as `trainedModelIds`, and both strengths in `scenario:parameters`; the quote fingerprint covers all of them.
 - **Agents** use the same contract (MCP.md 4.2). Per-project default trained models (Blender has them) are v1.1.
 
 ### 3.5 Library lane
 
 - **Scope.** Images of the current project. The plugin's own uploads (captures, masks, references, all named `photoshop-...`) are hidden by default; **Show plugin uploads** lists them. Video, audio and 3D assets are not listed in v1. Public Library assets and organizing (tags, collections) stay in the web app and hosted Scenario MCP.
-- **Browse.** A **Collection** menu (All images, then the project's collections) and a search field. Browsing uses the asset list, newest first, 30 per page with **Load more**. Typing uses the search endpoint; when it returns nothing, the panel offers "Search can miss recent assets. **Show all**" (the search index missed matching assets once, seen through hosted Scenario MCP).
-- **Grid.** Three square thumbnails per row at 320 px, two at 280 px. Selecting one shows its name, size and date with **Place**, **Use as reference** (in Image, Edit or Trained), **Open as document** and **Details** (model, prompt, size, date and the caption stored on the asset record; the record holds the prompt as a separate text asset, read with a second call, seen through hosted Scenario MCP, REST checked in M2.0).
+- **Browse.** A **Collection** menu (All images, then the project's collections) and a search field. Browsing uses the asset list, newest first, 30 per page with **Load more**. Typing uses the search endpoint; when it returns nothing, the panel offers "Search can miss assets. **Show all**" (a search found nothing while the list showed matching assets, seen through hosted Scenario MCP).
+- **Grid.** Three square thumbnails per row at 320 px, two at 280 px. Selecting one shows its name, size and date with **Place**, **Use as reference** (in Image, Edit or Trained), **Open as document** and **Details** (model, prompt, size, date and the caption stored on the asset record; the record holds the prompt as a separate text asset, read with a second call, seen through hosted Scenario MCP; list rows there also carried the prompt, so M2.0 item 11 checks whether REST needs the second call).
 - **Place** downloads the asset and lands it as an embedded smart object at native size, or fitted inside the selection box or the canvas when larger, never enlarged (as Photoshop's Place Embedded does; section 5.7). It is named `Scenario library <slug> <tail6>` and placed in one History state. Nothing spends.
 - **Empty.** "No images in project <name> yet." In a collection: "This collection has no images."
 - Sending a layer to the Library is v1.1 (section 5.1).
@@ -469,13 +489,13 @@ The plugin ships no table of trained families: families change, so each trained 
 
 A tool selector (**Upscale**, **Expand**, **Remove BG**) sits where the model card sits in other lanes; each tool has a default model, shipped as data, and **Change**.
 
-- **Upscale.** Source (All visible, Current layer, Selection box), factor from the model's schema with the output size shown. **Lands**: from a selection box, **Layer over the box** by default (the larger pixels inside a smart object placed back over the box, for detail repair); from All visible or a layer, **New document** by default, or **Layer in this document** (a smart object holding the larger pixels, scaled to the source's size).
+- **Upscale.** Source (All visible, Current layer, Selection box), factor from the model's schema, and the output size from the generated size (section 5.8): "Output 6000 x 4000", or "Output 12288 x 8192, 1.4x of this document" when the source was read reduced. **Lands**: from a selection box, **Layer over the box** by default (the larger pixels inside a smart object placed back over the box, for detail repair); from All visible or a layer, **New document** by default, or **Layer in this document** (a smart object holding the larger pixels, scaled to the source's size).
 - **Expand.**
   - **Canvas**: aspect presets (1:1, 4:5, 3:2, 2:3, 16:9, 9:16, and Custom) or **Per side** (left, top, right, bottom in pixels). **Anchor**: a 3 x 3 grid for where the current image sits (center by default; Per side sets it implicitly). **Lands**: This document (default) or A copy of this document, for making several formats from one master.
   - What a model can honor depends on its route (section 5.8). The default is a model with a mask input, so every anchor and Per side work: GPT Image 2.5 Flare at release, compared with Photoroom Expand in M4. With an exact-size model that has no placement setting, Anchor and Per side are disabled: "This model expands around the center."
   - The new size shows as "3000 x 2000 to 3000 x 3750", with the resolution warning of section 5.8 when it applies. Overlap with the original (default 32 px) sits in Advanced. The prompt field is hidden for models that take no prompt.
-  - Result: the canvas grows and a smart object masked to the new area plus the overlap lands under the original layers' top, in one History state, so original pixels stay authoritative.
-- **Remove BG.** Source: Current layer or the selection box. **Lands**:
+  - Result: the canvas grows and the result lands as section 5.8 says, in one History state.
+- **Remove BG.** Source: Current layer or the selection box, read at full resolution (section 5.5). **Lands**:
   - **Mask on the layer**: the default for a pixel layer, a smart object without a mask, and the Background layer, which is first converted to a normal layer in the same History state, as Photoshop's own Remove Background does (assumed, M4).
   - **New cutout layer**: a copy of the source pixels with the cutout as its mask, so Select and Mask can still refine the edge. The only choice when the layer already has a mask (left as it is), is locked (the Background layer aside), or is a text, shape, adjustment or group layer.
   - From the selection box, the mask hides everything outside the box.
@@ -489,11 +509,11 @@ A tool selector (**Upscale**, **Expand**, **Remove BG**) sits where the model ca
 | Label | When |
 |---|---|
 | `Generate (N CU)` | Exact price from a current quote |
-| `Generate (N to M CU)` | The charge can vary within a bound the schema gives (per output, per layer) |
+| `Generate (N to M CU)` | The charge can vary within a bound the schema gives (section 6.1, step 6) |
 | `Generate (from N CU)` | The charge can exceed the quote and the schema gives no bound; always confirmed (section 6.1) |
 | `Checking price...` | Dry run in flight |
 | `Sending...` | Disabled while this request is being sent (section 6.2) |
-| `Generate (price after upload)` | The model's dry run needs the input file (section 6.1, step 3) |
+| `Generate (price after upload)` | The price depends on an input file that no stand-in can price (section 6.1, step 3) |
 | `Price unavailable` | Disabled; the reason shows under the button |
 | `Confirm (N CU)` | Second click in the price-after-upload case |
 
@@ -507,7 +527,9 @@ A tool selector (**Upscale**, **Expand**, **Remove BG**) sits where the model ca
 
 The source chip states what the lane will read: `Selection 928 x 928`, `Layer "Background copy"`, `All visible`. It updates on Photoshop notifications (select, set, make, delete, open, close, document switch) through `action.addNotificationListener` (documented), coalesced at 200 ms. Its menu offers **All visible** (default) and **Current layer**, and the line "To use a layer mask as the area, Cmd-click (Ctrl-click) its thumbnail first" until mask sources ship (v1.1). On 16-bit documents and on Display P3, Adobe RGB or ProPhoto documents, the chip adds "Edits are 8-bit sRGB" before anything is spent (section 5.4).
 
-**Edit lane default model**, shipped as data like the others: GPT Image 2.5 Flare at release. It takes a mask with a documented polarity (transparent = edit), exact width and height on a 16 px grid, and up to 10 references, the first being the image edited (schema seen through hosted Scenario MCP); it is the one model run end to end through a selection edit (capture, placement and outside check verified live (27.11) with the ExtendScript toolkit; generation through hosted Scenario MCP). M4 compares it with two other mask-taking models on alignment and price.
+**Edit lane default model**, shipped as data like the others: GPT Image 2.5 Flare at release. It takes a mask with a documented polarity (transparent = edit), exact width and height on a 16 px grid, and up to 10 references, the first being the image edited (schema seen through hosted Scenario MCP); it is the model of the selection-edit round trip (capture, placement and outside check verified live (27.11) with the ExtendScript toolkit; generation through hosted Scenario MCP). M4 compares it with two other mask-taking models on alignment and price.
+
+Under the source chip, **Margin** (auto: half the long side, at least 64 px; or 64 px; or none) and the context size show before the spend, with "generated at about N% of this area's resolution" when the generated size (section 5.8) is smaller than the context box.
 
 Flow for a selection edit by a person:
 
@@ -516,7 +538,7 @@ Flow for a selection edit by a person:
 3. They click Generate. The plugin records the target: document id and title, canvas size and resolution, capture box, insert point, sample mode, and the selection mask (saved to the plugin temp folder).
 4. Capture, in a short modal scope: the context box (selection bounds plus margin, shaped to the model's size inputs, section 5.8) read as sRGB 8-bit at upload size, and the mask.
 5. Outside the modal scope: encode (section 5.5), then upload the context, any reference slots and, when the model has a mask input, the mask in the model's polarity.
-6. Second dry run with the real asset ids. A different price stops the run and shows the new price for approval.
+6. Second dry run with the real asset ids. A different price stops the run and shows the new price for approval; the job waits in `awaiting_approval`.
 7. Ledger write, then submit. The panel stays free while the job runs.
 8. On success: download the takes, run the checks, and place them (section 3.9). The selection is left as it was: placement changes no selection, so the person can generate again on the same area.
 
@@ -569,11 +591,11 @@ Two tabs.
 |---|---|
 | uploading inputs | **Cancel** (stops the upload; nothing was sent to generate) |
 | awaiting approval | **Approve** with the price kind, **Decline** |
-| sending | none; it becomes queued or Unknown within 60 s (section 6.1) |
-| queued, generating | **Cancel** (sent to Scenario once, where Scenario allows it), **Details** |
+| sending | none; it becomes queued, Not sent or Unknown within 60 s (section 6.1) |
+| queued, generating | **Cancel** (the jobs `cancel` action, sent once; documented for inference jobs), **Details** |
 | canceling | **Details** |
 | finished on Scenario, downloading results | **Stop download**, **Details** |
-| download stopped | **Resume download** |
+| download stopped | **Resume download**; for `ResultUnreachable` or `ResultExpired`, **Open on Scenario** and **Details** |
 | results saved | **Place**, **Open as document**, **Use as reference**, **Copy file path** |
 | placing | none |
 | place failed | **Place**, **Details**, **Copy error** |
@@ -592,7 +614,7 @@ When the ledger is empty, the empty state links to **On Scenario**: jobs from an
 | 1 | Double-clicks the downloaded `.ccx`; Creative Cloud installs it | 20 s |
 | 2 | Starts Photoshop, or restarts it if it was open (the command-line installer's install took effect at the next launch on 27.11, verified live; double-click install not tested) | 25 s |
 | 3 | Opens Plugins > Scenario | 5 s |
-| 4 | Clicks **Create an API key**; the browser opens app.scenario.com at the API keys page; they create a Project key with the Editor role and copy the key and secret | 40 s |
+| 4 | Clicks **Create an API key**; the browser opens app.scenario.com at the API keys page; they create a Project key with the Editor role, optionally with a CU limit (section 4.2), and copy the key and secret | 40 s |
 | 5 | Pastes them and clicks **Save and test** (two free calls, section 4.2) | 10 s |
 | 6 | Clicks Generate on the sample prompt in the Image lane; with no document open, the result opens as a new document | 5 s |
 | 7 | Waits for generation, download and placement with the default Image model | 15 s |
@@ -612,7 +634,7 @@ The plugin classifies Scenario errors by HTTP status and by the `code` and `mess
 |---|---|---|
 | Not signed in | "Connect your Scenario account to generate. Needs a Scenario plan with API access (Starter or above)." | **Create an API key**, **Copy a request for your admin**, **Create a Scenario account**, **See plans**, key fields |
 | Key refused (401) | "Scenario did not accept this key and secret." | **Enter key again**, **Create an API key** |
-| No API access on this plan | "API keys need a Starter plan or above. This team's plan has no API access." | **Open plans** |
+| No API access on this plan | "API keys need a Starter plan or above. This team's plan has no API access." | **Open plans**, **Copy a request for your admin** |
 | Key cannot run models (403 at Save and test, or at the first Generate) | "This key can't run models. Create a Project key with the Editor or Admin role." plus Scenario's message; nothing was spent | **Create an API key**, **Copy error** |
 | Team key | "This is a team (Organization) key. Generating needs a Project key." | **Create an API key** |
 | Forbidden later (403) | "Scenario refused this request: <message>. The key may not have access to this model or action." | **Copy error** |
@@ -625,7 +647,7 @@ The plugin classifies Scenario errors by HTTP status and by the `code` and `mess
 | Catalog failed | "Models could not load." | **Retry** |
 | No models for the lane | "No models in this lane match these filters." | **Clear filters** |
 | Model no longer available | "This model is no longer available to this key." | **Choose another model** |
-| No trained models | "No trained models in project <name> yet. Scenario's public models are listed below; models trained in other projects appear when you switch project." | **Open Scenario**, **Switch project** |
+| No trained models | "No trained models in project <name> yet. Scenario's public models are listed below; models trained in other projects appear when you switch project." Without a public listing (M2.0 item 12), the second sentence reads "Models trained in other projects appear when you switch project." | **Open Scenario**, **Switch project** |
 | Library empty | "No images in project <name> yet." | none |
 | No jobs | "Jobs you start here or from an agent appear here. Jobs from another Photoshop version are on the On Scenario tab." | **On Scenario** |
 | No document open (Edit, Enhance) | "Open or create a document to use this lane." | **New document** |
@@ -664,7 +686,7 @@ Loading: skeleton rows in lists, text next to every progress bar ("Uploading sel
 | Screen | Wireframe section |
 |---|---|
 | First run, sign-in states, ready banner | 1 |
-| Main view, Image lane, minimum width, no document | 2 |
+| Main view, Image lane, minimum width, no document, Projects view | 2 |
 | Enhance lane: Upscale, Expand, Remove BG | 3 |
 | Model picker | 4 |
 | Trained lane | 5 |
@@ -712,7 +734,7 @@ The plugin asks for a Project key with the Editor role in the project the person
 ### 4.2 Flow
 
 1. The first-run screen reads "Connect your Scenario account", with the plan requirement and "Generative AI by Scenario".
-2. **Create an API key** opens app.scenario.com at the API keys page (Settings > Organization > API Keys in the help center; the exact link is fixed in M2.0). Photoshop asks for consent on each such click (documented). Under the button: "Create a Project key with the Editor role in the project you want to use. Only team admins and project owners can create keys." **Copy a request for your admin** copies: "Could you create a Scenario API key for me? Type: Project key, role: Editor, project: <the one I should use>, with a CU limit if you set one for third-party tools. It is for the Scenario plugin for Photoshop."
+2. **Create an API key** opens app.scenario.com at the API keys page (Settings > Organization > API Keys in the help center; the exact link is fixed in M2.0). Photoshop asks for consent on each such click (documented). Under the button: "Create a Project key with the Editor role in the project you want to use. Only team admins and project owners can create keys. A CU limit on the key caps what this plugin and connected agents can spend." **Copy a request for your admin** copies: "Could you create a Scenario API key for me? Type: Project key, role: Editor, project: <the one I should use>, with a CU limit if you set one for third-party tools. It is for the Scenario plugin for Photoshop."
 3. Two fields: API key and API secret. Pasting `key:secret`, or two lines, into the key field is split on the paste event: the secret moves to the masked field at once and never shows.
 4. On macOS a password field's value cannot be read; the documented workaround switches the field to text while reading. The plugin switches, reads and switches back in one synchronous step, so no frame paints in between (documented workaround; no paint assumed, M2).
 5. **Save and test** runs two free calls. First an authenticated read: 401 gives "Scenario did not accept this key and secret." Then a dry run of the default Image model: a 403 or a plan refusal gives the matching state of section 3.13. Whether Scenario refuses a dry run for a key that cannot run models is measured in M2.0 (item 8). If it does not, Save and test says "Connected" without claiming generation rights, and the first Generate's refusal shows "This key can't run models" with nothing spent. Offline: "No connection to Scenario. Check your network." On success the pair goes to `secureStorage` and the header shows the project name if the API returns it (assumed, M2.0), else "Scenario project" and the key's last 4 characters.
@@ -764,7 +786,7 @@ A Project key belongs to one project. The plugin keeps one key per project, one 
 | Re-layout to another aspect (Smart Reframe: recomposes and moves text and logos) | none | none | none | later: a re-layout, not an outpaint; format work goes through Expand in v1 |
 | Upscale | Enhance | All visible, current layer or selection box | New document (default) or smart object holding the larger pixels | v1 |
 | Remove background | Enhance | Current layer, or the selection box | Layer mask on the source layer, or a new cutout layer (section 3.6) | v1 |
-| Trained models (LoRAs, compositions), the project's and public ones | Trained | As Image; as Edit when the base takes `image` plus `strength`, or reference images for an edit type (section 3.4) | As Image or Edit | v1 (Edit experimental) |
+| Trained models (LoRAs, compositions), the project's and public ones | Trained | As Image; as Edit when the base takes `image` plus `strength` or reference images (section 3.4) | As Image or Edit | v1 (Edit experimental) |
 | References and consistency | Image, Edit, Trained | Selection, layer, all visible, Library asset, file | Input only | v1 |
 | Library: browse, place, use as reference | Library | none | Smart object, reference, or new document | v1. Public Library assets and organizing (tags, collections): web app and hosted Scenario MCP |
 | Caption stored on an asset | Details | Asset record | Text (already on the record, free) | v1 |
@@ -847,11 +869,11 @@ A Project key belongs to one project. The plugin keeps one key per project, one 
 
 | Item | Rule | Release | Basis |
 |---|---|---|---|
-| Capture long side | The model's maximum input from its schema, else 2048 px; scale factor recorded; masks scaled the same; then shaped to the model's size inputs (section 5.8) | v1 | |
-| Read cost and memory | Reads at upload size: on a one-layer 8000 x 8000 document a full composite read took 317 ms, the same read at a 1024 px target 6 ms. One capture buffer at a time, at most 4096 px on the long side; `imageData.dispose()` after use | v1 | read times verified live (27.11), 8-bit, one layer; 600 MB warning documented |
+| Capture size by lane | Edit contexts and references: the model's maximum input from its schema, else 2048 px on the long side. Expand: the new canvas at its own size, up to the model's maximum output (section 5.8). Upscale and Remove BG: the source at full resolution, up to the model's stated input maximum and a lane read cap (6144 px on the long side to start, set in M4 against the 600 MB warning), so an upscale is not shrunk first. Scale factor recorded; masks scaled the same; then shaped to the model's size inputs (section 5.8) | v1 | read cap assumed (M4) |
+| Read cost and memory | Reads at upload size: on a one-layer 8000 x 8000 document a full composite read took 317 ms, the same read at a 1024 px target 6 ms. One capture buffer at a time, at most 4096 px on the long side, except Upscale and Remove BG reads, which stay within their cap and read in tiles (`sourceBounds`) when one read would be too large; `imageData.dispose()` after use | v1 | read times verified live (27.11), 8-bit, one layer; 600 MB warning documented |
 | Encoding | Captures with transparency, and masks, go as PNG. Opaque captures go as JPEG at quality 95 when the model takes JPEG, which should keep a 2048 px capture under the limit (an estimate, measured in M2.0) | v1 | assumed (M2.0 checks JPEG acceptance per family) |
 | Upload route | Under 4 MB: `POST /v1/assets` with the image as base64, to the API host. 4 MB and above: `POST /v1/uploads` (multipart), a `PUT` of each part to a signed storage link, then `POST /v1/uploads/{id}/action` to complete, polling until the asset id appears. The guide does not say whether the 4 MB counts the base64 body, a third larger than the file, so the plugin keeps the base64 route under 4 MB encoded (about 3 MB of file) until M2.0 measures the boundary | v1 | documented (Scenario "Uploading assets"); the boundary assumed |
-| If the storage host cannot be declared | Every upload stays under the measured limit: the encoder reduces the long side in 10% steps until the file fits, and the tray shows `Input reduced` with the size. How far a 2048 px RGBA photographic PNG must shrink is measured in M2.0 | v1 | assumed; decided in M2.0 |
+| If the storage host cannot be declared | Every upload stays under the measured limit: the encoder reduces the long side in 10% steps until the file fits, and the tray shows `Input reduced` with the size; section 5.8 says when the run stops first. How far a 2048 px RGBA photographic PNG must shrink is measured in M2.0 | v1 | assumed; decided in M2.0 |
 | Result smaller than the box | Placed scaled up into the box, with a badge and **Upscale this take** | v1 | |
 | Upscale factor | Output kept within the model's maximum and 30,000 px per side (PSD limit); beyond that, a note about PSB | v1 | documented |
 | Expand | New canvas within 30,000 px per side. The model generates the new canvas at most at its maximum output, then the result is scaled up (section 5.8) | v1 | documented (PSD limit) |
@@ -890,26 +912,32 @@ Models size their output in different ways, so a capture box drawn from a select
 
 | Model's size inputs (from its schema) | Shaping | Placed back |
 |---|---|---|
-| Width and height on a grid (a 16 px step on GPT Image 2.5 and the FLUX bases) | The box at upload scale is rounded up to the grid on each axis; the box grows in the document by the difference, so width and height are sent exactly | Scaled to the shaped box; the aspect matches by construction |
-| A ratio enum, with or without a resolution enum | The nearest allowed ratio to the box is chosen, and the box grows on its short axis to that ratio. The resolution is the smallest value whose long side covers the box at upload scale, else the largest | Scaled to the shaped box |
+| Width and height on a grid (a 16 px step on GPT Image 2.5 and the FLUX bases) | The box at upload scale is rounded up to the grid on each axis; the box grows in the document by the difference, so width and height are sent exactly | Scaled to the shaped box; the aspect should match by construction (assumed, M4) |
+| A ratio enum, with or without a resolution enum | The nearest allowed ratio to the box is chosen, and the box grows on the one axis that reaches that ratio without shrinking. The resolution is the smallest value whose long side covers the box at upload scale, else the largest | Scaled to the shaped box |
 | A fixed list of sizes | The size nearest in ratio, then the smallest that covers the box | Scaled to the shaped box |
 | No size input (output follows the input) | The box as it is | Scaled to the box |
 
 - **Growing the box.** It grows evenly around the selection, shifts to stay inside the canvas, and only when the canvas itself is too small on that axis is the excess padded by repeating edge pixels, which the placement then crops away. The selection mask does not change: grown areas are outside it, so they add context and stay protected.
-- **Which input gets the capture.** The schema's `image` input when the model has one; otherwise the first reference, for models whose schema says the first reference is the image edited (GPT Image 2.5, the reference-route trained bases of section 3.4). The reference counter counts it ("Capture + 2 of 10"). A model with neither is not offered in Edit. The mask goes to a `mask` input in the model's polarity (section 5.6).
+- **Which input gets the capture.** The schema's `image` input when the model has one; otherwise the first reference, for models recorded in `shared/catalog-map.json` as editing their first reference: GPT Image 2.5, whose mask description names "the first reference image" (seen through hosted Scenario MCP), and the reference-route bases of section 3.4, whose schemas do not say it (assumed, M4). The reference counter counts it ("Capture + 2 of 10"). A model with neither is not offered in Edit. The mask goes to a `mask` input in the model's polarity (section 5.6).
 - **Checks.** `aspect_ok` and the `May be misaligned` badge compare the result with the shaped box, never with the raw selection box.
 
 **Expand routes.** Each Expand model has one route, from the mapping data and its schema:
 
 | Route | Models today (seen through hosted Scenario MCP) | Sent | Anchor and Per side |
 |---|---|---|---|
-| Mask | Models with `image` plus `mask`, such as GPT Image 2.5 | The new canvas: original pixels at the anchor, the new area empty, and a mask of the new area plus the overlap in the model's polarity; shaped as above; the prompt | All anchors and Per side |
+| Mask | Models with `image` plus `mask`, such as GPT Image 2.5 | The new canvas at its own size up to the model's maximum output, since the output is the size sent: original pixels at the anchor, the new area empty, and a mask of the new area plus the overlap in the model's polarity; shaped as above; the prompt | All anchors and Per side |
 | Position preset | Reframe: a 9-value `position` preset, a ratio enum and a resolution enum | The original image, the anchor as `position`, the target ratio; Custom maps to the nearest ratio the model allows, and the panel shows the size it will produce | Anchor: yes. Per side: off |
 | Exact size, no placement | Photoroom Expand: `image` and an exact output size, no prompt | The original image and the new canvas size scaled to the model's maximum | Off until an M4 paid run shows where the model puts the source; until then the panel says "This model expands around the center" |
 
-In every route the result is aligned to the original by the known placement and lands under the original layers' top, so original pixels stay authoritative; the seam check runs on the overlap band.
+In every route the result is aligned to the original by its known placement (assumed for the position-preset and exact-size routes, M4: if the seam check on the overlap fails there, the result lands unmasked for manual alignment). It lands at the top of the document, masked to the new area plus the overlap with a ramp across it, so original pixels stay authoritative; under it, a Background layer's new area holds Photoshop's canvas extension color. The seam check runs on the overlap band.
 
-**Resolution of the new area.** A model generates the whole new canvas at most at its maximum output (from its schema), then the plugin scales the result up to the canvas. When the canvas's long side exceeds that maximum, the panel says before the spend: "New area at about N% of this document's resolution", where N is the model's maximum long side over the canvas's long side. A 6000 x 7500 canvas on a model whose output stops at 4096 px reads about 55%. Generating each new edge strip separately at full resolution is v1.1; until then the warning names **Upscale** as the follow-up.
+**Generated size.** Before the click, the plugin computes the size the model will generate, from the lane's capture size (section 5.5), the model's limits in its schema, the shaping above and the expected upload route. That one figure is shown wherever it falls short of the target:
+- Upscale: the Output line is the generated size times the factor, with "N.Nx of this document" when the source was read reduced.
+- Expand: "New area at about N% of this document's resolution", where N is the generated long side over the canvas's long side. On the default model (maximum output 3840 px), a 3000 x 3750 canvas generates at full size and a 6000 x 7500 canvas at about 51%. The warning names **Upscale** as the follow-up; generating each new edge strip separately at full resolution is v1.1.
+- Edit: "generated at about N% of this area's resolution" under the source chip (section 3.8).
+- Remove BG: "Mask at N% of the layer's resolution".
+
+If encoding at Generate brings an input below the size shown (the upload fallback of section 5.5), the run stops before the submit and shows the new size for approval, as a changed price does.
 
 ---
 
@@ -917,15 +945,20 @@ In every route the result is aligned to the original by the known placement and 
 
 ### 6.1 Money contract
 
-1. **A price check is a dry run.** `POST /v1/generate/custom/{modelId}` with `dryRun`. Scenario documents two values: `true`, which its help center says "returns the exact CU cost", and `api`, which the API reference says "estimates at the API tier" without defining that tier; and a 269 status for the estimate (documented). The plugin price-checks with `dryRun=true` until M2.0 decides. It accepts any 2xx answer whose body carries `creativeUnitsCost` and no job id; through hosted Scenario MCP the answer had an empty `job` and no job id (seen through hosted Scenario MCP). M2.0 dry-runs one request in both modes, runs it once for real at the smallest settings, and keeps the mode whose price equals that job's `cu_record` (section 2.5), in one constant. If neither matches, every price ships as `from N CU` (step 6) and M3 waits until Scenario says which mode matches the charge. A price check is free, runs 400 ms after the form stops changing, and never carries the `ipDetection` flag, whose fee is charged even on a dry run (documented).
+1. **A price check is a dry run.** `POST /v1/generate/custom/{modelId}` with `dryRun`. Scenario documents two values: `true`, which its help center says "returns the exact CU cost", and `api`, which the API reference says "estimates at the API tier" without defining that tier; and a 269 status for the estimate (documented). The plugin price-checks with `dryRun=true` until M2.0 decides. It accepts any 2xx answer whose body carries `creativeUnitsCost` and no job id; through hosted Scenario MCP the answer had an empty `job` and no job id (seen through hosted Scenario MCP). M2.0 dry-runs the default job shapes in both modes, pays for them (item 3), and keeps the mode whose price equals each job's `cu_record` (section 2.5), in one constant. If neither matches, every price ships as `from N CU` (step 6) and M3 waits until Scenario says which mode matches the charge. A price check is free, runs 400 ms after the form stops changing, and never carries the `ipDetection` flag, whose fee is charged even on a dry run (documented).
 2. **Parameters are validated before the dry run** against the model schema: names, types, enums, ranges, required inputs. Dry runs accepted unknown parameter names and priced them at defaults (seen through hosted Scenario MCP), so an unchecked typo would be priced and then run with defaults.
-3. **Inputs.** Price checks upload nothing. If a model's dry run accepts the request without its file inputs, that price goes on the button. At Generate the inputs upload, and a second dry run with the real asset ids must return the same price; otherwise the run stops and shows the new price for approval. If the dry run needs the file, the button reads `Generate (price after upload)`: the first click uploads and prices, the second click spends. Whether dry runs price without file inputs is assumed, per model family (M2.0).
+3. **Inputs.** Price checks upload no document pixels. The schema marks the inputs that change the price (`costImpact`, given to agents as `price_affecting`):
+   - With no price-affecting file input, the dry run leaves the file inputs out and its price goes on the button.
+   - A price-affecting file input is never left out. Where the price follows the number of files only, each slot gets a stand-in: a small blank image the plugin uploads once per project, holding no document pixels and hidden from the Library like the plugin's other uploads. Where it also follows their size, the stand-in is a blank image at the shaped capture's size. Where neither works, or the dry run needs the real file, the button reads `Generate (price after upload)`: the first click uploads and prices, the second click spends.
+   - At Generate the real inputs upload, and a second dry run with the real asset ids must return the same price; otherwise the run stops and shows the new price, and the job waits in `awaiting_approval`.
+   - Default models (Image, Edit, Expand, Upscale, Remove BG) are chosen among models whose button price is exact before upload, with price-affecting settings pinned in the preset (GPT Image 2.5's `quality` defaults to `auto`, which changes the price, so its preset names a level). If no model fits a lane, its default shows `Generate (price after upload)` and KNOWN_LIMITATIONS says so.
+   - What each family's price follows is assumed until M2.0 item 5 measures it.
 4. **A dry run that returns a job id is an alarm.** Price checks stop for the session, the job id enters Jobs as Unknown (`uncertain`), and the panel says "A price check created a job on Scenario."
 5. **A quote is single use and expires after 120 s**, checked only for a request whose idempotency key is new (section 6.2). It is bound to a SHA-256 fingerprint of the model id, the trained model ids and scales, the canonical JSON of the parameters, the input asset ids, the target (capture record or "new document W x H"), the project, a hash of the key id, and the quote mode. Any change invalidates it.
 6. **Price kinds.** Prices show up to three decimals.
    - `exact`, "N CU": the charge equals the quote.
-   - `range`, "N to M CU": the schema bounds a variable charge (outputs requested, a `maxLayers` parameter). M counts for the confirm threshold and the agent allowance.
-   - `from`, "from N CU": the charge can exceed N with no bound the plugin can compute. The person's confirm dialog always opens, with "The charge can be higher"; an agent's request always gets the approval card and never runs under the allowance (section 6.3). Models seen quoting a flat price while the charge varies with size ship as `from` (list kept as data, filled in M2.0).
+   - `range`, "N to M CU": the schema bounds a variable charge (such as the v1.1 `maxLayers` parameter; no v1 default is known to need it). M counts for the confirm threshold and the agent allowance.
+   - `from`, "from N CU": the charge can exceed N with no bound the plugin can compute. The person's confirm dialog always opens, with "The charge can be higher"; an agent's request always gets the approval card and never runs under the allowance (section 6.3). Models whose charge M2.0 finds varying with size while their quote is flat ship as `from` (a list kept as data, from M2.0 item 14).
    - Jobs shows "quoted N, charged M" once the charge is known (section 2.5).
 7. **Approval** follows section 6.3.
 8. **Paid calls are never retried automatically.** The paid request times out after 60 s, under the 120 s an agent's tool call waits, and the job becomes Unknown. Reads (catalog, schemas, job status, assets) retry with back-off and honor `Retry-After`.
@@ -943,7 +976,7 @@ In every route the result is aligned to the original by the known placement and 
 | No answer within 60 s, connection lost, 5xx, unreadable body | `uncertain` | A job may exist. Scenario's errors page advises retrying 500s; for a paid call a retry could charge twice, so the person decides (section 6.2) | 500 documented; the class is the plugin's choice |
 
    The error body (`status`, `code`, `message`) is documented. The codes Scenario uses for credit, plan and key-cap refusals are recorded in M2.0.
-10. **Refusals and failures.** A content-policy refusal shows as Blocked (detection rule in section 2.5) and is never retried. Failed, blocked and canceled jobs show their charge as section 2.5 defines it: "Refunded by Scenario", or "Charged N CU, no refund on failure" when the job carries `billing.disableRefund`.
+10. **Refusals and failures.** A content-policy refusal shows as Blocked (detection rule in section 2.5) and is never retried. Failed, blocked and canceled jobs show their charge as section 2.5 defines it: "Refunded by Scenario", or "Charged N CU, no refund on failure" when the job carries `billing.disableRefund`. The model record's own `disableRefund` (documented) shows before the spend, under the Generate button and on agent cards: "No refund if it fails".
 11. **Guards.** Confirm above N CU for the person (default 100; M for a range; always for `from`). **No-spend mode** in the panel refuses paid calls and agent uploads; `SCENARIO_NO_SPEND=1` in the helper does the same for agents whatever the panel says. Per-key CU caps set on app.scenario.com (documented) surface as errors. The plugin adds no cap of its own beyond the agent allowance.
 
 ### 6.2 No double charge
@@ -965,7 +998,7 @@ Scenario's run endpoint takes no idempotency key (documented: none in the API re
 6. At startup, every `submitting` record becomes `uncertain` (section 6.4).
 7. Agents cannot resolve `uncertain` jobs: recovery tools return `UncertainNeedsPerson`.
 
-Paths this covers: an answer lost between agent, helper and plugin (the replay of step 2.1, at any age); a second click or a new agent key while a request is being sent (2.2); an answer lost between the plugin and Scenario (step 4 and the person's resolution); a restart mid-send (step 6). Prompt-only image jobs have no unique asset ids, so matching rests on model, parameters and time; the plugin pre-selects only a single exact match and never links without the person's click.
+Paths this covers: an answer lost between agent, helper and plugin (the replay of step 2.1, at any age); a second click or a new agent key while a request is being sent (2.2); an answer lost between the plugin and Scenario (step 4 and the person's resolution); a restart mid-send (step 6). Prompt-only image jobs have no unique asset ids, so matching rests on model, parameters and time; the plugin pre-selects only a single exact match and never links without the person's click. Not covered: an agent that loses a `generate` answer and then, against the server instructions, quotes again and sends a new key while the first job is `queued`; under an allowance the second job is charged. KNOWN_LIMITATIONS lists it.
 
 ### 6.3 Approvals
 
@@ -974,17 +1007,17 @@ Paths this covers: an answer lost between agent, helper and plugin (the replay o
 | Person | Paid generation | The click on a priced Generate button; a confirm dialog when the price, or M for a range, is above the threshold, and always for a `from` price |
 | Person | Document change | **Place when ready** for their own jobs, or a **Place** click; each change is one History state |
 | Agent | Paid generation | Always a quote from `estimate_cost` and `approved_cost` equal to its exact string. Then the Agent spending setting: **Ask each time** (default; an approval card), or **Allow without asking** for one client session the person picks, up to N CU per call (default 50) and T CU in total (default 300). Above either limit, for a `from` price, or for another client, the card returns |
-| Agent | Upload | Only captures the plugin made, files the person chose in the panel this session, and results the plugin saved. The first upload from each document, or each chosen file, in a client session shows a card: "Allow <client> to send pixels from <document> to Scenario for this session?" with **Allow** and **Deny**. Later uploads from that document in that session are logged |
+| Agent | Upload | Only captures the plugin made, files the person chose in the panel this session, and results the plugin saved (matched by canonical path against the files the ledger records, never by folder). The first upload from each document, chosen file or saved result in a client session shows a card: "Allow <client> to send pixels from <document> to Scenario for this session?" with **Allow** and **Deny**. Later uploads from that document in that session are logged |
 | Agent | Document change | Switch on: one History state "Scenario agent: ...". Switch off: proposal card |
 | Agent | Photoshop commands | Second switch, off by default, requires the first, off again when Photoshop quits |
 | Agent | Cancel, withdraw, stop or resume a job | Only jobs started by the same client session (`NotYourJob` otherwise) |
 | Agent | Resolve Unknown, change settings, save, close, export | Never |
 
-- **The allowance** goes to the client session the person picks in Settings > Agents, shown by its reported name and, when two names match, its connection time. It ends when that session disconnects, when Photoshop quits, when the person clicks **End** in the header, or when the total is used. The header shows "Agent allowance: 180 of 300 CU left" while it runs, and `scenario_status` reports it.
-- **Deduction.** At submission the allowance deducts the quote, M for a range. Once the charge is known it deducts the larger of that and `cu_charged` (section 2.5); a refund gives nothing back. A charge above its quote ends the allowance, and the header and activity log show "Charged N CU, above the quoted M". The person can then give a new allowance.
-- **Cards** state the price kind: "N CU", "N to M CU", or "from N CU, no upper bound", and the Approve button repeats it.
+- **The allowance** goes to the client session the person picks in Settings > Agents, shown by its reported name and, when two names match, its connection time. It ends when that session ends (section 2.6), when Photoshop quits, when the person clicks **End** in the header, or when the total is used. The header shows "Agent allowance: 180 of 300 CU left" while it runs, and `scenario_status` reports it.
+- **Deduction.** At submission the allowance deducts the quote, M for a range; the limit check and the deduction are one step with no `await` between them, so two parallel calls cannot both pass, and amounts are integer thousandths of a CU. Once the charge is known, the deduction becomes the larger of the quote and `cu_charged` (section 2.5); a refund gives nothing back. A charge above its quote (section 2.5) ends the allowance, and the header and activity log show "Charged N CU, above the quoted M". The person can then give a new allowance. The total bounds quoted prices: jobs already running when a charge above its quote ends the allowance can pass the total by the difference.
+- **Cards** state the price kind: "N CU", "N to M CU", or "from N CU, no upper bound", and the Approve button repeats it. A client session has one pending card at a time: its later requests wait behind it, and the card offers **Decline all from <client>**. A card expires after 10 minutes unanswered, or when its session ends: a spend request becomes `not_sent`, an upload `declined`.
 - The `approved_cost` check runs in the plugin and applies even under an allowance. An agent's own statement of a price is never authorization.
-- With **Ask each time**, `generate` returns `awaiting_approval` at once with a `local_id`; the agent waits with `wait_for_job`. If the quote expired before the person approves, the plugin prices again on **Approve**: the same price submits; a different price updates the card and needs a new click. A card left unanswered for 10 minutes expires and the job becomes `not_sent`.
+- With **Ask each time**, `generate` returns `awaiting_approval` at once with a `local_id`; the agent waits with `wait_for_job`. If the quote expired before the person approves, the plugin prices again on **Approve**: the same price submits; a different price updates the card and needs a new click.
 
 ### 6.4 Restart survival and downloads
 
@@ -993,14 +1026,14 @@ Paths this covers: an answer lost between agent, helper and plugin (the replay o
    - `submitting` becomes `uncertain`;
    - `uploading_inputs` and `awaiting_approval` become `not_sent` ("Interrupted by a restart"; an agent's session ended with Photoshop anyway);
    - `queued`, `generating` and `cancel_requested` resume polling;
-   - `downloading` resumes; `download_failed` stays until **Resume download**;
-   - `applying` becomes `ready`, since an apply that did not finish rolled back with Photoshop;
-   - `ready` and `apply_failed` wait in the tray.
+   - `succeeded` starts downloading; `downloading` resumes; `download_failed` stays until **Resume download**;
+   - `applying` becomes `ready`, since an apply that did not finish rolled back with Photoshop (assumed, M5). Photoshop's crash recovery may still reopen a document holding the placed layer, so the plugin first looks for a layer whose metadata carries the job's asset id; if it finds one, the job becomes `applied`;
+   - `ready` and `apply_failed` wait in the tray; `uncertain` stays until the person resolves it.
    Nothing lands in a document by itself after a restart.
 3. Downloads come only from the Scenario hosts in the manifest (section 2.10), into `<name>.part`, renamed after a header and size check. Three attempts with back-off. Signed links are requested from the asset record when a download starts and never stored. A partial file restarts from zero, or resumes with a Range request where the CDN supports it (assumed, M5).
 4. **Stop download** and **Resume download** in Jobs. Resume asks for fresh signed links and downloads again; files already complete on disk are kept.
 5. Polling every 2 s for the first minute, 5 s until 10 minutes, then 15 s. Paused while offline.
-6. The plugin data path includes the Photoshop major version (`.../PHSP/27/...`, verified live (27.11)), and plugin data may not carry over to the next major (forum report; assumed, checked on 28.0). When the person has chosen an Output Folder, the ledger is mirrored to `<Output Folder>/.scenario/jobs/`. The folder's access token lives in plugin storage, which may not carry over either, so the first launch on a new major asks the person to choose the folder again and then imports it. Without a chosen folder, Unknown and running records can be lost in such an upgrade, which reopens a double-charge path for those jobs: KNOWN_LIMITATIONS says so, Settings suggests choosing a folder, and the empty Jobs view points to On Scenario, which can re-add any finished job.
+6. The plugin data path includes the Photoshop major version (`.../PHSP/27/...`, verified live (27.11)), and plugin data may not carry over to the next major (forum report; assumed, checked on 28.0). When the person has chosen an Output Folder, the ledger is mirrored to `<Output Folder>/.scenario/jobs/`. The folder's access token lives in plugin storage, which may not carry over either, so the first launch on a new major asks the person to choose the folder again and then imports it. Imported records are untrusted, since the folder may be synced or shared: each is checked against the ledger schema, its paths are confined to the Output Folder, every status with a job id is read again from Scenario, files are checked as `recover_download` does, text shows as plain text, and the record is marked imported. Without a chosen folder, Unknown and running records can be lost in such an upgrade, which reopens a double-charge path for those jobs: KNOWN_LIMITATIONS says so, Settings suggests choosing a folder, and the empty Jobs view points to On Scenario, which can re-add any finished job.
 
 ### 6.5 Undo
 
@@ -1028,15 +1061,15 @@ Basis: one suspension giving one entry is verified live (27.11) for place, repla
 - **Agents may run Photoshop commands**: off by default, needs the first switch, and turns off when Photoshop quits, so a forgotten "on" never carries over to a later client. Its text: "Lets agents run Photoshop commands (batchPlay) on open documents: layers, selections, masks, adjustments, filters and transforms. Each call is one History step. Commands that save, close, export or print, play Actions, run scripts, use Adobe's generative features or change Photoshop's settings are always refused. Turn on only for agents you trust."
 - **Agents read the active document only**: off by default. When on, document tools refuse other documents with `DocumentNotAllowed`.
 - Switches apply to all documents, for the current Photoshop user.
-- **Select Subject.** `set_selection` with `subject`, and the allowed `autoCutout` command, run Select Subject, which follows Photoshop's Image Processing preference: set to Cloud, the image is processed on Adobe's servers; Device is the default (documented, Adobe help). For agent calls the plugin forces device processing when the descriptor exposes the option (checked in M6); otherwise PRIVACY.md's note applies.
+- **Select Subject.** `set_selection` with `subject`, and the allowed `autoCutout` command, run Select Subject, which follows Photoshop's Image Processing preference: set to Cloud, the image is processed on Adobe's servers; Device is the default (documented, Adobe help; a 2025 Adobe beta post said cloud processing would become the default, so M6 reads the preference on a fresh 27.11 install). For agent calls the plugin forces device processing when the descriptor exposes the option (checked in M6); otherwise PRIVACY.md's note applies.
 
 **The allow-list** (`shared/batchplay-allow.json`, checked in the plugin, versioned with the tool catalog):
 1. Every descriptor's event (`_obj` at the top level) must be on the list. The list is generated at build time from the events the skills' toolkits send through Action Manager (among them `mergeVisible`, `applyImage`, selection intersect, Minimum, `placedLayerReplaceContents` and Displace), plus the layer and selection events agents need (`make`, `set`, `select`, `delete`, `duplicate` and `move` of layers, `transform`, `show`, `hide`, `fill`, `newPlacedLayer`, `rasterizeLayer`, `canvasSize`, `imageSize`, `crop`, `autoCutout`, `colorRange`, selection `expand`, `contract`, `feather` and `smoothness`, `align`), the adjustment and filter events the skills need (Curves, Levels, Hue/Saturation, Color Balance, Channel Mixer, Invert, Desaturate, Equalize, Gaussian Blur, High Pass, Median, Add Noise, Unsharp Mask, Smart Sharpen, Offset), and `get`. Each entry has a live test.
-2. Every `_target` and every reference anywhere in the descriptor must point by `_id` to a layer, channel or path of the document named by `document_id`, to its selection, or to that document. A descriptor with no `_target`, or with an ordinal, relative or by-name reference (`_enum`, `_offset`, `_index`, `_name`), acts on the active document, so it is refused with `DocumentNotActive` unless `document_id` is the active document. Refused in every case: references to the application, Actions or action sets, presets, color settings, workspaces, menus, History states and snapshots, or other documents, and any `make` or `duplicate` whose class or target is a document, so no command creates a document.
+2. Every `_target` and every reference anywhere in the descriptor must point by `_id` to a layer, channel or path of the document named by `document_id`, to its selection, or to that document. A descriptor with no `_target`, or with an ordinal, relative or by-name reference (`_enum`, `_offset`, `_index`, `_name`), acts on the active document, so it is refused with `DocumentNotActive` unless `document_id` is the active document. A reference chain with a layer `_id` but no document element counts as targetless. The active-document check runs inside the modal scope, just before `batchPlay`. Refused in every case: references to the application, Actions or action sets, presets, color settings, workspaces, menus, History states and snapshots, or other documents, and any `make` or `duplicate` whose class or target is a document, so no command creates a document.
 3. Always refused, whether or not someone adds them to the list by mistake: `play` (Actions), script events (`AdobeScriptAutomation Scripts` and any event that runs a file), `syntheticFill` and every Adobe generative event, `open`, `placeEvent` (results land through the apply tools), `save`, `close`, `quit`, `splitChannels` (it makes new documents), the export family (Export As, Quick Export, Generate Assets, Save for Web), `print`, and events defined by other plugins.
 4. File paths (the contents file of `placedLayerReplaceContents`, Displace's map) are canonicalized, symlinks resolved, and must sit inside the plugin's temp folder.
 5. Per-descriptor dialog options are forced to no dialog, so no command opens one.
-6. `get` results lose their path properties (`fileReference` and the like), so the commands switch does not reveal file paths or the account name in them.
+6. `get` results lose every path value (`_path`), path properties (`fileReference` and the like), and the document properties that can record paths (`XMPMetadataAsUTF8` and `json`), so the commands switch does not reveal file paths or the account name in them. Whether other string properties carry paths is not tested; 12.1 checks a document with a linked smart object.
 7. The whole call runs in one modal scope and one History state; an error in any descriptor rolls back the call.
 
 The allow-list is what makes "agents never save, close or export" true: no tool does it, and no allowed command reaches it directly or through an Action or a script. A listed command can still change anything in the target document, undoable in one step; that is why the switch is separate and off by default.
@@ -1052,10 +1085,11 @@ Adobe Developer Terms as quoted below are the 2024-06-18 version, current as of 
 | Rule | How v1 handles it | Basis |
 |---|---|---|
 | Privacy notice in the listing and in the plugin, covering sharing with third parties, and deletion of content and tokens on request (Developer Terms 6.10) | PRIVACY.md, linked from Settings > About. It names Scenario, its model providers and the agent provider, and says how to delete what the plugin stores and what Scenario holds | documented |
-| No use of content received from Adobe software to create, train, test or improve AI (6.16) | **Open item.** The plugin has no training action. Scenario's privacy policy (July 16, 2026) lets Scenario use self-serve customers' content to operate and improve its services and models, and excludes this under enterprise agreements; as written, that does not give the 6.16 assurance for self-serve accounts. **Gate:** before the first public release, Scenario commits in writing that content sent through the plugin is excluded from training and model improvement on every plan, or Scenario's legal review signs off on another reading | documented (both texts) |
+| No use of content received or derived from Adobe software to create, train, test or otherwise improve AI, by the developer or by third parties it allows, "or for any technologies designed or intended for the identification of natural persons" (6.16) | **Open item.** The plugin has no training action and no person identification. Scenario's privacy policy (July 16, 2026) lets Scenario use self-serve customers' content to operate and improve its services and models, and excludes this under enterprise agreements; as written, that does not give the 6.16 assurance for self-serve accounts. **Gate:** before the first public release, Scenario commits in writing that content sent through the plugin is excluded from training and model improvement on every plan, by Scenario and by the model providers it sends that content to, or Scenario's legal review signs off on another reading | documented (both texts) |
 | Significant functionality beyond Adobe's own (6.9) | Scenario's catalog, trained models, the ledger | documented |
 | Own end-user license (6.15) | MIT license plus Scenario's terms; **gate:** legal review confirms this suffices for the first public release; a Marketplace EULA is written when a listing is decided | documented |
-| Restricted countries (6.17) | **Gate:** legal review decides how a GitHub release respects it; any Marketplace listing respects it | documented |
+| Restricted countries and trade controls (6.17: mainland China, Russia, and the territories embargoed under 6.5, which also covers export rules and sanctions lists) | **Gate:** legal review decides how a GitHub release respects them; any Marketplace listing respects them | documented |
+| Non-assertion (6.12): the developer does not assert IP rights covering the plugin against Adobe, its affiliates or their customers | **Gate:** a deliberate decision by Scenario's legal review | documented |
 | No licenses that would subject Adobe's tools to open-source terms (6.6) | Dependencies are MIT, Apache-2.0 or BSD only (section 11); the plugin is MIT | documented |
 | Third-party companion apps (Marketplace review) | The README and any listing say where to get the helper (npm, release page) and on which platforms it installs | documented |
 | Adobe's generative AI user guidelines: no unauthorized automated use of Adobe's generative features | The allow-list refuses every Adobe generative event (section 6.6) | documented |
@@ -1063,7 +1097,7 @@ Adobe Developer Terms as quoted below are the 2024-06-18 version, current as of 
 | No destructive or non-undoable AI action without consent | Results are new layers; one History state each; nothing overwrites pixels | documented |
 | Disclosure of generative AI | "Generative AI by Scenario" on the first-run screen, in About and in any listing (Adobe's rule for Express add-ons, applied here by choice) | documented |
 | Original icons, readable in dark themes | Own icon set | documented |
-| EU AI Act, Article 50 (machine-readable marking of generated output) | **Gate** for Scenario's legal review: the duties apply from 2 August 2026, so the review happens now, not before a listing. Layer XMP records the origin of each result; no Content Credentials are added in v1 | documented (Regulation (EU) 2024/1689); later amendments and applicability not checked |
+| EU AI Act, Article 50 (machine-readable marking of generated output) | **Gate** for Scenario's legal review: the duties apply from 2 August 2026, so the review happens now, not before a listing, and settles which party is the provider under Article 50(2), Scenario or its model providers. Layer XMP records the origin of each result; no Content Credentials are added in v1 | documented (Regulation (EU) 2024/1689); later amendments and applicability not checked |
 
 ---
 
@@ -1114,12 +1148,13 @@ The Blender plugin sets up Claude Code, Codex, Cursor and Claude Desktop from a 
 | Cursor | **Add to Cursor** | Opens Cursor's server install link with the `scenario-photoshop` entry (one Photoshop consent dialog, then Cursor's own confirmation). The link carries the token in a URL handed to the operating system | documented (Cursor install links); assumed (M6) |
 | Claude Desktop | **Get the extension** | Opens the release page of `scenario-photoshop-X.Y.Z.mcpb`; double-clicking installs it in Claude Desktop, which asks for the pairing token (declared sensitive in the extension) with **Copy token** next to the button | documented (Claude Desktop extensions); assumed (M6) |
 | Any | **Copy JSON**, **Copy TOML** | The server entry for manual setup, with the note "Add this to your user-level client config, not to a project file such as `.mcp.json` that may be committed" | |
-| Any, with Node | **Copy setup command** | `SCENARIO_PHOTOSHOP_TOKEN=<token> npx -y @scenario-labs/photoshop-mcp@X.Y.Z setup <client>` for Cursor and Claude Desktop: writes the token file, replaces only the `scenario-photoshop` entry (without the token), backs up the file as `<file>.scenario-backup-<time>`, writes atomically, and leaves a file it cannot parse untouched | design |
+| Any, with Node | **Copy setup command** | `SCENARIO_PHOTOSHOP_TOKEN=<token> npx -y @scenario-labs/photoshop-mcp@X.Y.Z setup <client>` for Cursor and Claude Desktop: writes the token file, replaces only the `scenario-photoshop` entry (without the token), backs up the file as `<file>.scenario-backup-<time>`, writes atomically, keeps the original file's mode on rewrites and backups (new files 0600), and leaves a file it cannot parse untouched | design |
 
 - Each row shows "Connected, last call 2 min ago" or "Not connected", from the clients the helper reports. Rows show for all four clients, because the plugin cannot check which config files exist.
 - `npx` needs Node 20 or later. The Claude Desktop extension runs on the Node that ships with Claude Desktop (documented), so a Photoshop-only user can connect an agent without installing Node. When a client starts the helper with `npx`, npx contacts the npm registry.
 - The `@scenario-labs` npm scope belongs to Scenario (it publishes `@scenario-labs/sdk`); the helper is published with npm provenance.
-- **Where the token goes.** The setup command takes the token from its environment, never from its arguments: other accounts on the same machine can list a process's arguments but not its environment (verified live on macOS). The pasted line still lands in the shell history. Clients set up this way share the token file, so after **Reset pairing token** one new setup command reconnects all of them. The Cursor link, Copy JSON and Copy TOML put the token in the client's config instead. The token grants access to the local plugin link only, and the plugin clears the clipboard 60 s after copying it (section 4.3).
+- **Where the token goes.** The setup command takes the token from its environment, never from its arguments: other accounts on the same machine can list a process's arguments but not its environment (verified live (macOS); Windows not measured). The pasted line still lands in the shell history. Clients set up this way share the token file, so after **Reset pairing token** one new setup command reconnects all of them. The Cursor link, Copy JSON and Copy TOML put the token in the client's config instead. The token grants access to the local plugin link only, and the plugin clears the clipboard 60 s after copying it (section 4.3).
+- **Windows.** The copy buttons give the PowerShell form there: `$env:SCENARIO_PHOTOSHOP_TOKEN='<token>'; npx -y @scenario-labs/photoshop-mcp@X.Y.Z setup <client>; Remove-Item Env:SCENARIO_PHOTOSHOP_TOKEN`. PowerShell keeps a history file too. `setup` also reads the token from standard input (`--token-stdin`), for example piped from the clipboard, which keeps it out of shell history. Not tested until the Windows pass (KNOWN_LIMITATIONS).
 
 ---
 
@@ -1203,7 +1238,7 @@ One schema, shared with the skills: namespace `https://scenario.com/ns/photoshop
 | Artifact | Contents |
 |---|---|
 | `scenario-photoshop-plugin-X.Y.Z.ccx` | The UXP plugin, packaged with `uxp plugin package` from Adobe's UXP devtools CLI (documented; its last release is from 2022, so RELEASING.md also documents the fallback: zip the built plugin and rename it `.ccx`) |
-| `@scenario-labs/photoshop-mcp@X.Y.Z` on npm | The helper, published with npm provenance |
+| `@scenario-labs/photoshop-mcp@X.Y.Z` on npm | The helper, published with npm provenance and an `npm-shrinkwrap.json`, so `npx` installs the dependency tree that was tested |
 | `scenario-photoshop-X.Y.Z.mcpb` | Claude Desktop extension wrapping the helper |
 | `scenario-photoshop-handbook-X.Y.Z.html` | The user guide as one page, media included |
 | `SHA256SUMS` | Checksums of every file above |
@@ -1223,7 +1258,7 @@ One schema, shared with the skills: namespace `https://scenario.com/ns/photoshop
 ### 10.4 Release automation
 
 - release-please on `main` opens the release PR; merging it publishes. Tag `photoshop-plugin-vX.Y.Z`. RELEASING.md describes the steps and recovery.
-- The first public release waits for the gates of section 6.8 (the written training commitment or legal sign-off, the end-user license, restricted countries, the EU AI Act review). RELEASING.md lists them as a checklist.
+- The first public release waits for the gates of section 6.8 (the written training commitment or legal sign-off, the end-user license, restricted countries and trade controls, non-assertion, the EU AI Act review). RELEASING.md lists them as a checklist.
 - The release workflow builds and packages the `.ccx`, publishes the npm package, builds the `.mcpb` and the handbook, writes `SHA256SUMS`, and attests each artifact.
 - CI on every pull request: lint (including shadowed globals and secret patterns), unit tests, helper integration tests, the `tools/list` size test, MCP.md regeneration diff, manifest permission check, the batchPlay allow-list tests, link check, and a public-content check that rejects internal names, ids and account details in text and in media file names and metadata.
 
@@ -1244,7 +1279,7 @@ macOS on Apple silicon and Intel is the tested platform. Windows 10 and 11 run t
 
 The branch is not pushed until this set is complete and checked:
 
-- **Documents**: `README.md` (hero image and a short demo video), `docs/USER_GUIDE.md` (quick start; three recipes with before and after: fix an area in a client photo, paint over a render in a studio style, make 4:5 and 9:16 from one key visual; every lane, Jobs, Library, Details, settings, troubleshooting, known limits), `docs/MCP.md` with a Connect a client walkthrough, `PRIVACY.md`, `docs/KNOWN_LIMITATIONS.md` (an evidence paragraph, then runtime and authentication, creation and application, interface and capture, verification), `SECURITY.md`, `SUPPORT.md`, `RELEASING.md`, `CHANGELOG.md`, `AGENTS.md`.
+- **Documents**: `README.md` (hero image and a short demo video), `docs/USER_GUIDE.md` (quick start; three recipes with before and after: fix an area in a client photo, paint over a render in a studio style (a trained style in the Trained lane's Edit, section 3.4), make 4:5 and 9:16 from one key visual; every lane, Jobs, Library, Details, settings, troubleshooting, known limits), `docs/MCP.md` with a Connect a client walkthrough, `PRIVACY.md`, `docs/KNOWN_LIMITATIONS.md` (an evidence paragraph, then runtime and authentication, creation and application, interface and capture, verification), `SECURITY.md`, `SUPPORT.md`, `RELEASING.md`, `CHANGELOG.md`, `AGENTS.md`.
 - **Screenshots** from the real panel in Photoshop for every screen in section 3.15, captured from the panel's window.
 - **Before and after images** for every v1 lane, from real Scenario generations on varied, realistic inputs (a different subject per lane).
 - **Short screen recordings** (MP4, with a GIF for the README): sign-in to first generation, a selection edit, an upscale, and an agent driving Photoshop through the plugin's local Scenario MCP server.
@@ -1257,14 +1292,14 @@ The repository is public and `npx -y` runs the published helper on people's mach
 - **Test credentials.** The M2.0 test project's key and the live scripts' credentials live outside the repository, in the developer's own secure storage or environment. They are never in CI, fixtures or logs.
 - **Recorded responses.** Real responses recorded in M2.0 (dry runs, uploads, error bodies, job records) become mock fixtures only after a scrub script replaces team, project, user, job and asset ids, signed links and prompts. The CI public-content check cannot recognize ids it does not know, so the scrub runs before the commit, and a test fails on any id-shaped value outside an allow-list of fixture ids.
 - **npm publishing.** npm trusted publishing (OIDC) with provenance, from a protected release environment that needs a maintainer's approval. No long-lived npm token in repository secrets.
-- **Workflows.** Pull request workflows run with no secrets, on `pull_request`, never `pull_request_target` with a checkout of the pull request's code. Secret scanning with push protection is on for the repository.
+- **Workflows.** Pull request workflows run with no secrets, on `pull_request`, never `pull_request_target` with a checkout of the pull request's code. Third-party actions are pinned by commit SHA; workflows default to `permissions: contents: read`, and only the publish job gets `id-token: write`. release-please opens its pull requests with a GitHub App token scoped to this repository (pull requests opened with `GITHUB_TOKEN` do not trigger CI), never a personal token. The `.mcpb` is signed if the format's signing fits the release workflow (checked in M8). Secret scanning with push protection is on for the repository.
 
 ---
 
 ## 11. Licensing
 
 - MIT. `LICENSE` at the repository root, "Copyright (c) 2026 Scenario".
-- Dependencies under MIT, Apache-2.0 or BSD licenses only. `THIRD_PARTY_NOTICES.md` is generated in CI. Expected: the Model Context Protocol TypeScript SDK, `ws`, a deflate library for PNG. The exact list is fixed in M1.
+- Dependencies under MIT, Apache-2.0 or BSD licenses only. `THIRD_PARTY_NOTICES.md` is generated in CI. The helper has one runtime dependency, `ws`, pinned exactly; it implements the Model Context Protocol's stdio transport itself. The plugin bundles a deflate library for PNG.
 - No code from the Scenario Blender plugin (GPL-3.0) or from other projects. Everything is written from this spec and public documentation.
 - Use of Scenario is governed by Scenario's terms. Use of Photoshop APIs by Adobe's developer terms. "Photoshop" is used descriptively; no Adobe logos.
 
@@ -1276,24 +1311,24 @@ The repository is public and `npx -y` runs the published helper on people's mach
 
 | Area | Covers | Runs in |
 |---|---|---|
-| util | SHA-256 and HMAC test vectors, including the pairing proofs and message MACs with the byte layout of section 2.6; UTF-8, PNG encode and decode round trip, `iCCP` insertion that keeps other chunks, metadata stripping of PNG and JPEG, canonical JSON | Node |
-| forms and quotes | Schema validation, fingerprint binding (trained ids, scales and the base's `strength` included), 120 s expiry, quote mode, alarm on a dry run that returns a job, 269 and 200 dry-run answers; price kinds: a range checked against its upper bound, a `from` price always confirmed | Node with a mock API |
-| capture shaping | Grid rounding, nearest ratio, fixed sizes, growth inside the canvas and edge padding, place-back to the shaped box; the capture as `image` or first reference; the three Expand routes and the resolution warning | Node |
-| trained models | Base from `run_with`; unknown `runs_as` greyed; **Run with** candidates; Make new and Edit routes from fixture base schemas (`image` plus `strength`, references, none) | Node |
+| util | SHA-256 and HMAC test vectors, including the pairing proofs and message MACs of `test/vectors/pairing.json` (section 2.6); UTF-8, PNG encode and decode round trip, `iCCP` insertion that keeps other chunks, metadata stripping of PNG and JPEG, canonical JSON | Node |
+| forms and quotes | Schema validation, fingerprint binding (trained ids, scales and the base's `strength` included), 120 s expiry, quote mode, alarm on a dry run that returns a job, 269 and 200 dry-run answers; price kinds: a range checked against its upper bound, a `from` price always confirmed; price-affecting file inputs priced with stand-ins or as price after upload; the above-quote comparison net of discount, in thousandths | Node with a mock API |
+| capture shaping | Grid rounding, nearest ratio on the axis that grows, fixed sizes, growth inside the canvas and edge padding, place-back to the shaped box; the capture as `image` or first reference; capture size by lane (Upscale and Remove BG at full resolution up to the cap); the generated size on Upscale's Output line, in the Expand warning and in the Edit note; the stop when encoding reduces an input below the size shown; the three Expand routes | Node |
+| trained models | Candidate bases from fixture base inputs' `modelTypes`, `compliantModelIds` first; LoRA or composition from the input that lists the type; no candidate: grayed; **Run with** and stacking; Make new (`needs_reference` included) and Edit routes from fixture base schemas (`image` plus `strength`, references, none) | Node |
 | idempotency | Replay with the same key 130 s after the quote returns the same job; conflict on a changed payload; `QuoteUsed`; `RequestInFlight` for a new key while a matching job is `uploading_inputs`, `awaiting_approval`, `submitting` or `uncertain`; no answer within 60 s gives `uncertain` | Node with a mock API |
-| jobs | State machine with every transition of section 2.5 and the restart transitions of 6.4; 401, 403, 429 (wait and limit codes), 5xx, offline; a 2xx paid answer without a job id; `.part` files, rename, three attempts, expired links; charges: success as `cuCost` plus `cuCostDetails`, a failed, blocked or canceled job shown as refunded, with `disableRefund` shown as charged, totals from `cu_charged` only | Node with a mock API |
+| jobs | State machine with every transition of section 2.5 and the restart transitions of 6.4; 401, 403, 429 (wait and limit codes), 5xx, offline; a 2xx paid answer without a job id; `.part` files, rename, three attempts, expired links, `ResultUnreachable` and `ResultExpired`; charges: success as `cuCost` plus `cuCostDetails`, a failed, blocked or canceled job shown as refunded, with `disableRefund` shown as charged, `not_sent` as 0 and not refunded, totals from `cu_charged` only | Node with a mock API |
 | uploads | Route by encoded size, JPEG for opaque captures, the under-limit fallback, no `Authorization` on storage or download hosts, no `Authorization` after a cross-origin redirect | Node with a mock API |
 | Unknown resolution | Exact match pre-selected; two matches pre-select nothing; records without inputs; prompt-only jobs | Node |
 | checks | Seam, edited, aspect, polarity and outside-the-mask math on synthetic shifts, scales and tints | Node |
-| helper and pairing | stdio protocol, owner and peer election on both loopback addresses, proofs both ways, wrong role, wrong token, replayed proof, bad MAC, old counter, `pairing_failed`, a squatter that relays the handshake, a fake browser with `Origin: null` or an http origin, pages opened from `file://` URLs in a Chromium-based browser and in Safari, Host checks, 10 MiB cap, `tools/list` size cap, `null` handling, error format, `NoSpend` on paid calls and uploads; setup command: token from the environment only, token file mode 0600, backup, atomic write, invalid file untouched | Node; browsers for the `file://` pages |
-| agent rules | Allowance for the client session picked, per call and in total; a `from` quote under an allowance returns `awaiting_approval`; a charge above its quote ends the allowance; upload card once per document per client session; cancel, withdraw, stop and resume limited to the same session; read scope, `DocumentNotAllowed` | Node with a fake plugin |
-| batchPlay allow-list | Each allowed event; refused: `play` of an Action that contains a Save step, a script event, `syntheticFill`, `save`, `close`, an export event, `splitChannels`, `make` of a document, an application-level `delete`, a History state reference, a reference to another document, a targetless or ordinal reference when `document_id` is not active, a dialog option, a `../` path and a symlink; path properties removed from `get` results | Node (descriptor check) and live (M6) |
+| helper and pairing | stdio protocol, owner and peer election on both loopback addresses (two helpers starting together included), proofs both ways, wrong role, wrong token, replayed proof, bad MAC, old counter, `pairing_failed`, a squatter that relays the handshake, a fake browser with `Origin: null` or an http origin, pages opened from `file://` URLs in a Chromium-based browser and in Safari, Host checks, 10 MiB cap, `tools/list` size cap, `null` handling, error format, `NoSpend` on paid calls and uploads; sessions: ids of 128 random bits, new across owner changes and plugin reconnects, the name fixed at the first `initialize` and a later name ignored, a call with an unlisted session refused, a second plugin link refused; setup command: token from the environment or standard input only, token file mode 0600, a group-readable token file refused, backups and rewrites keeping the original mode, atomic write, invalid file untouched | Node; browsers for the `file://` pages |
+| agent rules | Allowance for the client session picked, per call and in total; a `from` quote under an allowance returns `awaiting_approval`; a charge above its quote ends the allowance; upload card once per document, chosen file or saved result per client session; the allowance, upload consents and pending cards end when the session leaves the list and when the plugin link drops, owner exit included, and its jobs pass to the person; one pending card per session; cancel, withdraw, stop and resume limited to the same session; read scope, `DocumentNotAllowed` | Node with a fake plugin |
+| batchPlay allow-list | Each allowed event; refused: `play` of an Action that contains a Save step, a script event, `syntheticFill`, `save`, `close`, an export event, `splitChannels`, `make` of a document, an application-level `delete`, a History state reference, a reference to another document, a targetless or ordinal reference, or an `_id` chain without a document element, when `document_id` is not active; a dialog option, a `../` path and a symlink; no path in `get` results on a document with a linked smart object | Node (descriptor check) and live (M6) |
 | metadata | XMP escaping, legacy keys read (`cost_cu` included), and with both opt-outs on no prompt text or price in XMP or layer names | Node |
 | docs and fixtures | MCP.md equals the generated file; links; public-content check; no id-shaped value in fixtures outside the allow-list (section 10.8) | CI |
 
 ### 12.2 Live tests in Photoshop
 
-Run on 27.11 first; on a 26.9 or later 26.x build when one can be installed (if none can, KNOWN_LIMITATIONS says 26.9 to 27.8 is untested); on 28.0 when it ships. Each item is recorded as verified live, tested automated, or not tested.
+Run on 27.11 first; on a 26.9 or later 26.x build when one can be installed (if none can, KNOWN_LIMITATIONS says 26.9 to 27.10 is untested); on 28.0 when it ships. Each item is recorded as verified live, tested automated, or not tested.
 
 1. Install from `.ccx` by double-click and by command line, with the time to a usable panel and whether a restart is needed; first launch with the panel closed (startup code connects).
 2. Sign-in: create key, paste (with `key:secret`), **Save and test**; wrong key; Reader key; Team key; offline; sign out; persistence across restart; a second project's key and the project switch.
@@ -1305,7 +1340,7 @@ Run on 27.11 first; on a 26.9 or later 26.x build when one can be installed (if 
 8. Undo and redo for every operation in section 6.5; one History entry each.
 9. Restart recovery: quit Photoshop during upload, while `submitting` (test hook delays the response), while awaiting approval, while generating, while downloading, while placing.
 10. Error paths: 401, 403, 429, offline, partial download, expired link, Blocked, a failed job shown as refunded, a `disableRefund` job shown as charged, a key with a CU cap below the price.
-11. Agent session driven by a real client: pairing, every v1 tool, approval, upload (per document) and proposal cards, both switches, the allowance with a `from` price and its total, `NoSpend`, two clients at once, owner exit and peer takeover, a squatter on the port; Select Subject with the Image Processing preference on Cloud.
+11. Agent session driven by a real client: pairing, every v1 tool, approval, upload (per document) and proposal cards, both switches, the allowance with a `from` price and its total, `NoSpend`, two clients at once, owner exit and peer takeover (grants end, new session ids), a squatter on the port, a second Photoshop dialing the port; Select Subject with the Image Processing preference on Cloud.
 12. Connect a client for each of the four clients from a clean machine; the token absent from every process's arguments.
 13. Open platform items: `executeAsModal` timing and Escape, drag and drop onto the panel (drag stays out of v1 until it passes), Content Credentials on placed results, the Origin, User-Agent and Host of the UXP WebSocket on 26.x, `crypto.getRandomValues`, the password field read without a paint; on Windows, the exclusive bind on both loopback addresses.
 14. **Run self-test** (Settings > Diagnostics), free: on a scratch document, place a bundled image, mask it, write and read XMP, check one History entry, run the outside-the-mask check, close the document without saving.
@@ -1331,17 +1366,18 @@ A reviewer installs the plugin from scratch following only the docs and reports 
 |---|---|---|
 | 1 | One authenticated read with key and secret (Basic auth), and one with an access token from mcp.scenario.com (bearer on REST) | Basic works: as designed; it fails: M2 stops, since v1 has no other sign-in. Bearer is noted for a later sign-in either way |
 | 2 | The same dry run with `dryRun=true` and `dryRun=api`: status (269 or 200), body, both prices | Feeds item 3; the body shape found is the one the plugin recognizes |
-| 3 | One cheap paid job, its `cu_record` read from `billing.cuCost` plus `billing.cuCostDetails`, compared with both quotes | One mode matches: it becomes the constant. Both match: `true`. Neither matches: every price ships as `from N CU` and M3 waits for Scenario to say which mode matches the charge |
+| 3 | Paid jobs in the shapes the defaults use, each compared with both quote modes: the Image default at its smallest settings, and the Edit default with a capture-sized reference, a mask and 2 takes. On every M2.0 job: `billing.cuCost`, `cuCostDetails` and `cuDiscount`, and the quote's `creativeUnitsDiscount` | One mode matches on both jobs: it becomes the constant. Both match: `true`. Neither matches: every price ships as `from N CU` and M3 waits for Scenario to say which mode matches the charge. The discount fields set `cu_record` (section 2.5); a test project without a discount leaves that question to Scenario |
 | 4 | One failed job on a refundable model and one canceled job: their billing fields, and the net effect in the project's usage (team limits endpoint if the key reads it, else the web app) | Refunded as documented: section 2.5 as written. A canceled job keeps its main charge: canceled jobs show "Charged N CU" and count in totals |
-| 5 | Dry runs without file inputs, one model per lane family; JPEG input accepted per family | Priced: price before upload. Refused: "price after upload" for that family, as data. JPEG refused: PNG for that family |
+| 5 | Per lane family, and for each file input the schema marks `costImpact`: dry runs without the file, with a real file, and with blank stand-ins of the same size and of another size; JPEG input accepted per family | Same price without the file: price before upload. Lower without it, equal with any stand-in: stand-ins by count. Equal only with a same-size stand-in: stand-ins at the capture's size. Otherwise, or refused without the file: "price after upload" for that family, as data. JPEG refused: PNG for that family |
 | 6 | Uploads through `POST /v1/assets` of about 2.9 MB of file (base64 just under 4 MB) and about 3.5 MB of file (base64 over 4 MB), and one through `POST /v1/uploads`: the limit's unit, the storage host, whether it is stable, link expiry | The encoder targets the measured limit. A stable host, or one stable below a subdomain, goes in the manifest and PRIVACY.md; otherwise every upload stays under the limit (section 5.5) |
 | 7 | Hosts of a REST image result, a video asset, and model, asset and collection thumbnails; whether any API call answers with a redirect | Fixed hosts are listed; a varying subdomain gets a wildcard entry, checked to load; no pattern: the fallback of section 2.10. A redirect is tested for the `Authorization` rule |
 | 8 | With a Reader key, a Team key and an Editor Project key: an authenticated read, a dry run, and a paid call at the smallest settings | Dry run refused for Reader and Team: Save and test reports it at sign-in. Dry run passes: Save and test says "Connected" without claiming generation rights, and the first Generate's refusal shows "This key can't run models", nothing spent. A Reader key that can run paid jobs changes the 3.13 text and section 4.1 to say so |
 | 9 | Error bodies: a key whose CU cap is below the price, an unknown parameter, a 429 when one occurs; their `code` values | Codes ship as data for section 3.13; unknown codes show Scenario's message |
 | 10 | One request the model's published policy refuses, at the smallest settings: where the refusal appears (HTTP error or job failure) and its codes | Codes ship as data for `blocked`. None found: every failure is `failed` until M5 finds one |
-| 11 | A job record from the jobs list: model and `metadata.input` fields, prompt, inputs | Usable: exact matching for Unknown (section 6.2), prompts on On Scenario rows, **Reuse settings** there. Not usable: nothing pre-selected, rows without prompts, no Reuse |
-| 12 | The project's trained models through the key, a REST listing of public trained models, a LoRA and a composition record (`runs_as`, `run_with`, type) and their base schemas | Fields present: section 3.4 as written. No public listing: the lane lists the project's only and says so. No `run_with`: those models are greyed |
-| 13 | Catalog capability and tag strings; whether REST offers a recommendation; the key's project name; the API keys page, plans and account links; whether an Editor key reads team limits; whether a running job can be canceled | Each is data or a link. No recommendation: the "Scenario picks" lists. No project name: the key's last 4 characters. No cancel: **Cancel** is hidden |
+| 11 | A job record from the jobs list: model and `metadata.input` fields, prompt, inputs; whether asset list rows carry the prompt | Usable: exact matching for Unknown (section 6.2), prompts on On Scenario rows, **Reuse settings** there. Not usable: nothing pre-selected, rows without prompts, no Reuse |
+| 12 | The project's trained models through the key, a REST listing of public trained models, and a LoRA and a composition record (`type`, `status`, `compliantModelIds`, `parentModelId`, `concepts`) with their bases' `inputs` (`modelTypes` on `loras` and on `modelId`) | Types listed by base inputs: section 3.4 as written. `modelId` without `modelTypes`: compositions take their candidates from `compliantModelIds`, else are grayed. No public listing: the lane lists the project's only and says so. Only a model no base takes is grayed, never the lane |
+| 13 | Catalog capability and tag strings; whether REST offers a recommendation; the key's project name and id, and whether calls need `projectId` (the uploading guide's routes take it); the API keys page, plans and account links; whether an Editor key reads team limits; whether the documented `cancel` action works on a running job with an Editor key | Each is data or a link. No recommendation: the "Scenario picks" lists. No project name: the key's last 4 characters. No cancel: **Cancel** is hidden |
+| 14 | Each Enhance default, and each model kept in a default or a "Scenario picks" list whose quote stays flat across sizes (seen on upscalers, background removers and an exact-size Expand model through hosted Scenario MCP), paid at its smallest and at a larger size | Charge equal to the quote at both sizes: `exact`. Charge grows while the quote stays flat: `from` in the shipped list, or `range` when the schema gives the bound |
 
 Item 3 is the one that can hold the plan: if no mode matches, M3 waits. Every other item has a fallback in the design, as stated.
 
@@ -1349,8 +1385,8 @@ Item 3 is the one that can hold the plan: if no mode matches, M3 waits. Every ot
 
 | Risk | Mitigation | Basis |
 |---|---|---|
-| Quote differs from the charge | Quote mode fixed in M2.0, or every price shown as `from` if none matches; ranges and `from` prices confirmed; the allowance counts the larger of quote and charge; Jobs shows quoted and charged; per-model notes in KNOWN_LIMITATIONS | one sample matched (seen through hosted Scenario MCP); differences inferred from per-layer pricing and flat quotes |
-| Dry runs need file inputs for many models | "Price after upload" path | assumed (M2.0) |
+| Quote differs from the charge | Quote mode fixed in M2.0, or every price shown as `from` if none matches; flat quotes paid at two sizes (M2.0 item 14); ranges and `from` prices confirmed; the allowance counts the larger of quote and charge; Jobs shows quoted and charged; per-model notes in KNOWN_LIMITATIONS | one sample matched (seen through hosted Scenario MCP); differences inferred from per-layer pricing and flat quotes |
+| Dry runs need file inputs for many models | Stand-in inputs, else the "price after upload" path | assumed (M2.0) |
 | Upload storage host cannot be declared | Every upload under the measured limit, with a visible `Input reduced` badge | assumed (M2.0) |
 | Download hosts vary | Subdomain wildcard, else "Stored on a host this plugin can't reach" with **Open on Scenario** (section 2.10) | assumed (M2.0) |
 | Expand on large canvases comes back soft | Resolution warning before the spend (section 5.8); **Upscale** as the follow-up; per-side strips in v1.1 | documented (model maximum outputs) |
@@ -1380,12 +1416,13 @@ Item 3 is the one that can hold the plan: if no mode matches, M3 waits. Every ot
 | Loopback port | 9890, fixed, no hopping | Outside the port the Blender plugin documents (9876) and the ranges other Scenario plugins reserve. A fixed port keeps client configs and the manifest entry valid, and the manifest cannot list a range |
 | Helper distribution | npm package for `npx`, plus a Claude Desktop `.mcpb` extension; no standalone binaries in v1 | `npx` covers the three CLI-based clients. The extension gives Photoshop-only users a path without Node. Standalone binaries need code signing to pass Gatekeeper and SmartScreen, so they wait |
 | Pairing | A 256-bit token made in the plugin, kept by the helper in a user-only token file that the setup command writes from its environment (or in a client's config as `SCENARIO_PHOTOSHOP_TOKEN`); mutual HMAC proofs with role labels; a MAC on every message; an Origin allow-list | The plugin dials out, so it must verify who holds the port without giving the token to that holder. The token file keeps it off command lines and out of client configs, and one setup command re-pairs every client after a reset |
+| Client sessions | Random 128-bit ids, new for each plugin link; the name fixed at `initialize`; grants end with the session or the link | An allowance or upload consent must never pass to a client the person did not pick, nor outlive the one they did |
 | Minimum Photoshop | 26.9 | First release that drops `Authorization` on a cross-origin redirect; still the 2025 release line |
 | Connect a client | Copy commands, a Cursor install link and a Claude Desktop extension instead of direct config writes | Writing client files from UXP needs `fullAccess`, which this plugin avoids |
 | Environment credentials | Not supported in the plugin; `SCENARIO_NO_SPEND` honored by the helper for spend and uploads | `process.env` is empty in UXP and the helper never holds the key |
-| Agent spending default | Ask in the panel each time; optional allowance for one client session with a per-call limit (50 CU) and a total (300 CU); `from` prices always ask | Approval before spend in the product, while long agent runs stay possible. The total is a bound because unbounded prices never run under it and it counts the larger of quote and charge |
+| Agent spending default | Ask in the panel each time; optional allowance for one client session with a per-call limit (50 CU) and a total (300 CU); `from` prices always ask | Approval before spend in the product, while long agent runs stay possible. The total bounds quoted prices: unbounded prices never run under it, it counts the larger of quote and charge, and a charge above its quote ends it |
 | Agent uploads | Asked once per document, or chosen file, per client session, then logged | Pixels leave the machine before any spend card. Asking per document keeps the card's text true, and a batch over one document still runs without stops |
-| Pricing before upload | Dry run without file inputs; exact re-check after upload before submitting | No pixels leave before the person clicks Generate, and the spend still matches a shown price |
+| Pricing before upload | Dry run without document pixels: price-affecting file inputs get stand-ins, else "price after upload"; exact re-check after upload before submitting | No pixels leave before the person clicks Generate, and the spend still matches a shown price |
 | Quote mode | `dryRun=true` until M2.0 shows which mode matches the charge | Scenario's help center documents it as the exact cost; the docs do not define the tier `api` estimates |
 | Idempotency | Quote id as the default key, optional `idempotency_key`, local replay | Scenario has no idempotency key. A replayed call returning the same job covers lost responses on the stdio and socket hops |
 | Unknown resolution | Pre-select only one exact match; the person confirms; "Mark not sent" is durable | A wrong link either hides a charge or downloads someone else's job. Durable marks keep the decision after a restart |
@@ -1396,8 +1433,9 @@ Item 3 is the one that can hold the plan: if no mode matches, M3 waits. Every ot
 | Agent commands | batchPlay descriptor lists checked against an allow-list | `eval` needs `allowCodeGenerationFromStrings`, a permission that widens review and risk. An allow-list, not a deny-list, is what lets the plugin promise that agents never save, close or export |
 | CMYK and other modes | Capture through `getPixels` asking for sRGB; **Make RGB copy** for any mode M4 finds unreadable; a temporary duplicate in v1.1 | Adobe documents that imaging converts with the working profile when the requested space differs; a hidden duplicate on large print files needs testing first |
 | Capture shaping | One rule per model kind, as data (section 5.8) | Selection boxes rarely match a model's sizes; shaping avoids false misalignment flags and keeps Expand's controls honest |
+| Large inputs | Upscale and Remove BG read the source at full resolution up to a lane cap; Edit contexts and references keep the 2048 px default, with the generated size shown | Shrinking the source defeats an upscale and softens a cutout mask |
 | Expand default | A mask-route model (GPT Image 2.5 Flare at release), compared with Photoroom Expand in M4 | Every anchor, Per side and a prompt work on the mask route; Photoroom has a flat price but no placement setting |
-| Trained models | Base from each model's `run_with`, routes from the base's schema, no family table | Trained families change; the schema is the contract, and an unknown type is shown greyed instead of guessed |
+| Trained models | Bases from the catalog (inputs whose `modelTypes` list the trained type, `compliantModelIds` first), routes from the base's schema, no family table | Trained families change and REST names no base; the schemas are the contract, and a type no base takes is shown grayed instead of guessed |
 | Job status values | The Blender plugin's machine values where the meaning matches | Agents that know one Scenario plugin read the other's statuses the same way |
 | Result color tagging | Insert an sRGB `iCCP` chunk before placing | Results arrive untagged; tagging makes Photoshop convert into the document's space instead of guessing |
 | Lanes in v1 | Image, Edit, Enhance (Upscale, Expand, Remove BG), Trained, Library, plus Jobs and Details | They cover use cases 1 to 9 and 11 to 15. Layer decomposition, Workflows, Video, Vectorize, Segment and Maps need their own landing designs and tests |

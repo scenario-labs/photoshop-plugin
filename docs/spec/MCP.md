@@ -1,6 +1,6 @@
 # Local Scenario MCP server: tool reference (spec v1)
 
-Status: draft for review, revision 3, 2026-10-19. This is the design reference for the tools of `scenario-photoshop` in the first public release (0.1.0, feature scope v1). The published `docs/MCP.md` is generated from the tool definitions in `shared/` once they exist, and must match this file.
+Status: draft for review, revision 4, 2026-10-19. This is the design reference for the tools of `scenario-photoshop` in the first public release (0.1.0, feature scope v1). The published `docs/MCP.md` is generated from the tool definitions in `shared/` once they exist, and must match this file.
 
 Read with [SPEC.md](SPEC.md): the link and pairing in section 2.6, agent rules in section 2.7, safety in section 6.
 
@@ -12,6 +12,7 @@ Read with [SPEC.md](SPEC.md): the link and pairing in section 2.6, agent rules i
 | Client transport | stdio. The client starts `npx -y @scenario-labs/photoshop-mcp@X.Y.Z` (exact version) or the Claude Desktop extension |
 | Helper to plugin | WebSocket on port 9890. The first helper binds `127.0.0.1` and `::1`; the plugin dials `ws://localhost:9890` |
 | Pairing | The helper reads the token from `SCENARIO_PHOTOSHOP_TOKEN` when its client sets it, else from the user-only token file the setup command writes (SPEC 2.6, 7.4). The token never travels: both sides prove they hold it with HMAC-SHA-256 over random nonces and a role label, then every message carries a MAC |
+| Client sessions | One per connected client: an id of 128 random bits, new for each plugin link, and a name fixed at `initialize`. A session's allowance, upload consents, pending cards and job ownership end when it ends (SPEC 2.6, Client sessions) |
 | Environment guard | `SCENARIO_NO_SPEND=1` makes every paid call and every upload return `NoSpend` |
 | Limits | 10 MiB per message; 120 s per tool call, except `wait_for_job` (45 s by default, 170 s at most) |
 | Hosted counterpart | Hosted Scenario MCP at mcp.scenario.com for training, usage, collection changes and workflow authoring |
@@ -71,11 +72,11 @@ Job `status` (meanings and transitions: SPEC 2.5). Values are the Blender plugin
 | `not_sent` | Not sent | yes |
 | `uncertain` | Unknown | no (the person resolves it) |
 
-`approval.state`: `none`, `pending`, `approved`, `declined`, `expired` (unanswered for 10 minutes, or Photoshop restarted).
+`approval.state`: `none`, `pending`, `approved`, `declined`, `expired` (unanswered for 10 minutes, its session ended, or Photoshop restarted).
 
 `application.state`: `none`, `pending_approval`, `committed`, `dismissed`, `expired`, `rolled_back`, `uncertain`.
 
-Upload `state`: `awaiting_approval`, `uploading`, `imported`, `failed`, `declined`.
+Upload `state`: `awaiting_approval`, `uploading`, `imported`, `failed`, `declined` (also when the card goes unanswered for 10 minutes or its session ends).
 
 `quote.price_kind`: `exact` (`N CU`), `range` (`N to M CU`, M counts against limits), `from` (`from N CU`: the charge can exceed N with no bound, so it always needs the person's approval).
 
@@ -85,7 +86,7 @@ Upload `state`: `awaiting_approval`, `uploading`, `imported`, `failed`, `decline
 
 ## 3. Money flow for agents
 
-1. `estimate_cost` validates the parameters against the model schema, then runs a dry run on Scenario in the quote mode M2.0 fixes (SPEC 6.1) and returns a `quote_id`, `cu_cost_exact` (a decimal string), `price_kind` and, for a range, `cu_cost_max`. Free.
+1. `estimate_cost` validates the parameters against the model schema, then runs a dry run on Scenario in the quote mode M2.0 fixes (SPEC 6.1) and returns a `quote_id`, `cu_cost_exact` (a decimal string; for a range, N), `price_kind` and, for a range, `cu_cost_max` (M, which the card and the allowance use). Free.
 2. The agent shows the price and its kind to the person in its own interface.
 3. `generate` carries `quote_id`, `approved_cost` equal to `cu_cost_exact` character for character, and optionally an `idempotency_key`. The plugin checks, in this order:
    1. **Idempotency.** A key already in the ledger returns its job with `replayed: true` and sends nothing, whatever the job's state and the quote's age. The same key with a different request returns `IdempotencyConflict`.
@@ -96,15 +97,15 @@ Upload `state`: `awaiting_approval`, `uploading`, `imported`, `failed`, `decline
    6. `SCENARIO_NO_SPEND` and the panel's No-spend mode are off (`NoSpend`).
 4. Then the Agent spending setting applies:
    - **Ask each time** (default): `generate` returns `status: "awaiting_approval"` at once. The panel shows an approval card (client name, model, takes, prompt, input thumbnails, and the price with its kind: "N CU", "N to M CU" or "from N CU, no upper bound") with **Approve** repeating the price, and **Decline**. The agent calls `wait_for_job`. An unanswered card expires after 10 minutes.
-   - **Allow without asking**: given to one client session the person picks, with a per-call limit (default 50 CU) and a session total (default 300 CU). An exact price, or the upper bound of a range, that fits both limits submits at once. A `from` price, a price above either limit, or a call from another client session gets the approval card. The total deducts the quote, then the larger of the quote and `cu_charged` once known; a charge above its quote ends the allowance. It also ends when that session disconnects, when Photoshop quits, when the person clicks **End**, or when the total is used. `scenario_status` reports what is left.
+   - **Allow without asking**: given to one client session the person picks, with a per-call limit (default 50 CU) and a session total (default 300 CU). An exact price, or the upper bound of a range, that fits both limits submits at once. A `from` price, a price above either limit, or a call from another client session gets the approval card. The total deducts the quote, then the larger of the quote and `cu_charged` once known; a charge above its quote ends the allowance. It also ends when that session ends, when Photoshop quits, when the person clicks **End**, or when the total is used. `scenario_status` reports what is left.
 5. Before the request goes to Scenario, the ledger records the job as `submitting` with the idempotency key.
 6. The result is `queued` (accepted), `not_sent` (Scenario refused it; nothing was charged) or `uncertain` (no answer within 60 s, the connection failed after sending, or a paid call answered without a job id; a job may exist).
 
 **Idempotency.** The key defaults to the `quote_id`. Check 1 runs before any quote check, so a replay works at any age, including after a client's tool call timed out. Scenario's API has no idempotency key, so this check is local; it covers lost responses between the agent, the helper and the plugin. When a response is lost between the plugin and Scenario, the job becomes `uncertain` and only the person can resolve it in the panel (SPEC 6.2).
 
-**Charges.** `cu_charged` is defined once, in SPEC 2.5: on success, the job's `cuCost` plus its `cuCostDetails`; on `failed`, `blocked` or `canceled`, 0 with `refunded: true`, unless `no_refund` is true; null before a final status. `cu_record` keeps what the job record reports, which for a refunded job is the original charge.
+**Charges.** `cu_record`, `cu_charged`, `refunded`, `no_refund` and what counts as a charge above its quote are defined once, in SPEC 2.5. A refunded failure reads `cu_charged` 0 while `cu_record` keeps the original charge.
 
-**Uploads.** Agents upload only captures the plugin made, files the person chose in the panel this session, and results the plugin saved. The first upload from each document, or each chosen file, in a client session shows a card in the panel ("Allow <client> to send pixels from <document> to Scenario for this session?"): `upload_reference` returns `state: "awaiting_approval"` until the person answers. After **Allow**, later uploads from that document in that session are logged without a card. `SCENARIO_NO_SPEND=1` and No-spend mode refuse uploads too.
+**Uploads.** Agents upload only captures the plugin made, files the person chose in the panel this session, and results the plugin saved (matched by path against the files the ledger records). The first upload from each document, chosen file or saved result in a client session shows a card in the panel ("Allow <client> to send pixels from <document> to Scenario for this session?"): `upload_reference` returns `state: "awaiting_approval"` until the person answers or the card expires (10 minutes, or when the session ends). After **Allow**, later uploads from that document in that session are logged without a card. `SCENARIO_NO_SPEND=1` and No-spend mode refuse uploads too.
 
 ## 4. Tools (v1)
 
@@ -123,31 +124,31 @@ A "Scenario layer" is a layer whose metadata carries `scenario:assetId`, or one 
 
 | Tool | Blender | Inputs | Output | Side effects | Cost |
 |---|---|---|---|---|---|
-| `list_models` | same | `lane`, `source`, `query`, `limit` (default 20, max 40), `cursor` | Rows {model_id, name, description, lanes, accepts_mask, max_references, max_output, experimental}. `source: "catalog"` never returns trained models; `trained` returns the project's, then Scenario's public ones. Trained rows add {trained: true, public, trained_type, runs_as (`lora` or `composition`), base_model_ids (the `run_with` base first, then other bases that accept the type), default_scale, max_loras, make_new (false when every base requires references), edit_route (`image_strength`, `reference`, `mask` or null), supported (false for an unknown `runs_as` or no `run_with`)} | None | Free |
-| `model_schema` | same | `model_id` | `parameters` [{name, type, default, enum, min, max, required}], `file_inputs` [{name, kind, role: `image`, `reference` or `mask`}], `mask_polarity` {value: `alpha`, `white` or `black`, source: `schema`, `table` or `default`}, `price_affecting` [names], `variable_charge` {kind: `range` or `from`, bound_parameter, reason}, `takes_loras` {max, scale_min, scale_max, types} when the model is a base for LoRAs, `size_inputs` {kind: `grid`, `ratio_enum`, `fixed` or `none`, step, ratios, sizes, max} (SPEC 5.8), `capture_input` (`image`, `reference` or null), `expand_route` (`mask`, `position` or `exact_size`, for Expand models) | None | Free |
+| `list_models` | same | `lane`, `source`, `query`, `limit` (default 20, max 40), `cursor` | Rows {model_id, name, description, lanes, accepts_mask, max_references, max_output, experimental}. `source: "catalog"` never returns trained models; `trained` returns the project's, then Scenario's public ones. Trained rows add {trained: true, public, trained_type (the record's `type`), trained_kind (`lora` or `composition`), base_model_ids (the candidate bases of SPEC 3.4, `compliantModelIds` first), default_scale, max_loras, make_new (`true`, `false`, or `needs_reference` when the base requires references), edit_route (`image_strength`, `reference`, `mask` or null), supported (false when no base takes the type)} | None | Free |
+| `model_schema` | same | `model_id` | `parameters` [{name, type, default, enum, min, max, required}], `file_inputs` [{name, kind, role: `image`, `reference` or `mask`}], `mask_polarity` {value: `alpha`, `white` or `black`, source: `schema`, `table` or `default`}, `price_affecting` [names, from the schema's `costImpact`], `variable_charge` {kind: `range` or `from`, bound_parameter, reason}, `takes_loras` {max, scale_min, scale_max, types} when the model is a base for LoRAs, `size_inputs` {kind: `grid`, `ratio_enum`, `fixed` or `none`, step, ratios, sizes, max} (SPEC 5.8), `capture_input` (`image`, `reference` or null; from `shared/catalog-map.json` where the schema does not say), `expand_route` (`mask`, `position` or `exact_size`, for Expand models) | None | Free |
 | `recommend_models` | new | `lane`, `prompt`, `limit` (default 5) | Rows as `list_models` plus `reason`; `source` is `scenario` or `plugin defaults` | None | Free |
-| `estimate_cost` | same | `model_id` (the model called; for trained models the base), `lane`, `parameters` (file inputs as asset ids; LoRAs as `loras` and `lorasScale`; a composition as `modelId`), one of `capture_id` (binds the placement target), `canvas` {document_id, box} (an Image result placed on an open document; `box` defaults to the canvas) or `new_document` {width, height}, `takes` | `quote_id`, `cu_cost_exact` (decimal string), `cu_cost` (number), `price_kind`, `cu_cost_max` (for `range`), `cost_details`, `expires_at`, `needs_upload` (true when the dry run needed file inputs that are missing) | One dry run on Scenario; no job. `ipDetection` is refused (`InvalidParameter`) because its fee is charged even on a dry run | Free |
-| `job_status` | same | `local_id` or `job_id` | `local_id`, `job_id`, `status`, `remote_status`, `progress`, `cu_quoted`, `price_kind`, `cu_record`, `cu_charged`, `refunded`, `no_refund`, `origin` {kind, client}, `approval` {state}, `outputs` [{asset_id, take, file_state}], `application` {state, history_state, layer_ids}, `error`, `revision`, `actions` | None | Free |
-| `wait_for_job` | same | `local_id` or `job_id`, `timeout` (0 to 170, default 45) | `job_status` fields, plus `still_running` when the wait expired | Waits without blocking Photoshop | Free |
-| `list_local_jobs` | same | `filter` (`all`, `active`, `needs_attention`, `agents`, `this_client`), `limit` (default 20), `cursor` | Rows {local_id, job_id, status, lane, model_name, prompt_slug, cu_quoted, cu_charged, origin, created_at, revision} | None | Free |
+| `estimate_cost` | same | `model_id` (the model called; for trained models the base), `lane`, `parameters` (file inputs as asset ids; LoRAs as `loras` and `lorasScale`; a composition as `modelId`), one of `capture_id` (binds the placement target), `canvas` {document_id, box} (an Image result placed on an open document; `box` defaults to the canvas) or `new_document` {width, height}, `takes` | `quote_id`, `cu_cost_exact` (decimal string), `cu_cost` (number), `price_kind`, `cu_cost_max` (for `range`), `cost_details`, `expires_at`, `no_refund` (the model's `disableRefund`), `needs_upload` (true when a required or price-affecting file input is missing: the price leaves it out, and `generate` needs a quote that includes it) | One dry run on Scenario; no job. `ipDetection` is refused (`InvalidParameter`) because its fee is charged even on a dry run | Free |
+| `job_status` | same | `local_id` or `job_id` | `local_id`, `job_id`, `status`, `remote_status`, `progress`, `cu_quoted`, `cu_quoted_max`, `price_kind`, `cu_record`, `cu_charged`, `refunded`, `no_refund`, `origin` {kind, client}, `approval` {state}, `outputs` [{asset_id, take, file_state}], `application` {state, history_state, layer_ids}, `error`, `revision`, `actions` | None | Free |
+| `wait_for_job` | same | `local_id` or `job_id`, `timeout` (0 to 170, default 45) | `job_status` fields once the job reaches `ready`, `applied`, `download_failed`, `uncertain` or a final status; `still_running` when the wait expired first | Waits without blocking Photoshop | Free |
+| `list_local_jobs` | same | `filter` (`all`, `active`, `needs_attention`, `agents`, `this_client`), `limit` (default 20), `cursor` | Rows {local_id, job_id, status, lane, model_name, prompt_slug, cu_quoted, cu_quoted_max, cu_charged, origin, created_at, revision} | None | Free |
 | `list_generations` | same | `created_after`, `limit` (default 20), `cursor` | The current project's jobs on Scenario: {job_id, status, created_at, asset_ids}, plus `model_id` when the job record carries it | None | Free |
-| `list_assets` | same | `collection_id`, `limit` (default 20), `cursor` | Images of the current project: {asset_id, name, width, height, created_at} | None | Free |
-| `search_assets` | same | `query`, `limit` (default 20) | As `list_assets`. Search can miss recent assets; browse with `list_assets` to be sure | None | Free |
+| `list_assets` | similar (no `public` input) | `collection_id`, `limit` (default 20), `cursor` | Images of the current project: {asset_id, name, width, height, created_at} | None | Free |
+| `search_assets` | similar (no `public` input) | `query`, `limit` (default 20) | As `list_assets`. Search can miss assets; browse with `list_assets` to be sure | None | Free |
 | `list_collections` | same | `limit`, `cursor` | {collection_id, name, asset_count} | None | Free |
 | `inspect_result_previews` | same | `local_id` or `job_id`, `takes` (default all), `max_px` (default 512, max 1024) | One JPEG per take, plus checks against the capture: `aspect_ok`, `edited`, `seam_bias`, `seam_residual`, `seam_ok`, `polarity_suspect` | Downloads results if needed; no document change | Free. Images go to the agent's provider |
 
-**Trained models.** A trained model is never the model called. Pass one of its `base_model_ids` as `model_id` (the first is its `run_with` base) and the trained model in the parameters, as in the Blender plugin:
+**Trained models.** A trained model is never the model called. Pass one of its `base_model_ids` as `model_id` (the first is the default; hosted Scenario MCP calls it `run_with`) and the trained model in the parameters, as in the Blender plugin:
 - a LoRA: `loras: [<trained model id>, ...]` and `lorasScale: [<strength>, ...]`, within `takes_loras` of the base (on FLUX.2 Dev, up to 6 LoRAs, strength 0 to 2);
 - a composition: `modelId: <trained model id>`, which cannot be combined with `loras`.
 
-`lane: "edit"` needs an `edit_route`: with `image_strength`, the capture goes as `image` and the base's `strength` (default and range from `model_schema`) sets how far the result moves from it; with `reference`, the capture goes as the first reference. No current base takes a mask, so the mask is applied in Photoshop. `lane: "image"` needs `make_new`. Otherwise, or when `supported` is false, `estimate_cost` returns `InvalidParameter`. Trained edits are `experimental` until they pass live testing.
+`lane: "edit"` needs an `edit_route`: with `image_strength`, the capture goes as `image` and the base's `strength` (default and range from `model_schema`) sets how far the result moves from it; with `reference`, the capture goes as the first reference. No current base takes a mask, so the mask is applied in Photoshop. `lane: "image"` needs `make_new` true, or `needs_reference` with at least one reference in the parameters. Otherwise, or when `supported` is false, `estimate_cost` returns `InvalidParameter`. Trained edits are `experimental` until they pass live testing.
 
 ### 4.3 Inputs
 
 | Tool | Blender | Inputs | Output | Side effects | Cost |
 |---|---|---|---|---|---|
-| `capture_reference` | similar: captures only; the upload is `upload_reference` | `document_id`, `source` (`selection`, `layer`, `all_visible`, `document`), `layer_id`, `sample` (`all_visible` or `layer`, for a selection), `purpose` (`edit`, `reference`, `expand`, `upscale`, `remove_background`), `model_id` (shapes the capture to that model, SPEC 5.8; required for `edit` and `expand`), `margin` (default: half the long side, at least 64 px; 0 allowed), `expand` {left, top, right, bottom, or `aspect` and `anchor`; overlap default 32} for `purpose: "expand"`, `max_px` | `capture_id`, `box` (the shaped box), `scale`, `size`, `parts` (`context`, `mask`, `model_mask` as relevant), `capture_input`, `mask_coverage`, `feathered`, `expand_route` and `resolution_ratio` (the share of the document's resolution the new area gets) for Expand, `notes` | A short modal read; files in the plugin temp folder; records the placement target. No document change, nothing sent | Free |
-| `upload_reference` | same | One of: `capture_id` with `parts` (default: the parts the purpose needs), or `path` (a file the person chose in the panel this session, or a result the plugin saved) | `reference_ids` per part, `state`, `asset_ids` once imported, `reduced` {from, to} when the image was reduced to fit the upload limit | Sends the pixels to Scenario; the first upload from each document asks the person (section 3, Uploads). The same capture part is uploaded once; repeats return the same reference | Uploads. Spends no CU |
+| `capture_reference` | similar: captures only; the upload is `upload_reference` | `document_id`, `source` (`selection`, `layer`, `all_visible`, `document`), `layer_id`, `sample` (`all_visible` or `layer`, for a selection), `purpose` (`edit`, `reference`, `expand`, `upscale`, `remove_background`), `model_id` (shapes the capture to that model, SPEC 5.8; required for `edit` and `expand`), `margin` (default: half the long side, at least 64 px; 0 allowed), `expand` {left, top, right, bottom, or `aspect` and `anchor`; overlap default 32} for `purpose: "expand"`, `max_px` | `capture_id`, `box` (the shaped box), `scale`, `size`, `parts` (`context`, `mask`, `model_mask` as relevant), `capture_input`, `mask_coverage`, `feathered`, `generated_size` and `resolution_ratio` (generated size over the target's size, SPEC 5.8), `expand_route` for Expand, `notes` | A short modal read; files in the plugin temp folder; records the placement target. No document change, nothing sent | Free |
+| `upload_reference` | same | One of: `capture_id` with `parts` (default: the parts the purpose needs), or `path` (a file the person chose in the panel this session, or a result the plugin saved) | `reference_ids` per part, `state`, `asset_ids` once imported, `reduced` {from, to} when the image was reduced to fit the upload limit | Sends the pixels to Scenario; the first upload from each document, chosen file or saved result asks the person (section 3, Uploads). The same capture part is uploaded once; repeats return the same reference | Uploads. Spends no CU |
 | `reference_upload_status` | same | `reference_id` | `state`, `asset_id`, `error` | None | Free |
 
 Any other `path` returns `UploadRefused` before anything is read. Files from disk are PNG or JPEG and are sent with their EXIF, XMP, IPTC and text metadata stripped.
@@ -156,15 +157,15 @@ Any other `path` returns `UploadRefused` before anything is read. Files from dis
 
 | Tool | Blender | Inputs | Output | Side effects | Cost |
 |---|---|---|---|---|---|
-| `generate` | same | `lane`, `model_id`, `quote_id`, `approved_cost` (exact string), `parameters` (must match the quote), `idempotency_key` (8 to 128 characters; default the `quote_id`) | `local_id`, `status` (`awaiting_approval`, `queued`, `not_sent` or `uncertain`), `job_id` when known, `replayed`, `allowance_remaining` when the allowance applied, `note` | Ledger write; approval card when required; then the paid request to Scenario | Spends, after the checks in section 3 |
+| `generate` | same | `lane`, `model_id`, `quote_id`, `approved_cost` (exact string), `parameters` (must match the quote), `idempotency_key` (8 to 128 characters; default the `quote_id`) | `local_id`, `status` (`awaiting_approval`, `queued`, `not_sent` or `uncertain`; on a replay, the job's current status), `job_id` when known, `replayed`, `allowance_remaining` when the allowance applied, `note` | Ledger write; approval card when required; then the paid request to Scenario | Spends, after the checks in section 3 |
 
 ### 4.5 Recovery
 
 | Tool | Blender | Inputs | Output | Side effects | Cost |
 |---|---|---|---|---|---|
-| `recover_local_job` | same (actions `retry_receipt` and `find_cloud_job` are not offered: see section 6) | `local_id`, `expected_revision`, `action` | `status`, `revision`, `actions`, `error` | `refresh` reads the job on Scenario now. `recover_download` checks the files on disk against the record, with no network call. `resume` is the panel's **Resume download**: fresh signed links, complete files kept. `stop_download` is **Stop download**. `cancel` asks Scenario once to cancel a running job and reports the outcome; its charge follows section 3, Charges. `resume`, `stop_download` and `cancel` act only on jobs this client session started (`NotYourJob` otherwise). An `uncertain` job returns `UncertainNeedsPerson` | Free |
+| `recover_local_job` | same (actions `retry_receipt` and `find_cloud_job` are not offered: see section 6) | `local_id`, `expected_revision`, `action` | `status`, `revision`, `actions`, `error` | `refresh` reads the job on Scenario now. `recover_download` checks the files on disk against the record, with no network call: `ready` when every file verifies, else `download_failed`. `resume` is the panel's **Resume download**: fresh signed links, complete files kept. `stop_download` is **Stop download**. `cancel` asks Scenario once to cancel a running job and reports the outcome; its charge follows section 3, Charges. `resume`, `stop_download` and `cancel` act only on jobs this client session started (`NotYourJob` otherwise, including jobs of an ended session, which belong to the person). An `uncertain` job returns `UncertainNeedsPerson` | Free |
 | `recover_cloud_job` | same | `job_id` | `local_id`, `status`, `revision` | Adds a finished job of the current project to the ledger and downloads its results; never submits a generation; no document change | Free |
-| `cancel_prepared_job` | same | `local_id` of a job in `awaiting_approval` | `status: "not_sent"` | Withdraws the request, only for jobs this client session started (`NotYourJob` otherwise); nothing was sent to Scenario | Free |
+| `cancel_prepared_job` | similar: returns `not_sent` where Blender's withdrawn job reads `canceled` | `local_id` of a job in `awaiting_approval` | `status: "not_sent"` | Withdraws the request, only for jobs this client session started (`NotYourJob` otherwise); nothing was sent to Scenario | Free |
 
 ### 4.6 Document changes
 
@@ -184,9 +185,9 @@ Need **Agents may modify the document**, except `prepare_result_application`, wh
 |---|---|---|
 | `new_layer` | Embedded smart object, or a group of takes, fitted to `target.box`, the capture box, or the canvas. Default `fit`: `cover` for generated results, `native` for Library assets and results with alpha | Library assets use this purpose |
 | `edit_selection` | Smart object over the shaped capture box; for takes, a group; the layer mask from the captured selection on the layer or the group | Needs a job made from a `capture_id`. The result must match the shaped box's aspect within 1%; otherwise it lands contained with the warning `may_be_misaligned` |
-| `expand` | Canvas resized and a masked smart object under the original layers' top, in one History state | Needs an `expand` capture made for the model, whose route decided what was sent |
+| `expand` | Canvas resized and a masked smart object at the top of the document (SPEC 5.8), in one History state | Needs an `expand` capture made for the model, whose route decided what was sent |
 | `cutout_mask` | The result's alpha as a mask on `target.layer_id` (the source layer by default; the Background layer is converted to a layer first) | A layer that already has a mask, or a text, shape, adjustment, group or other locked layer, gets a new cutout layer instead: a copy of the source pixels with the cutout as its mask; the response says so |
-| `new_document` | A new document opened from the result | The source document does not change |
+| `new_document` | A new document opened from the result | The source document does not change, and the job stays `ready` |
 
 ### 4.7 Photoshop commands
 
@@ -197,7 +198,7 @@ Needs both switches: **Agents may modify the document** and **Agents may run Pho
 | `execute_batchplay` | similar (`execute_python`; descriptors only, no code) | `descriptors` (array of batchPlay descriptors, at most 200), `label` (History name), `document_id` | `outcome`, `history_state`, `results` (capped at 64 KB in total) | Runs inside one modal scope and one History state on one document. An error in any descriptor rolls back the whole call | Free |
 
 The plugin checks every descriptor against an allow-list before running anything (SPEC 6.6, `shared/batchplay-allow.json`):
-- Allowed: the events the Scenario Photoshop skills' toolkits send, plus the layer, selection, mask, channel, transform, canvas, adjustment and filter events listed there, each with a live test, plus `get`, whose results lose path properties.
+- Allowed: the events the Scenario Photoshop skills' toolkits send, plus the layer, selection, mask, channel, transform, canvas, adjustment and filter events listed there, each with a live test, plus `get`, whose results lose path values and the document properties that can record paths (SPEC 6.6).
 - Every reference must point by `_id` into the document named by `document_id` (a layer, channel, path, the selection, or the document). A descriptor with no target, or with an ordinal, relative or by-name reference, returns `DocumentNotActive` unless that document is active. References to the application, Actions, presets, color settings, workspaces, menus, History states or other documents, and commands that create a document, are refused.
 - Always refused: playing Actions, script events, Adobe's generative events (Generative Fill and the like), `open`, `placeEvent`, `save`, `close`, `quit`, `splitChannels`, the export family, `print`, and events of other plugins. Dialog options are forced off.
 - File paths are canonicalized, symlinks resolved, and must sit inside the plugin's temp folder.
@@ -247,14 +248,14 @@ New lanes in v1.1 (`vectorize`, `layers`, `segment`, `maps`, `video`) reuse `est
 
 | Type | When |
 |---|---|
-| `NotConnected` | No plugin connected: Photoshop is closed or the plugin is not installed |
+| `NotConnected` | No plugin connected: Photoshop is closed or the plugin is not installed. Also when this client's session ended during the call: call again |
 | `PairingFailed` | The owner rejected this helper's proof, or the plugin's: the tokens differ (for example after **Reset pairing token**). Run the setup command again from Connect a client |
 | `PortInUse` | Another program holds port 9890, or the holder failed the proof |
 | `VersionMismatch` | Helper and plugin speak different protocol versions, or the tool is unknown to the plugin; the message names both versions |
 | `NotSignedIn` | No Scenario key saved in the plugin |
 | `Unauthorized` | Scenario returned 401: the key and secret were not accepted |
 | `NoApiAccess` | The team's plan has no API access (Starter and above have it) |
-| `KeyCannotGenerate` | The key's type or role cannot run models (a Reader key or a Team key) |
+| `KeyCannotGenerate` | The key's type or role cannot run models (a Team key; a Reader key is inferred to be one until M2.0 measures it) |
 | `Forbidden` | Any other 403; the message carries Scenario's text |
 | `PlanLimit` | A plan or key CU limit is reached. Do not retry |
 | `InsufficientCredits` | Scenario reports too few CU |
@@ -272,6 +273,8 @@ New lanes in v1.1 (`vectorize`, `layers`, `segment`, `maps`, `video`) reuse `est
 | `SpendDeclined` | The person declined the approval card (reported in `job_status`) |
 | `UploadDeclined` | The person declined the upload card |
 | `Blocked` | Scenario's content policy blocked the request |
+| `ResultUnreachable` | A result sits on a host the plugin's manifest does not declare; open it on Scenario. The job reads `download_failed` |
+| `ResultExpired` | A result is no longer available on Scenario. The job reads `download_failed` |
 | `UploadRefused` | The file was not chosen by the person or made by the plugin |
 | `UnsupportedDocument` | Color mode or bit depth the lane cannot read |
 | `DocumentNotAllowed` | **Agents read the active document only** is on and the call named another document |
@@ -284,6 +287,7 @@ New lanes in v1.1 (`vectorize`, `layers`, `segment`, `maps`, `video`) reuse `est
 | `NotScenarioLayer` | The layer carries no Scenario metadata |
 | `PhotoshopBusy` | Another plugin or a dialog holds Photoshop's modal state for more than 10 s |
 | `Timeout` | The tool call exceeded 120 s; the work continues and `job_status` reports it. For `generate`, call it again with the same `idempotency_key` |
+| `Internal` | An unexpected error in the helper or the plugin; the message says what failed |
 
 How `NoApiAccess`, `KeyCannotGenerate` and `PlanLimit` are told apart depends on the `code` in Scenario's error body, which the plugin reads from a table shipped as data. Until a code is in the table, the call returns `Forbidden` or `RateLimited` with Scenario's message.
 
@@ -299,7 +303,7 @@ How `NoApiAccess`, `KeyCannotGenerate` and `PlanLimit` are told apart depends on
 6. `estimate_cost(model_id, lane: "edit", parameters: {prompt, <capture_input>: <asset_id>, mask: <asset_id>}, capture_id, takes: 2)` returns `quote_id`, `cu_cost_exact` and `price_kind`.
 7. The agent shows the price and its kind to the person.
 8. `generate(lane: "edit", model_id, quote_id, approved_cost: <cu_cost_exact>, parameters, idempotency_key)` returns `local_id` and `awaiting_approval` (default setting); the person clicks **Approve** in the panel.
-9. `wait_for_job(local_id)` until `status` is `ready`. On a timeout, call `wait_for_job` again. If `generate` itself timed out, call it again with the same `idempotency_key`.
+9. `wait_for_job(local_id)` until it returns `ready`, or an error such as `ResultExpired`. On a timeout, call `wait_for_job` again. If `generate` itself timed out, call it again with the same `idempotency_key`.
 10. `inspect_result_previews(local_id)`: pick the take with `seam_ok` and `edited` true.
 11. `prepare_result_application(local_id, expected_revision, purpose: "edit_selection", asset_id)`: review text and checks.
 12. `apply_result_application(application_id)`: `committed` with `outside_check.untouched` true, or `pending_approval` when the switch is off.
@@ -314,9 +318,13 @@ How `NoApiAccess`, `KeyCannotGenerate` and `PlanLimit` are told apart depends on
 
 ## 10. What agents cannot do
 
+Through this server, agents cannot:
+
 - Save, close, export or print documents, play Actions, run scripts, use Adobe's generative features or change Photoshop's settings: no tool does it, and the allow-list refuses those commands in `execute_batchplay`. (`export_image` comes in v1.1, to new files in the Output Folder only.)
 - Resolve `uncertain` jobs, approve their own spending or uploads, or change settings and switches.
 - Cancel, withdraw, stop or resume jobs that another client session or the person started.
 - Read the Scenario key, the secret or the pairing token.
 - Upload a file the person did not choose and the plugin did not make.
 - Run JavaScript. Photoshop commands are batchPlay descriptors only.
+
+An agent client that can run shell commands has the person's account, outside this server's rules (SPEC 2.6, threat model).
