@@ -1,7 +1,7 @@
 {
   "name": "scenario-photoshop-plugin",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Scenario for Adobe Photoshop: UXP plugin and local MCP server (early skeleton)",
   "license": "MIT",
   "workspaces": [
