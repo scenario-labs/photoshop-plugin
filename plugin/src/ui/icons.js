@@ -54,7 +54,9 @@ var FILLED = {
 function markup(name) {
   if (Object.prototype.hasOwnProperty.call(FILLED, name)) return FILLED[name];
   if (!Object.prototype.hasOwnProperty.call(PATHS, name)) return "";
-  return '<svg width="18" height="18" viewBox="0 0 18 18" ' + OUTLINE + ">" + PATHS[name] + "</svg>";
+  // Each shape carries the stroke itself: renderers that do not inherit
+  // presentation attributes from <svg> still draw it.
+  return '<svg width="18" height="18" viewBox="0 0 18 18">' + PATHS[name].replace(/<(path|circle|rect)\b/g, "<$1 " + OUTLINE) + "</svg>";
 }
 
 function names() {

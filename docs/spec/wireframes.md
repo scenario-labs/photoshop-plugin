@@ -109,7 +109,7 @@ Then the ready banner, above the Image lane. It does not block anything and goes
 
 ## 2. Main view
 
-Header, lane tabs, lane body (scrolls), results tray, prompt bar (pinned at the bottom, always visible). The panel is one flex column whose middle part scrolls: UXP 9.4 has no `position: sticky`, CSS grid or `gap` (measured with the probe plugin).
+Header, lane tabs, lane body and results tray (they scroll; the tray ends the body and comes into view when a job changes), prompt bar (pinned at the bottom, always visible). The panel is one flex column whose middle part scrolls: UXP 9.4 has no `position: sticky`, CSS grid or `gap` (measured with the probe plugin).
 
 The header is one row that never wraps: the Scenario mark (monochrome, in the theme's text color), the project name (one line, cut with an ellipsis; the full name is its tooltip; it opens the Projects view), the agent dot (`o` none connected, `*` connected, `!` needs the person; the status is its tooltip) and the Jobs icon with a count badge (`(J2)`; the counts in words are its tooltip). Everything else is in Photoshop's panel menu `[=]`: Jobs, Projects, Settings, Connect an AI Agent, Diagnostics, Scenario Help, About, Sign Out (which opens Settings with the confirm armed).
 
@@ -131,7 +131,7 @@ Explanations go in tooltips, not paragraphs: the target is a chip (`(Selection 9
 | References                   2 of 4  |
 | [th x] [th x] [ + ]                  |
 | > Advanced (6 settings)              |
-+--------------------------------------+
+| ------------------------------------ |
 | Placed: 4 takes              [ Jobs ]|
 | [t1*] [t2] [t3] [t4]                 |
 | Model name . quoted N, charged N CU  |
