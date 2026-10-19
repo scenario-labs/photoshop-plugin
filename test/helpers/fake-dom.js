@@ -118,11 +118,13 @@ function createFakeDocument({ html = fs.readFileSync(INDEX, "utf8"), macPassword
     return el;
   };
   doc.text = (id) => doc.byId(id).textContent;
-  // Views and banners are hidden by the stylesheet until the code shows them.
+  // Views, sub-views, banners, menus and disclosures are hidden by the
+  // stylesheet until the code gives them a display.
   doc.shown = (id) => {
     const el = doc.byId(id);
-    const hiddenByCss = /\b(view|banner)\b/.test(el.className);
-    return hiddenByCss ? el.style.display === "block" : el.style.display !== "none";
+    const hiddenByCss = /\b(view|subview|banner|menu|details)\b/.test(el.className);
+    const d = el.style.display;
+    return hiddenByCss ? !!d && d !== "none" : d !== "none";
   };
   // A paste into a field: the paste event with clipboard data, then, unless
   // the handler prevented it, the browser's own insert and an input event.

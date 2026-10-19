@@ -40,6 +40,15 @@ const lane = (doc, id) => doc.lanes.find((b) => b.getAttribute("data-lane") === 
 async function priced(doc, label) {
   await waitFor(() => button(doc) === label, { label: `button reads ${label}`, timeout: 4000 });
 }
+// An sp-picker's chosen item: UXP ignores a value set from code, so the item carries `selected`.
+function picked(doc, id) {
+  const menu = doc.byId(id).children[0];
+  assert.equal(menu.tagName, "SP-MENU");
+  assert.equal(menu.getAttribute("slot"), "options");
+  const items = menu.children.filter((i) => i.getAttribute("selected") === "");
+  assert.equal(items.length, 1, `#${id} has one selected item`);
+  return items[0].getAttribute("value");
+}
 
 test("no price check before the panel is shown or used; Generate is enabled once the Image lane shows a price", async (t) => {
   const { doc, mock, host } = await bootPanel(t);
@@ -63,24 +72,34 @@ test("M2 exit on the button: Image default 2 CU, Edit default (capture and mask 
   host.entrypoints.panels.scenarioPanel.show();
   await priced(doc, "Generate (2 CU)");
   assert.equal(doc.text("model-name"), "GPT Image 2.5 Flare");
-  assert.equal(doc.text("lane-source"), "Target: canvas 1024 x 1024");
-  assert.equal(doc.byId("size-select").value, "1024x1024", "the preset nearest the canvas aspect, smallest first");
-  assert.equal(doc.byId("takes-select").value, "1");
+  // The target chip: what the result lands on, the explanation in its tooltip.
+  assert.equal(doc.text("lane-source"), "Canvas 1024 \u00d7 1024");
+  assert.equal(doc.text("target-label"), "Target");
+  assert.equal(doc.byId("target-icon").getAttribute("data-icon"), "canvas");
+  assert.equal(doc.byId("target-chip").getAttribute("title"), T.target_canvas);
+  assert.equal(picked(doc, "size-select"), "1024x1024", "the preset nearest the canvas aspect, smallest first");
+  assert.equal(doc.byId("size-select").value, "1024x1024");
+  assert.equal(picked(doc, "takes-select"), "1");
+  assert.equal(doc.byId("takes-select").children[0].children[0].textContent, "1 take");
   assert.ok(doc.shown("size-row") && doc.shown("takes-row"));
 
   lane(doc, "edit").click();
   await priced(doc, "Generate (3 CU)");
-  assert.equal(doc.byId("takes-select").value, "2", "Edit defaults to 2 takes");
-  assert.equal(doc.text("lane-source"), "Source: canvas 1024 x 1024, sent at 1024 x 1024");
+  assert.equal(picked(doc, "takes-select"), "2", "Edit defaults to 2 takes");
+  assert.equal(doc.text("target-label"), "Source");
+  assert.equal(doc.text("lane-source"), "Canvas 1024 \u00d7 1024");
+  assert.equal(doc.byId("target-chip").getAttribute("title"), "Sent to the model at 1024 \u00d7 1024.");
   assert.equal(mock.uploads.length, 0, "the capture and the mask are priced without any upload");
-  assert.match(doc.text("model-badges"), /Mask input/);
+  assert.match(doc.text("model-badges"), /Mask/);
 
   lane(doc, "enhance").click();
   assert.ok(doc.shown("enhance-tools"));
   await priced(doc, "Generate (10 CU)");
   assert.equal(doc.text("model-name"), "Topaz Image Upscale");
-  assert.equal(doc.byId("factor-select").value, "2x");
-  assert.equal(doc.text("lane-output"), "Output 2048 x 2048");
+  assert.equal(picked(doc, "factor-select"), "2x");
+  assert.equal(doc.text("lane-output"), "Output 2048 \u00d7 2048");
+  assert.equal(doc.byId("tool-upscale").className, "seg-btn on");
+  assert.ok(!doc.shown("prompt"), "a model without a prompt shows no prompt field");
   assert.ok(!doc.shown("takes-row"));
 
   doc.byId("tool-remove_background").click();
@@ -90,12 +109,12 @@ test("M2 exit on the button: Image default 2 CU, Edit default (capture and mask 
   host.active = 102;
   doc.byId("tool-upscale").click();
   await priced(doc, "Generate (40 CU)");
-  assert.equal(doc.text("lane-output"), "Output 4096 x 4096 (this model's largest output)");
+  assert.equal(doc.text("lane-output"), "Output 4096 \u00d7 4096 (this model's largest output)");
   doc.byId("tool-remove_background").click();
   await priced(doc, "Generate (1 CU)");
   assert.equal(doc.text("lane-output"), "Mask at 50% of the layer's resolution");
   assert.equal(mock.uploads.length, 3, "the small stand-in is reused at any size");
-  assert.equal(doc.byId("generate").getAttribute("disabled"), "", "other lanes generate in a later build");
+  assert.equal(doc.byId("generate").getAttribute("disabled"), "", "other lanes do not generate in this build");
   assert.equal(doc.text("generate-note"), T.lane_later);
   assert.deepEqual(mock.violations, []);
   for (const r of mock.requests.filter((x) => x.path.startsWith("/v1/generate"))) assert.equal(r.search, "?dryRun=true");
@@ -113,17 +132,33 @@ test("the other labels: Expand and Trained show why there is no price, Library h
   lane(doc, "trained").click();
   assert.equal(button(doc), "Price unavailable");
   assert.equal(doc.text("generate-reason"), T.trained_later);
+  // Trained: an empty state with a way to browse, no model card, no prompt bar.
+  assert.ok(doc.shown("lane-empty") && !doc.shown("model-card") && !doc.shown("prompt-bar"));
+  assert.equal(doc.text("lane-empty-title"), T.trained_title);
+  assert.equal(doc.text("lane-note"), T.trained_later);
+  assert.equal(doc.text("lane-empty-action"), T.trained_browse);
+  doc.byId("lane-empty-action").click();
+  assert.ok(doc.shown("view-picker"));
+  assert.equal(doc.byId("picker-tab-trained").getAttribute("selected"), "");
+  doc.byId("picker-back").click();
   lane(doc, "library").click();
   assert.ok(!doc.shown("prompt-bar"));
+  assert.equal(doc.text("lane-empty-title"), T.library_title);
   assert.equal(doc.text("lane-note"), T.library_later);
+  assert.ok(!doc.shown("lane-empty-action"));
   host.docs = [];
   host.active = null;
   lane(doc, "edit").click();
   await priced(doc, "Price unavailable");
   assert.equal(doc.text("generate-reason"), T.no_document);
+  assert.ok(doc.shown("lane-empty"));
+  assert.equal(doc.text("lane-empty-title"), T.no_document_title);
   lane(doc, "image").click();
   await priced(doc, "Generate (2 CU)");
-  assert.equal(doc.text("lane-source"), "Target: a new document 1024 x 1024");
+  assert.ok(!doc.shown("lane-empty"));
+  assert.equal(doc.text("lane-source"), "New document 1024 \u00d7 1024");
+  assert.equal(doc.byId("target-icon").getAttribute("data-icon"), "newdoc");
+  assert.equal(doc.byId("target-chip").getAttribute("title"), T.target_new);
 });
 
 test("the form: an empty prompt has no price; takes and the 400 ms debounce; one price check per pause", async (t) => {
@@ -154,7 +189,8 @@ test("picker: the lane's tab and tool chip, search, favorites kept on disk, choo
   lane(doc, "enhance").click();
   await priced(doc, "Generate (10 CU)");
   doc.byId("model-change").click();
-  assert.ok(doc.shown("view-picker") && !doc.shown("lane-body") && !doc.shown("prompt-bar"));
+  // The picker takes the main view's place: no tabs, body or prompt bar behind it.
+  assert.ok(doc.shown("view-picker") && !doc.shown("lane-tabs") && !doc.shown("main-scroll") && !doc.shown("main-foot"));
   await waitFor(() => doc.byId("picker-list").children.length > 0, { label: "rows" });
   assert.equal(doc.byId("picker-tab-enhance").getAttribute("selected"), "");
   const chips = doc.byId("picker-chips").children;
@@ -163,13 +199,17 @@ test("picker: the lane's tab and tool chip, search, favorites kept on disk, choo
   const rowIds = () => doc.byId("picker-list").children.map((r) => r.getAttribute("data-model"));
   assert.equal(rowIds()[0], "model_topaz-image-upscale");
   assert.ok(rowIds().every((id) => ["model_topaz-image-upscale", "model_sc-upscale-flux", "model_recraft-crisp-upscale", "model_p-image-upscale"].includes(id)));
-  const tags = doc.byId("picker-tags").children.map((o) => o.getAttribute("value"));
+  const tags = doc.byId("picker-tags").children[0].children.map((o) => o.getAttribute("value"));
   assert.equal(tags[0], "");
   assert.ok(!tags.some((x) => x.startsWith("sc:")));
 
   // Favorites: the star, kept in the data folder, listed first.
   const recraft = () => doc.byId("picker-list").children.find((r) => r.getAttribute("data-model") === "model_recraft-crisp-upscale");
-  recraft().children[0].children[1].click();
+  // Row: [picture, [head: [name, star], description, badges]].
+  const star = recraft().children[1].children[0].children[1];
+  assert.equal(star.getAttribute("data-star"), "model_recraft-crisp-upscale");
+  star.click();
+  assert.equal(recraft().children[1].children[0].children[1].className, "star on");
   assert.equal(rowIds()[0], "model_recraft-crisp-upscale");
   assert.deepEqual(JSON.parse(host.files.get(pickerMod.FAVORITES_FILE)).ids, ["model_recraft-crisp-upscale"]);
 
@@ -177,8 +217,8 @@ test("picker: the lane's tab and tool chip, search, favorites kept on disk, choo
   chips.find((c) => c.textContent === "All").click();
   doc.type("picker-search", "851");
   assert.deepEqual(rowIds(), ["model_851-labs-background-remover"]);
-  doc.byId("picker-list").children[0].children[0].children[0].click();
-  assert.ok(!doc.shown("view-picker") && doc.shown("lane-body") && doc.shown("prompt-bar"));
+  doc.byId("picker-list").children[0].click();
+  assert.ok(!doc.shown("view-picker") && doc.shown("lane-tabs") && doc.shown("main-scroll") && doc.shown("main-foot") && doc.shown("prompt-bar"));
   await priced(doc, "Generate (1 CU)");
   assert.equal(doc.byId("tool-remove_background").getAttribute("selected"), "", "the tool follows the chosen model");
   assert.equal(app.lanes.state().model_id, "model_851-labs-background-remover");
@@ -187,14 +227,16 @@ test("picker: the lane's tab and tool chip, search, favorites kept on disk, choo
   doc.byId("model-change").click();
   doc.byId("picker-clear").click();
   doc.byId("picker-tab-trained").click();
-  await waitFor(() => doc.byId("picker-list").children.some((r) => /via/.test(r.children[2] ? r.children[2].textContent : "")), { label: "trained badges" });
+  const badgesOf = (r) => (r.children[1].children[2] ? r.children[1].children[2].textContent : "");
+  await waitFor(() => doc.byId("picker-list").children.some((r) => /via/.test(badgesOf(r))), { label: "trained badges" });
   const lowPoly = doc.byId("picker-list").children.find((r) => r.getAttribute("data-model") === "model_JJ54CEwcWD5upeaCuLD83Ddh");
-  assert.match(lowPoly.children[2].textContent, /^LoRA via .+ · Public · Edit: Experimental$/);
-  assert.equal(lowPoly.children[0].children[0].getAttribute("disabled"), "");
-  assert.equal(lowPoly.children.at(-1).textContent, pickerMod.TEXT.use);
-  assert.equal(lowPoly.children.at(-1).getAttribute("disabled"), "");
+  assert.match(badgesOf(lowPoly), /^LoRA via .+ · Public · Edit: Experimental$/);
+  assert.equal(lowPoly.className, "model-row off");
+  assert.equal(lowPoly.getAttribute("title"), pickerMod.TEXT.trained_later);
+  lowPoly.click();
+  assert.ok(doc.shown("view-picker"), "a trained row only browses");
   doc.byId("picker-back").click();
-  assert.ok(doc.shown("lane-body"));
+  assert.ok(doc.shown("main-scroll"));
 });
 
 test("a model that disables refunds says so under the button; a price check that returns a job stops price checks", async (t) => {

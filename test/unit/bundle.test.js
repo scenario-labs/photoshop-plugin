@@ -35,10 +35,15 @@ test("the release bundle holds no development code and no run-time code generati
   assert.ok(!release.code.includes("dev-pairing-token"), "the dev token import is stubbed out");
   assert.ok(!release.code.includes("dev-api-key"), "the dev API key import is stubbed out");
   assert.ok(!release.code.includes("SCENARIO_API_SECRET"), "nothing in a release build reads a key file");
-  assert.equal(release.code.split("Release build: development-only module removed.").length - 1, 2, "both development-only modules are stubs");
+  assert.ok(!release.code.includes("dev-ui-command.json"), "the panel's dev UI loop is stubbed out");
+  assert.ok(!release.code.includes("location.reload"), "a release build never reloads its panel");
+  assert.ok(!release.code.includes("dev-demo"), "the panel's sample states are stubbed out");
+  assert.equal(release.code.split("Release build: development-only module removed.").length - 1, 4, "the four development-only modules are stubs");
   assert.ok(release.code.includes('module.exports = {"DEV":false,"BUILD":"release"}'));
   assert.ok(dev.code.includes("dev-pairing-token"));
   assert.ok(dev.code.includes("dev-api-key"));
+  assert.ok(dev.code.includes("dev-ui-command.json"));
+  assert.ok(dev.code.includes("dev-demo"));
   for (const code of [release.code, dev.code]) {
     assert.ok(!/\beval\s*\(/.test(code), "no eval");
     assert.ok(!/\bnew\s+Function\s*\(/.test(code), "no new Function");
@@ -74,13 +79,20 @@ test("the release bundle boots in a fake UXP, links to a real owner and answers 
   assert.equal(r.photoshop_version, "27.11.0");
   assert.equal(r.signed_in, false);
   assert.ok(files.has("dev-pairing-token"), "a release build ignores the dev token file");
-  await waitFor(() => ps.doc.text("link-headline").startsWith("Connected"), { label: "panel shows the link" });
+  await waitFor(() => ps.doc.text("link-headline").startsWith("Agent connected"), { label: "panel shows the link" });
   assert.equal(ps.doc.els.get("link-dot").className, "dot on");
-  assert.equal(ps.doc.text("token-value"), `Ending in ${token.slice(-4)}`);
+  assert.equal(ps.doc.text("token-value"), `....${token.slice(-4)}`);
   assert.ok(ps.doc.text("version").startsWith(`Scenario for Photoshop ${manifest.version}`));
-  assert.equal(ps.doc.text("lane-title"), "Image");
+  // The panel menu is declared with the panel: Settings and Sign Out live there.
+  const panelDef = ps.entrypoints[0].panels.scenarioPanel;
+  assert.equal(panelDef.menuItems.filter((i) => i.label !== "-").map((i) => i.id).join(","), "jobs,projects,settings,agents,diagnostics,help,about,signout");
+  panelDef.invokeMenu("about");
+  assert.ok(ps.doc.shown("view-settings"));
+  ps.doc.els.get("settings-back").click();
+  assert.equal(ps.doc.lanes[0].className, "tab on");
   ps.doc.lanes[3].click();
-  assert.equal(ps.doc.text("lane-title"), "Trained");
+  assert.equal(ps.doc.lanes[3].className, "tab on");
+  assert.equal(ps.doc.text("lane-empty-title"), "Trained models");
   assert.equal(ps.doc.lanes[3].getAttribute("selected"), "");
   assert.equal(ps.doc.lanes[0].getAttribute("selected"), null);
   await sleep(400);
@@ -113,8 +125,8 @@ test("panel: Show, Copy, and a confirmed Reset that cuts off the helper holding 
   await waitFor(() => ps.secure.get(P.token.secure_storage_key) !== token, { label: "new token stored" });
   const fresh = ps.secure.get(P.token.secure_storage_key);
   assert.ok(hp.parseToken(fresh));
-  assert.equal(ps.doc.text("token-value"), `Ending in ${fresh.slice(-4)}`, "the new token is masked again");
-  await waitFor(() => ps.doc.text("link-headline") === "A client tried to connect with an old pairing token.", { label: "old helper refused" });
+  assert.equal(ps.doc.text("token-value"), `....${fresh.slice(-4)}`, "the new token is masked again");
+  await waitFor(() => ps.doc.text("link-headline") === "An agent tried an old pairing token", { label: "old helper refused" });
   assert.equal(ps.doc.els.get("link-dot").className, "dot warn");
   assert.equal(o.pluginInfo(), null);
 });
@@ -215,7 +227,7 @@ test("both link URLs refused by Photoshop: the panel says the connection was ref
   const port = await freePort();
   const ps = runBundle(release.code, { port, secure: new Map([[P.token.secure_storage_key, newToken()]]), refuse: () => true });
   t.after(() => ps.kill());
-  await waitFor(() => ps.doc.text("link-headline") === "Connection refused by Photoshop", { label: "permission_denied shown" });
+  await waitFor(() => ps.doc.text("link-headline") === "Photoshop refused the agent link", { label: "permission_denied shown" });
   assert.equal(ps.doc.els.get("link-dot").className, "dot warn");
 });
 

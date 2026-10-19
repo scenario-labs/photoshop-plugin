@@ -1,12 +1,14 @@
 "use strict";
 // The model picker (SPEC 3.3): a full view inside the main view with a back
-// button, search, the four type tabs, chips, a Tags menu, rows with badges
-// and a favorite star, 30 rows per page with Load more. Favorites are kept
-// in the plugin data folder. Text from Scenario (names, descriptions, tags)
-// is set with textContent only. Thumbnails come with a later build.
+// button, search, the four type tabs, chips, a Tags menu, rows with the
+// model's picture, badges and a favorite star, 30 rows per page with Load
+// more. Favorites are kept in the plugin data folder. Text from Scenario
+// (names, descriptions, tags) is set with textContent only.
 
 var map = require("../catalog/map.js");
 var trainedMod = require("../catalog/trained.js");
+var icons = require("./icons.js");
+var thumbs = require("./thumbs.js");
 
 var PAGE = 30;
 var FAVORITES_FILE = "favorites.json";
@@ -17,11 +19,9 @@ var TEXT = {
   failed: "Models could not load.",
   empty: "No models in this lane match these filters.",
   trained_none: "No trained models in this project yet. Scenario's public trained models are listed below; models trained in other projects appear when you switch project.",
-  trained_later: "Trained models run in a later build.",
+  trained_later: "Generating with trained models is not in this version yet.",
   all_tags: "All tags",
-  use: "Use this model",
-  star_on: "★",
-  star_off: "☆"
+  use: "Use this model"
 };
 
 // o: { catalog, host, onChoose(row), onClose(), log }
@@ -36,9 +36,9 @@ function createPicker(doc, o) {
     var el = byId(id);
     if (el) el.textContent = text || "";
   }
-  function show(id, on) {
+  function show(id, on, display) {
     var el = byId(id);
-    if (el && el.style) el.style.display = on ? "" : "none";
+    if (el && el.style) el.style.display = on ? display || "" : "none";
   }
   function bind(id, type, fn) {
     var el = byId(id);
@@ -91,53 +91,56 @@ function createPicker(doc, o) {
     return out;
   }
 
+  // A row like a Photoshop list item: picture, name and star, one line of
+  // description (a click shows all of it), one line of badges. A click on
+  // the row uses the model.
   function renderRow(list, row) {
     var d = derived(row);
-    var box = el("div", null, "model-row");
-    box.setAttribute("data-model", row.id);
-    var head = el("div", null, "row");
-    var name = el("sp-action-button", row.name, "grow");
-    name.setAttribute("quiet", "");
     var trained = row.type !== "custom";
-    if (trained) {
-      name.setAttribute("disabled", "");
-      name.setAttribute("title", TEXT.trained_later);
-    } else {
-      name.addEventListener("click", function () {
-        close();
-        o.onChoose(row);
-      });
-    }
+    var box = el("div", null, trained ? "model-row off" : "model-row");
+    box.setAttribute("data-model", row.id);
+    box.setAttribute("title", trained ? TEXT.trained_later : TEXT.use + ": " + row.name);
+    var th = el("div", null, "model-thumb");
+    th.appendChild(icons.icon(doc, trained ? "trained" : "image"));
+    var img = el("img", null, "thumb-img");
+    img.setAttribute("alt", "");
+    th.appendChild(img);
+    thumbs.show(img, thumbs.modelThumb(row));
+    box.appendChild(th);
+    var main = el("div", null, "model-main");
+    var head = el("div", null, "model-head");
+    var name = el("span", row.name, "model-title");
     head.appendChild(name);
     var fav = st.favorites.indexOf(row.id) >= 0;
-    var star = el("sp-action-button", fav ? TEXT.star_on : TEXT.star_off);
-    star.setAttribute("quiet", "");
+    var star = el("div", null, fav ? "star on" : "star");
+    star.setAttribute("data-star", row.id);
     star.setAttribute("title", fav ? "Remove from favorites" : "Add to favorites");
-    star.addEventListener("click", function () {
+    star.appendChild(icons.icon(doc, fav ? "star-filled" : "star"));
+    star.addEventListener("click", function (ev) {
+      if (ev && typeof ev.stopPropagation === "function") ev.stopPropagation();
       toggleFavorite(row.id);
     });
     head.appendChild(star);
-    box.appendChild(head);
+    main.appendChild(head);
     var full = st.expanded === row.id;
     var text = row.description;
     if (!full && text.length > SHORT_DESCRIPTION) text = text.slice(0, SHORT_DESCRIPTION - 3) + "...";
-    var desc = el("sp-body", text, "muted");
-    desc.setAttribute("size", "XS");
-    desc.addEventListener("click", function () {
+    var desc = el("div", text, full ? "note" : "note one-line");
+    desc.setAttribute("data-desc", row.id);
+    desc.addEventListener("click", function (ev) {
+      if (ev && typeof ev.stopPropagation === "function") ev.stopPropagation();
       st.expanded = st.expanded === row.id ? null : row.id;
       render();
     });
-    box.appendChild(desc);
+    main.appendChild(desc);
     var b = badges(row, d);
-    if (b.length) {
-      var line = el("sp-body", b.join(" · "));
-      line.setAttribute("size", "XS");
-      box.appendChild(line);
-    }
-    if (trained) {
-      var use = el("sp-action-button", TEXT.use);
-      use.setAttribute("disabled", "");
-      box.appendChild(use);
+    if (b.length) main.appendChild(el("div", b.join(" · "), "note one-line badges"));
+    box.appendChild(main);
+    if (!trained) {
+      box.addEventListener("click", function () {
+        close();
+        o.onChoose(row);
+      });
     }
     list.appendChild(box);
   }
@@ -150,6 +153,8 @@ function createPicker(doc, o) {
     for (var i = 0; i < chips.length; i++) {
       (function (chip) {
         var b = el("sp-action-button", map.CHIP_LABELS[chip]);
+        b.setAttribute("size", "s");
+        b.setAttribute("quiet", "");
         b.setAttribute("data-chip", chip);
         if (chip === st.chip) b.setAttribute("selected", "");
         b.addEventListener("click", function () {
@@ -162,22 +167,35 @@ function createPicker(doc, o) {
     }
   }
 
+  // The Tags menu (an sp-picker: the chosen item carries `selected`, and
+  // the items are rebuilt only when they change).
+  var tagsKey = null;
   function renderTags(rows) {
     var sel = byId("picker-tags");
     if (!sel) return;
-    clear(sel);
     var options = [{ value: "", label: TEXT.all_tags }].concat(
       map.tagMenu(rows, st.tab).map(function (t) {
         return { value: t.tag, label: t.tag + " (" + t.count + ")" };
       })
     );
+    var k = JSON.stringify([options, st.tag]);
+    if (k === tagsKey) return;
+    tagsKey = k;
+    clear(sel);
+    var menu = el("sp-menu");
+    menu.setAttribute("slot", "options");
     for (var i = 0; i < options.length; i++) {
-      var opt = el("option", options[i].label);
+      var opt = el("sp-menu-item", options[i].label);
       opt.setAttribute("value", options[i].value);
       if (options[i].value === st.tag) opt.setAttribute("selected", "");
-      sel.appendChild(opt);
+      menu.appendChild(opt);
     }
-    sel.value = st.tag;
+    sel.appendChild(menu);
+    try {
+      sel.value = st.tag;
+    } catch (e) {
+      // the selected item already says it
+    }
   }
 
   function ensureBases() {
@@ -202,6 +220,7 @@ function createPicker(doc, o) {
       if (!tb) continue;
       if (map.TABS[t] === st.tab) tb.setAttribute("selected", "");
       else tb.removeAttribute("selected");
+      tb.className = map.TABS[t] === st.tab ? "seg-btn on" : "seg-btn";
     }
     renderChips();
     var status = o.catalog.status();
@@ -230,11 +249,13 @@ function createPicker(doc, o) {
     st.tab = map.TABS.indexOf(tab) >= 0 ? tab : "image";
     st.chip = tool && map.CHIPS[st.tab].indexOf(tool) >= 0 ? tool : "all";
     st.shown = PAGE;
-    show("lane-body", false);
-    show("prompt-bar", false);
-    show("view-picker", true);
-    var lanesNav = byId("lane-tabs");
-    if (lanesNav && lanesNav.style) lanesNav.style.display = "none";
+    // The picker takes the main view's place: tabs, body and prompt bar hide.
+    show("lane-tabs", false);
+    show("main-scroll", false);
+    show("main-foot", false);
+    show("view-picker", true, "flex");
+    var sc = byId("picker-scroll");
+    if (sc) sc.scrollTop = 0;
     render();
     o.catalog.ensure().then(render, render);
   }
@@ -242,10 +263,9 @@ function createPicker(doc, o) {
   function close() {
     st.open = false;
     show("view-picker", false);
-    show("lane-body", true);
-    show("prompt-bar", true);
-    var lanesNav = byId("lane-tabs");
-    if (lanesNav && lanesNav.style) lanesNav.style.display = "";
+    show("lane-tabs", true, "flex");
+    show("main-scroll", true, "block");
+    show("main-foot", true, "block");
     if (o.onClose) o.onClose();
   }
 

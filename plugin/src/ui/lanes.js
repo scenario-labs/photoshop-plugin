@@ -17,6 +17,9 @@ var map = require("../catalog/map.js");
 var requests = require("../forms/requests.js");
 var price = require("../forms/price.js");
 var jobsText = require("./jobs-text.js");
+var icons = require("./icons.js");
+var thumbs = require("./thumbs.js");
+var uiDemo = require("../dev/ui-demo.js");
 
 var DEBOUNCE_MS = 400;
 var TAKES = [1, 2, 4];
@@ -27,8 +30,8 @@ var TEXT = {
   checking: "Checking price...",
   unavailable: "Price unavailable",
   after_upload: "Generate (price after upload)",
-  after_upload_reason: "This model's price depends on a file no blank image can stand in for; it is priced once uploaded.",
-  lane_later: "This lane generates in a later build. The Image lane generates now.",
+  after_upload_reason: "This model is priced once its file is uploaded.",
+  lane_later: "Generating here is not in this version yet. The Image lane generates now.",
   sending: "Sending...",
   sent: "Sent. The result lands here when it is ready.",
   changed: "The document or the settings changed since the price check. Check the new price, then click again.",
@@ -38,11 +41,20 @@ var TEXT = {
   first_run_file: "first-run.json",
   no_refund: "No refund if it fails",
   no_document: "Open or create a document to use this lane.",
+  no_document_title: "No document open",
   alarm: "A price check created a job on Scenario. Price checks are stopped until Photoshop restarts.",
-  expand_later: "Canvas size and anchor controls for Expand come in a later build, so this lane shows no price yet.",
-  trained_later: "Trained models run in a later build. Use Change to browse them.",
+  expand_later: "Canvas size and anchor for Expand are not in this version yet, so there is no price.",
+  trained_title: "Trained models",
+  trained_later: "Generating with your project's trained models is not in this version yet. You can browse them.",
+  trained_browse: "Browse trained models",
   trained_none: "No trained model chosen.",
-  library_later: "The Library comes in a later build.",
+  library_title: "Library",
+  library_later: "Your project's images will show here. The Library is not in this version yet.",
+  add_reference: "Add a reference",
+  refs_full: "This model takes no more references.",
+  remove_reference: "Remove",
+  target_canvas: "Lands as a new layer over the whole canvas.",
+  target_new: "No document is open: the result opens as a new document.",
   loading: "Loading model",
   model_failed: "Model could not load",
   not_signed_in: "Sign in to see prices."
@@ -102,10 +114,12 @@ function param(schema, name) {
 }
 
 // o: { catalog, quotes, host, account() -> {id} | null, openPicker(tab, tool),
-//      log, timers, runner, references, ledger, settings, openJobs() }
+//      log, timers, runner, references, ledger, settings, openJobs(),
+//      urls (ui/thumbs.js createUrls, for reference pictures) }
 function createLanes(doc, o) {
   if (!doc || typeof doc.getElementById !== "function") return null;
   var timers = o.timers || { setTimeout: setTimeout, clearTimeout: clearTimeout };
+  var urls = o.urls || thumbs.createUrls(null);
   var log = o.log || function () {};
   var st = {
     active: false,
@@ -147,18 +161,48 @@ function createLanes(doc, o) {
     var el = byId(id);
     if (el) el.addEventListener(type, fn);
   }
+  // Fills an sp-picker. UXP ignores a value set from code, so the chosen
+  // item carries `selected`; the items are rebuilt only when they change, so
+  // an open picker is not redrawn under the pointer.
+  var pickerKeys = {};
   function fillSelect(id, options, selected) {
     var el = byId(id);
     if (!el || typeof doc.createElement !== "function") return;
+    var sig = JSON.stringify([options, selected]);
+    if (pickerKeys[id] === sig) return;
+    pickerKeys[id] = sig;
     while (el.firstChild) el.removeChild(el.firstChild);
+    var menu = doc.createElement("sp-menu");
+    menu.setAttribute("slot", "options");
     for (var i = 0; i < options.length; i++) {
-      var opt = doc.createElement("option");
-      opt.setAttribute("value", options[i].value);
-      if (options[i].value === selected) opt.setAttribute("selected", "");
-      opt.textContent = options[i].label;
-      el.appendChild(opt);
+      var item = doc.createElement("sp-menu-item");
+      item.setAttribute("value", options[i].value);
+      if (options[i].value === selected) item.setAttribute("selected", "");
+      item.textContent = options[i].label;
+      menu.appendChild(item);
     }
-    el.value = selected;
+    el.appendChild(menu);
+    try {
+      el.value = selected;
+    } catch (e) {
+      // the selected item already says it
+    }
+  }
+  function setTitle(id, text) {
+    var el = byId(id);
+    if (el && el.setAttribute) el.setAttribute("title", text || "");
+  }
+  // The target chip: what the result lands on, with the explanation in its
+  // tooltip. kind: selection | canvas | newdoc | visible | layer.
+  function setTarget(label, kind, text, tip) {
+    setText("target-label", label);
+    icons.set(byId("target-icon"), kind);
+    setText("lane-source", text);
+    setTitle("target-chip", tip || "");
+    show("target-row", !!text, "flex");
+  }
+  function times(w, h) {
+    return w + " \u00d7 " + h;
   }
 
   function key() {
@@ -231,47 +275,82 @@ function createLanes(doc, o) {
     show("confirm-card", !!st.confirm);
   }
 
+  // An empty state in the lane body: icon, title, one line, an action.
+  function renderEmpty(e) {
+    show("lane-empty", !!e, "flex");
+    if (!e) {
+      setText("lane-note", "");
+      return;
+    }
+    icons.set(byId("lane-empty-icon"), e.icon);
+    setText("lane-empty-title", e.title);
+    setText("lane-note", e.note);
+    setText("lane-empty-action", e.action || "");
+    show("lane-empty-action", !!e.action, "inline-flex");
+    st.emptyAction = e.run || null;
+  }
+
   // Which controls the lane shows.
   function renderLane() {
     var lane = st.lane;
-    var hasForm = lane !== "library";
-    show("enhance-tools", lane === "enhance");
+    var hasForm = lane !== "library" && lane !== "trained";
+    show("enhance-tools", lane === "enhance", "flex");
     for (var i = 0; i < map.TOOLS.length; i++) {
       var b = byId("tool-" + map.TOOLS[i]);
       if (!b) continue;
       if (map.TOOLS[i] === st.tool) b.setAttribute("selected", "");
       else b.removeAttribute("selected");
+      b.className = map.TOOLS[i] === st.tool ? "seg-btn on" : "seg-btn";
     }
-    show("model-card", hasForm);
+    show("model-card", hasForm, "flex");
     show("prompt-bar", hasForm);
-    show("lane-source", hasForm);
     show("refs-section", lane === "image" && !!refInput());
     renderTray();
     show("size-row", false);
     show("factor-row", false);
     show("takes-row", false);
     setText("lane-output", "");
-    setText("lane-source", "");
-    setText("lane-note", lane === "library" ? TEXT.library_later : "");
+    setTarget("Target", "canvas", "", "");
+    renderEmpty(null);
+    if (lane === "library") renderEmpty({ icon: "library", title: TEXT.library_title, note: TEXT.library_later });
     if (lane === "trained") {
-      setText("model-name", TEXT.trained_none);
-      setText("model-badges", "");
-      setText("lane-note", TEXT.trained_later);
+      renderEmpty({
+        icon: "trained",
+        title: TEXT.trained_title,
+        note: TEXT.trained_later,
+        action: TEXT.trained_browse,
+        run: function () {
+          o.openPicker("trained", null);
+        }
+      });
       setPrice({ state: "unavailable", label: null, reason: TEXT.trained_later, no_refund: false });
     }
   }
 
+  // The model card: picture, name, and one line of what it takes.
   function renderModel(schema) {
     setText("model-name", schema.name);
     var badges = [];
     for (var i = 0; i < schema.file_inputs.length; i++) {
       var f = schema.file_inputs[i];
-      if (f.role === "mask") badges.push("Mask input");
       if (f.role === "reference" && f.max) badges.push("Up to " + f.max + " references");
+      if (f.role === "mask") badges.push("Mask");
     }
     var out = schema.output_max_px || (schema.size_inputs.kind === "grid" ? schema.size_inputs.max : null);
-    if (out) badges.push("Max output " + out + " px");
-    setText("model-badges", badges.join(" · "));
+    if (out) badges.push(out + " px max");
+    var row = schema.row || null;
+    var line = badges.join(" · ") || (row && row.description) || "";
+    setText("model-badges", line);
+    setTitle("model-card", [schema.name, row && row.description, badges.join(" · ")].filter(Boolean).join("\n"));
+    icons.set(byId("model-thumb-icon"), map.laneTab(key()) === "enhance" ? "enhance" : st.lane === "edit" ? "edit" : "image");
+    thumbs.show(byId("model-thumb"), thumbs.modelThumb(row));
+  }
+
+  function clearModel(text) {
+    setText("model-name", text);
+    setText("model-badges", "");
+    setTitle("model-card", "");
+    thumbs.show(byId("model-thumb"), null);
   }
 
   // The lane's form for the current schema: options shown and the request.
@@ -296,7 +375,7 @@ function createLanes(doc, o) {
       fillSelect(
         "takes-select",
         options.map(function (n) {
-          return { value: String(n), label: String(n) };
+          return { value: String(n), label: n + (n === 1 ? " take" : " takes") };
         }),
         String(t)
       );
@@ -310,12 +389,11 @@ function createLanes(doc, o) {
       if (d && sel) {
         box = { width: sel.width, height: sel.height };
         out.target = { kind: "selection", document_id: d.id, box: [sel.left, sel.top, sel.width, sel.height] };
-        setText("lane-source", "Target: selection " + sel.width + " x " + sel.height + ", lands masked to the selection");
-        setText("lane-note", TEXT.selection_note);
+        setTarget("Target", "selection", "Selection " + times(sel.width, sel.height), TEXT.selection_note);
       } else {
         out.target = d ? { kind: "canvas", document_id: d.id, box: [0, 0, d.width, d.height] } : { kind: "new_document", width: 1024, height: 1024 };
-        setText("lane-source", d ? "Target: canvas " + d.width + " x " + d.height : "Target: a new document");
-        if (st.lane === "image") setText("lane-note", "");
+        if (d) setTarget("Target", "canvas", "Canvas " + times(d.width, d.height), TEXT.target_canvas);
+        else setTarget("Target", "newdoc", "New document", TEXT.target_new);
       }
       if (si.kind === "grid") {
         var sizes = si.sizes.filter(function (s) {
@@ -333,7 +411,7 @@ function createLanes(doc, o) {
         fillSelect(
           "size-select",
           sizes.map(function (s) {
-            return { value: sizeKey(s.width, s.height), label: s.label };
+            return { value: sizeKey(s.width, s.height), label: String(s.label).replace(/(\d+) ?x ?(\d+)/, "$1 \u00d7 $2") };
           }),
           sizeKey(chosen.width, chosen.height)
         );
@@ -343,7 +421,7 @@ function createLanes(doc, o) {
         // SPEC 3.8: with no document, the result opens as a new document at the Size preset.
         if (out.target.kind === "new_document") {
           out.target = { kind: "new_document", width: chosen.width, height: chosen.height };
-          setText("lane-source", "Target: a new document " + chosen.width + " x " + chosen.height);
+          setTarget("Target", "newdoc", "New document " + times(chosen.width, chosen.height), TEXT.target_new);
         }
       }
       out.references = st.refs.length;
@@ -351,6 +429,7 @@ function createLanes(doc, o) {
     }
     if (!d) {
       out.blocked = TEXT.no_document;
+      setTarget("Source", "canvas", "", "");
       return out;
     }
     out.source = { width: d.width, height: d.height };
@@ -361,11 +440,11 @@ function createLanes(doc, o) {
         params[si.width_input] = shaped.width;
         params[si.height_input] = shaped.height;
       }
-      setText("lane-source", "Source: canvas " + d.width + " x " + d.height + ", sent at " + shaped.width + " x " + shaped.height);
+      setTarget("Source", "canvas", "Canvas " + times(d.width, d.height), "Sent to the model at " + times(shaped.width, shaped.height) + ".");
       return out;
     }
     if (lane === "expand") {
-      setText("lane-source", "Canvas " + d.width + " x " + d.height);
+      setTarget("Source", "canvas", "Canvas " + times(d.width, d.height), "");
       out.blocked = TEXT.expand_later;
       return out;
     }
@@ -375,7 +454,7 @@ function createLanes(doc, o) {
       var r = MAP.stand_ins.read_cap_px / long;
       capped = { width: Math.round(d.width * r), height: Math.round(d.height * r) };
     }
-    setText("lane-source", "Source: all visible, " + d.width + " x " + d.height + (capped !== d ? ", read at " + capped.width + " x " + capped.height : ""));
+    setTarget("Source", "visible", "All visible " + times(d.width, d.height), capped !== d ? "Read at " + times(capped.width, capped.height) + "." : "All visible layers, merged.");
     if (lane === "upscale") {
       var fp = param(schema, "upscaleFactor");
       if (fp && fp.enum) {
@@ -403,7 +482,7 @@ function createLanes(doc, o) {
           oh = Math.round(oh * k2);
           note = " (this model's largest output)";
         }
-        setText("lane-output", "Output " + ow + " x " + oh + note);
+        setText("lane-output", "Output " + times(ow, oh) + note);
       }
       return out;
     }
@@ -416,8 +495,7 @@ function createLanes(doc, o) {
 
   async function loadSchema(modelId) {
     if (st.schemaFor === modelId && st.schema) return st.schema;
-    setText("model-name", TEXT.loading);
-    setText("model-badges", "");
+    clearModel(TEXT.loading);
     var s = await o.catalog.schema(modelId);
     st.schema = s;
     st.schemaFor = modelId;
@@ -438,13 +516,14 @@ function createLanes(doc, o) {
       schema = await loadSchema(modelId);
     } catch (e) {
       if (seq !== st.seq) return;
-      setText("model-name", TEXT.model_failed);
-      setText("model-badges", "");
+      clearModel(TEXT.model_failed);
       setPrice({ state: "unavailable", label: null, reason: e.message || String(e), no_refund: false });
       return;
     }
     if (seq !== st.seq) return;
     renderModel(schema);
+    // A model without a prompt (Upscale, Remove BG) shows no prompt field.
+    show("prompt", !!schema.prompt_input);
     var sel = null;
     if (st.lane === "image") {
       var dsz = docSize();
@@ -461,6 +540,8 @@ function createLanes(doc, o) {
     }
     renderRefs();
     var f = form(schema, sel);
+    if (f.blocked === TEXT.no_document) renderEmpty({ icon: st.lane === "enhance" ? "enhance" : "edit", title: TEXT.no_document_title, note: TEXT.no_document });
+    else renderEmpty(null);
     if (f.blocked) {
       setPrice({ state: "unavailable", label: null, reason: f.blocked, no_refund: schema.no_refund });
       return;
@@ -491,13 +572,47 @@ function createLanes(doc, o) {
     return schema ? requests.referenceInput(schema) : null;
   }
 
+  // References: one chip per image (its picture, a remove button, the
+  // details in its tooltip), then a "+" that opens the sources menu.
+  var refUrls = {};
+  var refsMenuOpen = false;
+  function refUrl(ref) {
+    if (!Object.prototype.hasOwnProperty.call(refUrls, ref.id)) refUrls[ref.id] = urls.fromBytes(ref.bytes, ref.mime);
+    return refUrls[ref.id];
+  }
+  function dropRef(id) {
+    st.refs = st.refs.filter(function (q) {
+      return q.id !== id;
+    });
+    if (Object.prototype.hasOwnProperty.call(refUrls, id)) {
+      urls.release(refUrls[id]);
+      delete refUrls[id];
+    }
+  }
+  function refIcon(ref) {
+    var l = String(ref.label || "");
+    if (/^Selection/.test(l)) return "selection";
+    if (/^Layer/.test(l)) return "layer";
+    if (/^All visible/.test(l)) return "visible";
+    return "file";
+  }
+  function setRefsMenu(open) {
+    refsMenuOpen = !!open;
+    show("refs-menu", refsMenuOpen, "flex");
+  }
+
   function renderRefs() {
     var input = st.lane === "image" ? refInput() : null;
     show("refs-section", !!input);
-    if (!input) return;
+    if (!input) {
+      setRefsMenu(false);
+      return;
+    }
     var max = input.multiple ? input.max || null : 1;
-    setText("refs-title", "REFERENCES (" + st.refs.length + (max ? " of " + max : "") + ")");
+    setText("refs-title", "References");
+    setText("refs-count", st.refs.length ? st.refs.length + (max ? " of " + max : "") : max ? "Up to " + max : "");
     var full = max !== null && st.refs.length >= max;
+    if (full || st.sending) setRefsMenu(false);
     var add = ["refs-add-selection", "refs-add-layer", "refs-add-visible", "refs-add-file"];
     for (var i = 0; i < add.length; i++) {
       var b = byId(add[i]);
@@ -510,32 +625,53 @@ function createLanes(doc, o) {
     while (box.firstChild) box.removeChild(box.firstChild);
     for (var r = 0; r < st.refs.length; r++) {
       (function (ref) {
-        var row = doc.createElement("div");
-        row.setAttribute("class", "row");
-        row.setAttribute("data-ref", ref.id);
-        var t = doc.createElement("sp-body");
-        t.setAttribute("size", "XS");
-        t.setAttribute("class", "grow");
-        t.textContent = ref.label + ", sent at " + ref.width + " x " + ref.height + (ref.reduced ? " · Input reduced" : "");
-        row.appendChild(t);
-        var x = doc.createElement("sp-action-button");
-        x.setAttribute("quiet", "");
-        x.textContent = "Remove";
+        var chip = doc.createElement("div");
+        chip.className = "ref";
+        chip.setAttribute("data-ref", ref.id);
+        chip.setAttribute("title", ref.label + ", sent at " + times(ref.width, ref.height) + (ref.reduced ? ". Input reduced to fit the model." : "."));
+        chip.appendChild(icons.icon(doc, refIcon(ref), "ref-icon"));
+        var img = doc.createElement("img");
+        img.className = "ref-img";
+        img.setAttribute("alt", "");
+        chip.appendChild(img);
+        thumbs.show(img, refUrl(ref));
+        if (ref.reduced) {
+          var badge = doc.createElement("span");
+          badge.className = "ref-badge";
+          badge.textContent = "\u2193";
+          chip.appendChild(badge);
+        }
+        var x = doc.createElement("div");
+        x.className = "ref-x";
+        x.setAttribute("data-remove", ref.id);
+        x.setAttribute("title", TEXT.remove_reference);
+        x.appendChild(icons.icon(doc, "close"));
         x.addEventListener("click", function () {
-          st.refs = st.refs.filter(function (q) {
-            return q.id !== ref.id;
-          });
+          if (st.sending) return;
+          dropRef(ref.id);
           renderRefs();
           changed();
         });
-        row.appendChild(x);
-        box.appendChild(row);
+        chip.appendChild(x);
+        box.appendChild(chip);
       })(st.refs[r]);
     }
+    var tile = doc.createElement("div");
+    tile.className = full || st.sending ? "add-tile off" : "add-tile";
+    tile.setAttribute("id", "refs-add");
+    tile.setAttribute("title", full ? TEXT.refs_full : TEXT.add_reference);
+    tile.appendChild(icons.icon(doc, "plus"));
+    tile.addEventListener("click", function () {
+      if (full || st.sending) return;
+      activate();
+      setRefsMenu(!refsMenuOpen);
+    });
+    box.appendChild(tile);
   }
 
   function addReference(source) {
     activate();
+    setRefsMenu(false);
     if (!o.references) return;
     var modelId = modelFor("image");
     var input = refInput();
@@ -564,7 +700,12 @@ function createLanes(doc, o) {
   // ---- the results tray (SPEC 3.9) ----
 
   function renderTray() {
-    var rec = st.latest && o.ledger ? o.ledger.get(st.latest) : null;
+    renderTrayRecord(st.latest && o.ledger ? o.ledger.get(st.latest) : null);
+  }
+
+  // The tray: the latest job's status, its takes as pictures (take 1, the
+  // visible layer once placed, carries a check), and Place / Open.
+  function renderTrayRecord(rec) {
     show("tray", !!rec && st.lane === "image");
     if (!rec) return;
     var t = jobsText.tray(rec);
@@ -573,6 +714,26 @@ function createLanes(doc, o) {
     setText("tray-badges", t.badges);
     show("tray-place", t.place);
     show("tray-open", t.open);
+    var box = byId("tray-takes");
+    if (!box || typeof doc.createElement !== "function") return;
+    while (box.firstChild) box.removeChild(box.firstChild);
+    var outs = rec.outputs || [];
+    for (var i = 0; i < outs.length; i++) {
+      var out = outs[i] || {};
+      var take = doc.createElement("div");
+      var kept = rec.state === "applied" && i === 0;
+      take.className = kept ? "take kept" : "take";
+      take.setAttribute("title", "Take " + (i + 1) + (out.width ? ", " + times(out.width, out.height) : "") + (kept ? ". The visible layer." : out.state === "saved" ? "" : ". Not downloaded yet."));
+      take.appendChild(icons.icon(doc, "image", "take-icon"));
+      var img = doc.createElement("img");
+      img.className = "take-img";
+      img.setAttribute("alt", "");
+      take.appendChild(img);
+      thumbs.show(img, out.state === "saved" ? thumbs.resultThumb(out.path) : null);
+      if (kept) take.appendChild(icons.icon(doc, "check", "take-mark"));
+      box.appendChild(take);
+    }
+    show("tray-takes", outs.length > 0, "flex");
   }
 
   function trayAction(newDocument) {
@@ -803,11 +964,12 @@ function createLanes(doc, o) {
   function select(lane) {
     st.lane = lane;
     st.seq++;
+    setRefsMenu(false);
     renderLane();
     if (lane !== "trained" && lane !== "library") {
       setPrice({ state: "idle", label: null, reason: null, no_refund: false });
       if (st.schema && st.schemaFor === modelFor(key())) renderModel(st.schema);
-      else setText("model-name", st.active ? TEXT.loading : "");
+      else clearModel(st.active ? TEXT.loading : "");
       changed();
     }
   }
@@ -892,6 +1054,9 @@ function createLanes(doc, o) {
   bind("tray-jobs", "click", function () {
     if (o.openJobs) o.openJobs();
   });
+  bind("lane-empty-action", "click", function () {
+    if (st.emptyAction) st.emptyAction();
+  });
   bind("ready-banner-close", "click", function () {
     st.firstRun.ready_closed = true;
     saveFirstRun();
@@ -941,14 +1106,14 @@ function createLanes(doc, o) {
   renderButton();
   renderBanners();
 
-  return {
+  var api = {
     select: function (lane) {
       if (lane !== st.lane) select(lane);
     },
     activate: activate,
     // After the picker closes: the lane's own parts show again.
     restore: function () {
-      show("prompt-bar", st.lane !== "library");
+      show("prompt-bar", st.lane !== "library" && st.lane !== "trained");
     },
     refresh: function () {
       st.schema = st.schemaFor === modelFor(key()) ? st.schema : null;
@@ -989,6 +1154,20 @@ function createLanes(doc, o) {
       return { lane: st.lane, key: key(), model_id: modelFor(key()), active: st.active, price: st.price, sending: st.sending, confirm: st.confirm, note: st.note, latest: st.latest };
     }
   };
+  // Development builds only (a stub in release): sample states for looking
+  // at the panel, drawn by the render code above.
+  api.dev = uiDemo.hook("lanes", {
+    st: st,
+    renderRefs: renderRefs,
+    renderTrayRecord: renderTrayRecord,
+    renderButton: renderButton,
+    setPrice: setPrice,
+    setRefsMenu: setRefsMenu,
+    dropRef: dropRef,
+    showConfirm: showConfirm,
+    clearConfirm: clearConfirm
+  });
+  return api;
 }
 
 module.exports = { createLanes: createLanes, TEXT: TEXT, shapeBox: shapeBox, nearestSize: nearestSize, DEBOUNCE_MS: DEBOUNCE_MS };

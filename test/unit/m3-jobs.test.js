@@ -214,7 +214,8 @@ test("download: a result whose download stopped keeps its charge and is resumed 
   assert.match(app.ledger.get(id).error, /^Download stopped: Download stopped after 3 attempts/);
   doc.byId("jobs").click();
   const row = doc.byId("jobs-list").children[0];
-  const acts = row.children[row.children.length - 1].children;
+  const main = row.children[1];
+  const acts = main.children[main.children.length - 1].children;
   assert.deepEqual(acts.map((b) => b.getAttribute("data-action")), ["resume", "copy_error"]);
   acts[0].click();
   await waitFor(() => app.ledger.get(id).state === "applied", { label: "resumed and placed" });

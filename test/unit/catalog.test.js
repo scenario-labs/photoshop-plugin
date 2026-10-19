@@ -172,7 +172,7 @@ test("catalog cache: the project's models then public ones, paged, kept 24 h in 
   assert.ok(listing.every((r) => r.query.pageSize === "500"));
   const file = JSON.parse(host.files.get(catalogMod.FILE));
   assert.equal(file.rows.length, got.length);
-  assert.deepEqual(Object.keys(file.rows[0]).sort(), ["capabilities", "compliant", "concepts", "created_at", "description", "id", "name", "no_refund", "privacy", "project", "tags", "type"]);
+  assert.deepEqual(Object.keys(file.rows[0]).sort(), ["capabilities", "compliant", "concepts", "created_at", "description", "id", "name", "no_refund", "privacy", "project", "tags", "thumb", "type"]);
   assert.ok(!JSON.stringify(file).includes("inputs"), "no schemas in the cache");
   mock.requests.length = 0;
   await app.catalog.ensure();
@@ -204,4 +204,19 @@ test("list_models: lanes, sources, query, paging; trained rows carry their bases
   assert.deepEqual((await app.catalogTools.list_models({ query: "topaz" })).models.map((m) => m.model_id), ["model_topaz-image-upscale"]);
   await assert.rejects(app.catalogTools.list_models({ cursor: "bogus" }), (e) => e.type === "InvalidParameter");
   await assert.rejects(app.catalogTools.list_models({ lane: "video" }), (e) => e.type === "InvalidParameter");
+});
+
+test("model pictures: the thumbnail of a trained model, else the first example image, from the public thumbnail path", () => {
+  const thumbs = require("../../plugin/src/ui/thumbs.js");
+  const base = { id: "model_abc", name: "A" };
+  const trained = catalogMod.displayRow({ ...base, thumbnail: { assetId: "asset_T1", url: "https://cdn.cloud.scenario.com/assets-transform/asset_T1?sig" }, exampleAssetIds: ["asset_E1"] });
+  assert.equal(trained.thumb, "asset_T1");
+  assert.equal(catalogMod.displayRow({ ...base, exampleAssetIds: ["asset_E1", "asset_E2"] }).thumb, "asset_E1");
+  assert.equal(catalogMod.displayRow({ ...base, exampleAssetIds: ["../x"] }).thumb, null);
+  assert.equal(catalogMod.displayRow(base).thumb, null);
+  // No signed link is kept: the picture comes from the file host's public path, without a key.
+  assert.equal(thumbs.modelThumb(trained), "https://cdn.cloud.scenario.com/thumbnails/asset_T1");
+  assert.equal(thumbs.modelThumb({ thumb: "javascript:alert(1)" }), null);
+  assert.equal(thumbs.resultThumb("Scenario/image/20261019/a-take1.png"), "plugin-data:/Scenario/image/20261019/a-take1.png");
+  for (const bad of ["/etc/passwd", "../x.png", "file:///x.png", "", null]) assert.equal(thumbs.resultThumb(bad), null);
 });

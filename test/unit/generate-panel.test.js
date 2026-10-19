@@ -34,6 +34,13 @@ async function repriced(app, doc, label, old) {
 async function trayReads(doc, text) {
   await waitFor(() => doc.text("tray-status") === text, { label: `tray reads ${text}`, timeout: 6000 });
 }
+
+// A Jobs row: [picture, [head: [title, status], meta, detail?, actions?]].
+function rowActions(row) {
+  const main = row.children[1];
+  const last = main.children[main.children.length - 1];
+  return last && last.getAttribute("class") === "actions" ? last.children : [];
+}
 const enabled = (doc, id) => doc.byId(id).getAttribute("disabled") === null;
 
 test("Image lane end to end: one paid call at the shown price, no price-check flag, CDN without the key, one History state, XMP and the ledger", async (t) => {
@@ -116,9 +123,13 @@ test("Image lane end to end: one paid call at the shown price, no price-check fl
   assert.ok(!(ps.files.get("scenario-link.log") || "").includes(T.sample_prompt), "prompts are never logged");
   assert.ok(!disk.includes("Signature="), "signed links are never stored");
 
-  // The tray and the header.
+  // The tray: the take's picture from the saved file, marked as the visible layer; the header's Jobs icon has no badge.
   assert.equal(doc.text("tray-detail"), "GPT Image 2.5 Flare · quoted 2, charged 2 CU");
-  assert.equal(doc.text("jobs"), "Jobs");
+  const take = doc.byId("tray-takes").children[0];
+  assert.equal(take.className, "take kept");
+  assert.equal(take.children.find((c) => c.tagName === "IMG").getAttribute("src"), "plugin-data:/" + r.outputs[0].path);
+  assert.equal(doc.text("jobs-badge"), "");
+  assert.equal(doc.byId("jobs").getAttribute("title"), "Jobs");
   assert.match(app.diagnostics.text(), /jobs: applied 1/);
 });
 
@@ -192,8 +203,9 @@ test("a selection: the result covers the selection's box and lands masked to it"
   const { doc, ps, app } = await bootGenerate(t, { docs: [{ ...POSTER, selection: { left: 100, top: 200, width: 512, height: 512 } }], active: 7 });
   ps.entrypoints.panels.scenarioPanel.show();
   await priced(doc, "Generate (2 CU)");
-  assert.equal(doc.text("lane-source"), "Target: selection 512 x 512, lands masked to the selection");
-  assert.equal(doc.text("lane-note"), T.selection_note);
+  assert.equal(doc.text("lane-source"), "Selection 512 \u00d7 512");
+  assert.equal(doc.byId("target-icon").getAttribute("data-icon"), "selection");
+  assert.equal(doc.byId("target-chip").getAttribute("title"), T.selection_note, "the chip's tooltip says it lands masked");
   doc.byId("generate").click();
   await trayReads(doc, "Placed: 1 take");
   const layer = ps.doc(7).layers[0];
@@ -207,7 +219,7 @@ test("a selection: the result covers the selection's box and lands masked to it"
   const before = checks();
   ps.doc(7).selection = { left: 0, top: 0, width: 300, height: 600 };
   ps.fire("set");
-  await waitFor(() => doc.text("lane-source") === "Target: selection 300 x 600, lands masked to the selection", { label: "new selection" });
+  await waitFor(() => doc.text("lane-source") === "Selection 300 \u00d7 600", { label: "new selection" });
   assert.ok(checks() > before);
 });
 
@@ -227,12 +239,23 @@ test("references: a capture reduced to fit 4 MB shows Input reduced; it uploads 
   ps.entrypoints.panels.scenarioPanel.show();
   await priced(doc, "Generate (2 CU)");
   assert.ok(doc.shown("refs-section"));
-  assert.equal(doc.text("refs-title"), "REFERENCES (0 of 10)");
+  assert.equal(doc.text("refs-title"), "References");
+  assert.equal(doc.text("refs-count"), "Up to 10");
   const first = quoteId(app);
+  // One "+" opens the sources menu; choosing a source closes it.
+  const tile = () => doc.byId("refs-list").children.at(-1);
+  assert.equal(tile().getAttribute("id"), "refs-add");
+  assert.ok(!doc.shown("refs-menu"));
+  tile().click();
+  assert.ok(doc.shown("refs-menu"));
   doc.byId("refs-add-visible").click();
-  await waitFor(() => doc.text("refs-list").includes("All visible"), { label: "reference added", timeout: 8000 });
-  assert.match(doc.text("refs-list"), /^All visible, sent at 1492 x 1492 · Input reduced/);
-  assert.equal(doc.text("refs-title"), "REFERENCES (1 of 10)");
+  assert.ok(!doc.shown("refs-menu"));
+  const chip = () => doc.byId("refs-list").children[0];
+  await waitFor(() => chip().className === "ref", { label: "reference added", timeout: 8000 });
+  assert.equal(chip().getAttribute("title"), "All visible, sent at 1492 \u00d7 1492. Input reduced to fit the model.");
+  assert.ok(chip().children.some((c) => c.className === "ref-badge"));
+  assert.match(chip().children.find((c) => c.tagName === "IMG").getAttribute("src"), /^blob:/, "the chip shows the captured picture");
+  assert.equal(doc.text("refs-count"), "1 of 10");
   assert.deepEqual(ps.reads.map((r) => r.width), [2048, 1843, 1658, 1492], "read again 10% smaller until it fits");
   assert.equal(mock.uploads.length, 0, "nothing uploads before Generate");
   await repriced(app, doc, "Generate (2 CU)", first);
@@ -269,7 +292,7 @@ test("a declined price change sends nothing; the uploaded reference stays on Sce
   await priced(doc, "Generate (2 CU)");
   const first = quoteId(app);
   doc.byId("refs-add-layer").click();
-  await waitFor(() => doc.text("refs-list").startsWith('Layer "Background", sent at 1024 x 1024'), { label: "layer reference" });
+  await waitFor(() => String(doc.byId("refs-list").children[0].getAttribute("title")).startsWith('Layer "Background", sent at 1024 \u00d7 1024'), { label: "layer reference" });
   await repriced(app, doc, "Generate (2 CU)", first);
   doc.byId("generate").click();
   await waitFor(() => doc.shown("confirm-card"), { label: "the price-changed card" });
@@ -293,7 +316,10 @@ test("an answer that may hide a job is Unknown: never retried, blocks the same r
   await waitFor(() => app.ledger.all()[0] && app.ledger.all()[0].state === "uncertain", { label: "Unknown" });
   assert.equal(mock.paidCalls.length, 1, "a 503 on the paid call is never retried");
   assert.equal(doc.text("tray-detail"), jobsText.TEXT.unknown_help);
-  assert.equal(doc.text("jobs"), "Jobs (1)");
+  // The header's Jobs icon: a badge in the warning color, the words in its tooltip.
+  assert.equal(doc.text("jobs-badge"), "1");
+  assert.equal(doc.byId("jobs-badge").className, "badge attention");
+  assert.equal(doc.byId("jobs").getAttribute("title"), "Jobs: 1 waiting for you");
 
   await repriced(app, doc, "Generate (2 CU)", app.ledger.all()[0].idempotency_key);
   doc.byId("generate").click();
@@ -303,8 +329,11 @@ test("an answer that may hide a job is Unknown: never retried, blocks the same r
   doc.byId("jobs").click();
   assert.ok(doc.shown("view-jobs"));
   const row = () => doc.byId("jobs-list").children[0];
-  const action = (name) => row().children[row().children.length - 1].children.find((b) => b.getAttribute("data-action") === name);
-  assert.match(row().children[0].textContent, /Image "lighthouse-rocky-coast"  Unknown/);
+  const action = (name) => rowActions(row()).find((b) => b.getAttribute("data-action") === name);
+  const head = row().children[1].children[0];
+  assert.equal(head.children[0].textContent, 'Image "lighthouse-rocky-coast"');
+  assert.equal(head.children[1].textContent, "Unknown");
+  assert.equal(head.children[1].className, "job-status attention");
   action("mark_not_sent").click();
   assert.equal(doc.text("jobs-note"), jobsText.TEXT.mark_confirm);
   assert.equal(app.ledger.all()[0].state, "uncertain", "one click only arms it");
@@ -381,9 +410,9 @@ test("restart: submitting becomes Unknown, uploading becomes not sent, a queued 
   doc.byId("jobs").click();
   const rows = doc.byId("jobs-list").children;
   const row3 = rows.find((r) => r.getAttribute("data-job") === id(3));
-  const acts = row3.children[row3.children.length - 1].children.map((b) => b.getAttribute("data-action"));
+  const acts = rowActions(row3).map((b) => b.getAttribute("data-action"));
   assert.deepEqual(acts, ["place", "open"]);
-  row3.children[row3.children.length - 1].children[0].click();
+  rowActions(row3)[0].click();
   await waitFor(() => get(3).state === "applied", { label: "placed from Jobs" });
   assert.deepEqual(ps.history, [{ document_id: 7, name: "Scenario: Place image" }]);
   assert.equal(get(3).placement.notes.length, 1, "another session's job lands over the canvas, with a note");

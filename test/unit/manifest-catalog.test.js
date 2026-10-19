@@ -83,10 +83,11 @@ test("panel page: local resources only, one script at the end of the body", () =
   assert.equal(scripts.length, 1);
   assert.match(scripts[0][1], /src="dist\/main\.js"/);
   assert.equal(scripts[0][2].trim(), "", "no inline script");
-  assert.ok(html.indexOf("<script") > html.indexOf("<section class=\"agents\">"), "the script runs after the elements it binds");
+  assert.ok(html.indexOf("<script") > html.indexOf('id="settings-agents"'), "the script runs after the elements it binds");
+  assert.ok(html.indexOf("<script") > html.lastIndexOf("</section>"), "after every view");
   assert.ok(!/(src|href)="(https?:)?\/\//.test(html), "nothing loaded from the network");
   assert.ok(!/\son[a-z]+=/i.test(html), "no inline event handlers");
-  for (const id of ["link-dot", "link-headline", "link-detail", "token-value", "token-show", "token-copy", "token-reset", "token-note", "version", "lane-title", "lane-purpose", "lane-note"]) {
+  for (const id of ["link-dot", "link-headline", "link-detail", "token-value", "token-show", "token-copy", "token-reset", "token-note", "version", "lane-note", "lane-source", "target-chip", "model-thumb", "refs-menu", "jobs-badge"]) {
     assert.ok(html.includes(`id="${id}"`), `#${id} exists`);
   }
   for (const lane of view.LANES) assert.ok(html.includes(`data-lane="${lane.id}"`), `lane ${lane.id} has a button`);
@@ -152,18 +153,20 @@ test("panel wording: every link phase has a headline, the token is masked by def
     assert.ok(["on", "off", "warn"].includes(d.dot), phase);
     assert.ok(d.headline && d.headline !== phase, `${phase} has its own headline`);
   }
-  assert.equal(view.describeLink({ phase: "connected", clients: [{ client_name: "Codex" }, { client_name: null }] }).headline, "Connected: Codex, Agent client", "a client without a name yet shows the SPEC 2.6 default");
-  assert.equal(view.describeLink({ phase: "plugin_busy", detail: "d" }).headline, "Agents are connected to another Photoshop.");
-  assert.equal(view.describeLink({ phase: "pairing_failed", detail: "d" }).headline, "A client tried to connect with an old pairing token.");
+  assert.equal(view.describeLink({ phase: "connected", clients: [{ client_name: "Codex" }, { client_name: null }] }).headline, "Agent connected: Codex, Agent client", "a client without a name yet shows the SPEC 2.6 default");
+  assert.equal(view.describeLink({ phase: "plugin_busy", detail: "d" }).headline, "Agents are connected to another Photoshop");
+  assert.equal(view.describeLink({ phase: "pairing_failed", detail: "d" }).headline, "An agent tried an old pairing token");
+  // The link's own words (which name the local program and its port) are the detail, shown under Details.
+  assert.equal(view.describeLink({ phase: "pairing_failed", detail: "d" }).detail, "d");
   assert.equal(view.describeLink({ phase: "connected", clients: [] }).dot, "on");
   assert.equal(view.describeLink({ phase: "pairing_failed" }).dot, "warn");
   assert.equal(view.describeLink(null).headline, "No agent connected");
   const token = "A".repeat(39) + "wxyz";
-  assert.equal(view.maskToken(token, false), "Ending in wxyz");
+  assert.equal(view.maskToken(token, false), "....wxyz");
   assert.equal(view.maskToken(token, true), token);
   assert.equal(view.maskToken(null, true), "Not created yet");
   assert.equal(view.LANES.map((l) => l.label).join(","), "Image,Edit,Enhance,Trained,Library");
-  assert.match(view.NOT_BUILT, /early build/);
+  assert.match(view.NOT_BUILT, /not available in this version/i);
 });
 
 test("errors.json lists exactly the types of MCP.md section 8", () => {

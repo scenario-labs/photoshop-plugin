@@ -17,6 +17,7 @@ var panelMod = require("./ui/panel.js");
 var accountPanelMod = require("./ui/account-panel.js");
 var devImport = require("./dev/import-token.js");
 var devKeyImport = require("./dev/import-key.js");
+var devUiLoop = require("./dev/ui-loop.js");
 var redactMod = require("./util/redact.js");
 var accountsMod = require("./auth/accounts.js");
 var authMod = require("./auth/auth.js");
@@ -33,6 +34,8 @@ var runnerMod = require("./jobs/runner.js");
 var downloadMod = require("./scenario/download.js");
 var referencesMod = require("./capture/references.js");
 var jobsViewMod = require("./ui/jobs-view.js");
+var menuMod = require("./ui/menu.js");
+var thumbsMod = require("./ui/thumbs.js");
 var API = require("../../shared/scenario-api.json");
 
 var VERSION = manifest.version;
@@ -118,19 +121,31 @@ function boot(env) {
   var runner = null;
   var references = null;
   var jobsView = null;
+  var menu = null;
 
-  // UXP wants entrypoints declared during the first synchronous run.
-  host.setupEntrypoints({
-    panels: {
-      scenarioPanel: {
-        show: function () {
-          if (panel) panel.refresh();
-          // Price checks start when the panel is first shown, never at launch.
-          if (lanes) lanes.activate();
+  // UXP wants entrypoints declared during the first synchronous run. A
+  // reloaded panel (development builds) finds them declared already. The
+  // panel menu (ui/menu.js) holds Jobs, Projects, Settings, Connect an AI
+  // Agent, Diagnostics, Help, About and Sign Out.
+  try {
+    host.setupEntrypoints({
+      panels: {
+        scenarioPanel: {
+          show: function () {
+            if (panel) panel.refresh();
+            // Price checks start when the panel is first shown, never at launch.
+            if (lanes) lanes.activate();
+          },
+          menuItems: menuMod.items(),
+          invokeMenu: function (id) {
+            if (menu) menu.invoke(id);
+          }
         }
       }
-    }
-  });
+    });
+  } catch (e) {
+    logger.log("entrypoints not set: " + ((e && e.message) || e));
+  }
 
   var random = null;
   try {
@@ -312,7 +327,8 @@ function boot(env) {
       settings: settings,
       openJobs: function () {
         if (jobsView) jobsView.open();
-      }
+      },
+      urls: thumbsMod.createUrls(env.global)
     });
     diagnostics = diagnosticsMod.createDiagnostics({ version: VERSION, build: flags.BUILD, host: host, settings: settings, auth: auth, link: link, errors: errors, jobs: ledger });
     accountPanel = accountPanelMod.createAccountPanel(env.document, {
@@ -342,6 +358,14 @@ function boot(env) {
         log: logger.log
       });
     }
+    var menuHandlers = {};
+    if (accountPanel) {
+      for (var mk in accountPanel.menuHandlers) menuHandlers[mk] = accountPanel.menuHandlers[mk];
+    }
+    menuHandlers.jobs = function () {
+      if (jobsView) jobsView.open();
+    };
+    menu = menuMod.createMenu(menuHandlers);
     accounts.onChange(function () {
       if (accountPanel) accountPanel.refresh();
       if (lanes) lanes.refresh();
@@ -354,7 +378,7 @@ function boot(env) {
     }
 
     link.start();
-    return {
+    var app = {
       host: host,
       link: link,
       pairing: pairing,
@@ -380,9 +404,12 @@ function boot(env) {
       diagnostics: diagnostics,
       errors: errors,
       redactor: redactor,
+      menu: menu,
       copyToken: panelActions.copyToken,
       resetToken: panelActions.resetToken
     };
+    if (flags.DEV) app.devUi = devUiLoop.start({ host: host, doc: env.document, global: env.global, app: app, log: logger.log, menu: menu });
+    return app;
   })();
 
   return ready;

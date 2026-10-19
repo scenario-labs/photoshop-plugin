@@ -1,9 +1,12 @@
 "use strict";
-// The panel shell: header, lane tabs (their bodies are ui/lanes.js), and the
-// agent link status with the pairing token. Uses Spectrum UXP widgets from
-// index.html; this file only binds them. No overlays, no animation.
+// The panel shell: icons, lane tabs (their bodies are ui/lanes.js), the
+// header's agent dot, and Settings > Connect an AI agent (link status and the
+// pairing token, the technical words under Details). Uses Spectrum UXP
+// widgets from index.html; this file only binds them. No overlays, no
+// animation.
 
 var view = require("./view.js");
+var icons = require("./icons.js");
 
 // doc: the panel's document. actions: { copyToken(), resetToken(), token(),
 // onLane(id) (optional: a lane tab was chosen) }.
@@ -16,11 +19,18 @@ function createPanel(doc, actions, version) {
   var resetArmed = false;
   var resetTimer = null;
   var lastLink = null;
+  var detailsOpen = false;
 
   function setText(id, text) {
     var el = byId(id);
     if (el) el.textContent = text || "";
   }
+  function setTitle(id, text) {
+    var el = byId(id);
+    if (el && el.setAttribute) el.setAttribute("title", text || "");
+  }
+
+  icons.fill(doc);
 
   function selectLane(id) {
     var lane = null;
@@ -28,11 +38,12 @@ function createPanel(doc, actions, version) {
     if (!lane) return;
     var buttons = doc.querySelectorAll ? doc.querySelectorAll("[data-lane]") : [];
     for (var b = 0; b < buttons.length; b++) {
-      if (buttons[b].getAttribute("data-lane") === id) buttons[b].setAttribute("selected", "");
+      var on = buttons[b].getAttribute("data-lane") === id;
+      if (on) buttons[b].setAttribute("selected", "");
       else buttons[b].removeAttribute("selected");
+      // The chosen tab keeps its label at narrow widths (styles.css).
+      buttons[b].className = on ? "tab on" : "tab";
     }
-    setText("lane-title", lane.label);
-    setText("lane-purpose", lane.purpose);
     // The lane bodies (ui/lanes.js) fill the rest; without them, a placeholder.
     if (actions.onLane) actions.onLane(id);
     else setText("lane-note", view.NOT_BUILT);
@@ -49,16 +60,20 @@ function createPanel(doc, actions, version) {
     var dot = byId("link-dot");
     if (dot) dot.className = "dot " + d.dot;
     var headerDot = byId("agent-dot");
-    if (headerDot) {
-      headerDot.className = "dot " + d.dot;
-      headerDot.setAttribute("title", d.headline);
-    }
+    if (headerDot) headerDot.className = "dot " + d.dot;
+    setTitle("agent-hit", d.headline);
     setText("link-headline", d.headline);
     setText("link-detail", d.detail);
   }
 
   function note(text) {
     setText("token-note", text);
+  }
+
+  function renderDetails() {
+    var el = byId("agents-details");
+    if (el && el.style) el.style.display = detailsOpen ? "block" : "none";
+    icons.set(byId("agents-details-icon"), detailsOpen ? "chevron-down" : "chevron-right");
   }
 
   function on(id, fn) {
@@ -75,6 +90,10 @@ function createPanel(doc, actions, version) {
     })(laneButtons[i]);
   }
 
+  on("agents-details-toggle", function () {
+    detailsOpen = !detailsOpen;
+    renderDetails();
+  });
   on("token-show", function () {
     tokenShown = !tokenShown;
     renderToken();
@@ -86,10 +105,10 @@ function createPanel(doc, actions, version) {
       })
       .then(
         function () {
-          note("Copied. Paste it into your agent client's config as SCENARIO_PHOTOSHOP_TOKEN.");
+          note(view.AGENTS.copied);
         },
         function (e) {
-          note("Could not copy: " + ((e && e.message) || e) + ". Use Show and copy it by hand.");
+          note("Could not copy: " + ((e && e.message) || e) + ". Open Details, use Show and copy it by hand.");
         }
       );
   });
@@ -97,7 +116,7 @@ function createPanel(doc, actions, version) {
     if (!resetArmed) {
       resetArmed = true;
       setText("token-reset", "Confirm reset");
-      note("Resetting disconnects every agent client that uses this token. Click again to confirm.");
+      note(view.AGENTS.reset_confirm);
       resetTimer = setTimeout(function () {
         resetArmed = false;
         setText("token-reset", "Reset");
@@ -116,7 +135,7 @@ function createPanel(doc, actions, version) {
         function () {
           tokenShown = false;
           renderToken();
-          note("New token made. Agent clients need it in their config before they can connect.");
+          note(view.AGENTS.reset_done);
         },
         function (e) {
           note("Reset failed: " + ((e && e.message) || e));
@@ -124,7 +143,15 @@ function createPanel(doc, actions, version) {
       );
   });
 
-  setText("version", "Scenario for Photoshop " + version + " · Generative AI by Scenario");
+  setText("agents-intro", view.AGENTS.intro);
+  setText("agents-pair", view.AGENTS.pair);
+  setText("agents-tech", view.AGENTS.tech);
+  setText("version", "Scenario for Photoshop " + version);
+  // Each tab's tooltip says what the lane is for (icons only at narrow widths).
+  for (var t = 0; t < laneButtons.length; t++) {
+    for (var l = 0; l < view.LANES.length; l++) if (view.LANES[l].id === laneButtons[t].getAttribute("data-lane")) laneButtons[t].setAttribute("title", view.LANES[l].purpose);
+  }
+  renderDetails();
   selectLane("image");
   renderToken();
 
@@ -135,6 +162,10 @@ function createPanel(doc, actions, version) {
     refresh: function () {
       renderToken();
       if (lastLink) renderLink(lastLink);
+    },
+    openDetails: function (open) {
+      detailsOpen = open !== false;
+      renderDetails();
     }
   };
 }

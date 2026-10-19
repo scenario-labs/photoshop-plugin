@@ -13,7 +13,9 @@ var schemaMod = require("../forms/schema.js");
 var priceChecks = require("../scenario/dry-run.js");
 
 var FILE = "model-catalog.json";
-var CACHE_VERSION = 1;
+// 2: rows carry `thumb`, so an older cache is read again.
+var CACHE_VERSION = 2;
+var ASSET_ID = /^asset_[A-Za-z0-9_-]{1,128}$/;
 
 function str(v) {
   return typeof v === "string" ? v : null;
@@ -51,8 +53,18 @@ function displayRow(m, fromProject) {
     created_at: str(m.createdAt) || "",
     compliant: strings(m.compliantModelIds),
     concepts: concepts,
-    no_refund: m.disableRefund === true
+    no_refund: m.disableRefund === true,
+    // The asset shown as the model's picture: its thumbnail (trained
+    // models) or its first example image (ui/thumbs.js).
+    thumb: thumbAsset(m)
   };
+}
+
+function thumbAsset(m) {
+  var t = m.thumbnail && typeof m.thumbnail === "object" ? m.thumbnail.assetId : null;
+  if (typeof t === "string" && ASSET_ID.test(t)) return t;
+  var ex = Array.isArray(m.exampleAssetIds) ? m.exampleAssetIds[0] : null;
+  return typeof ex === "string" && ASSET_ID.test(ex) ? ex : null;
 }
 
 function parseCache(text) {
