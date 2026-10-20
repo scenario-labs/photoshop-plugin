@@ -57,7 +57,14 @@ test("Suggest from a short prompt: price-checked first, sent at 0 CU, three prop
   assert.equal(checks.length, 1, "one price check");
   assert.equal(checks[0].search, "?dryRun=true");
   assert.equal(mock.sparkCalls.length, 1, "sent once, after the check");
-  assert.deepEqual(mock.sparkCalls[0].body, { mode: "contextual-v2", modelId: FLARE, numResults: 3, prompt: "a red fox" });
+  const sent = mock.sparkCalls[0].body;
+  assert.deepEqual({ ...sent, prompt: undefined }, { mode: "contextual-v2", modelId: FLARE, numResults: 3, prompt: undefined });
+  const [mine, rules] = sent.prompt.split("\n\nConstraints: ");
+  assert.equal(mine, "a red fox", "the person's prompt, then the constraints paragraph");
+  assert.match(rules, /^The result fills 1024 x 1024 px \(square\); do not propose another size\./, "the document size");
+  assert.match(rules, /Keep the style and medium of the picture/, "no restyle against the Style chip");
+  assert.match(rules, /Leave out sizes, resolution and quality settings\.$/);
+  assert.doesNotMatch(rules, /cut-out/, "not a cut-out");
   const items = findAll(doc, "data-sug").map((e) => e.getAttribute("title"));
   for (const s of items) assert.ok(!/[\u2014\u2013]/.test(s), "no em or en dash in a proposal");
   assert.equal(app.ledger.all().length, 0, "Suggest keeps no job record");
@@ -89,7 +96,7 @@ test("Suggest with a price is not sent: the menu says the price; an empty prompt
   await openPop(doc, "suggest");
   await waitFor(() => mock.sparkCalls.length === 1, { label: "described", timeout: 5000 });
   const body = mock.sparkCalls[0].body;
-  assert.equal(body.prompt, undefined, "no prompt");
+  assert.ok(body.prompt.startsWith(spark.DESCRIBE + "\n\nConstraints: "), "no prompt of the person's: a description is asked for, with the constraints");
   assert.equal(body.images.length, 1);
   assert.ok(body.images[0].startsWith("data:image/"), "the layer as a data link, nothing uploaded");
   await waitFor(() => texts(doc).includes("describes the Background layer"), { label: "says what it describes", timeout: 5000 });
@@ -99,6 +106,12 @@ test("spark.clean turns dashes into commas; bodyFor needs a prompt or a picture 
   assert.equal(spark.clean("A fox \u2014 red\u2013orange  fur"), "A fox, red, orange fur");
   assert.throws(() => spark.bodyFor({ model_id: FLARE, prompt: " " }));
   assert.equal(spark.bodyFor({ model_id: FLARE, prompt: "x", n: 9 }).numResults, 5);
+  assert.equal(spark.bodyFor({ model_id: FLARE, prompt: "x" }).prompt, "x", "no constraints, the prompt as typed");
+  const cut = spark.bodyFor({ model_id: FLARE, prompt: "a knight", constraints: ["The subject is a cut-out on a transparent background; do not add a background.", " "] });
+  assert.equal(cut.prompt, "a knight\n\nConstraints: The subject is a cut-out on a transparent background; do not add a background.");
+  assert.equal(spark.bodyFor({ model_id: FLARE, prompt: "y".repeat(2500), constraints: ["Keep it."] }).prompt.length, 2000, "the constraints survive the length cap");
+  assert.ok(spark.bodyFor({ model_id: FLARE, prompt: "y".repeat(2500), constraints: ["Keep it."] }).prompt.endsWith("Constraints: Keep it."));
+  assert.equal(spark.clean("A knight in armor.\n\nConstraints: no background."), "A knight in armor.", "an echoed constraints paragraph is dropped");
 });
 
 test("Change amount on every edit model with a strength input: Subtle to Free map onto the model's own range; none for a model without one", () => {
@@ -138,4 +151,24 @@ test("model menu: each model shows its letters, and its price once its free pric
   await waitFor(() => /^\d+ CU$/.test(right(flare())), { label: "Flare priced", timeout: 5000 });
   const z = () => rows().find((e) => e.getAttribute("data-value") === "model_z-image");
   await waitFor(() => right(z()) === "4 CU", { label: "another model priced by its own check", timeout: 5000 });
+});
+
+test("Suggest on a cut-out: Add background asks for the background only; Make versions asks for no background", async (t) => {
+  const DOC = { ...POSTER, layers: [{ name: "Bottle", kind: "pixel", frame: { left: 300, top: 200, width: 400, height: 600 } }, { name: "Background", background: true }] };
+  const { app, doc, ps, mock } = await bootGenerate(t, { docs: [DOC], active: 7, mockOpts: { answer: flarePrice() } });
+  ps.entrypoints.panels.scenarioPanel.show();
+  await waitFor(() => doc.text("ctx-title").startsWith("Bottle"), { label: "cut-out context" });
+  assert.equal(app.controller.state().action, "background");
+  doc.type("prompt", "a marble counter");
+  await sleep(ctlMod.DEBOUNCE_MS + 100);
+  await openPop(doc, "suggest");
+  await waitFor(() => mock.sparkCalls.length === 1, { label: "sent", timeout: 5000 });
+  assert.match(mock.sparkCalls[0].body.prompt, /^a marble counter\n\nConstraints: The result fills 1024 x 1024 px/);
+  assert.match(mock.sparkCalls[0].body.prompt, /describe only the new background behind it/);
+  doc.byId("pop-scrim").click();
+  findAll(doc, "data-act", "versions")[0].click();
+  await sleep(ctlMod.DEBOUNCE_MS + 100);
+  await openPop(doc, "suggest");
+  await waitFor(() => mock.sparkCalls.length === 2, { label: "sent again", timeout: 5000 });
+  assert.match(mock.sparkCalls[1].body.prompt, /cut-out on a transparent background; do not add a background/);
 });

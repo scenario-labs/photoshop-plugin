@@ -14,6 +14,12 @@
 // The proposals are cleaned for the prompt box: text only (Prompt Spark's
 // sizes, quality and other parameters are dropped: the chips stay in
 // charge), em and en dashes become commas, at most `n`.
+//
+// Constraints (prototype review: proposals ignored the document size,
+// restyled against the Style chip and put a background behind cut-outs):
+// Prompt Spark takes no constraint field, so they go as one closing
+// paragraph of the prompt sent, never into the person's prompt. With no
+// prompt, the request asks for a description of the picture first.
 
 var errorsMod = require("./errors.js");
 var priceChecks = require("./dry-run.js");
@@ -25,6 +31,7 @@ var MAX_PROMPT = 2000;
 
 function clean(text) {
   return String(text)
+    .replace(/(^|\n)\s*Constraints:[\s\S]*$/, "")
     .replace(/\s*[\u2014\u2013]\s*/g, ", ")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
@@ -36,14 +43,31 @@ function dataUrl(image) {
   return "data:" + (image.mime || "image/png") + ";base64," + b64.encodeStandard(image.bytes);
 }
 
-// o: { model_id, prompt, image ({bytes, mime}) | null, n (1 to 5) }
+var DESCRIBE = "Describe the attached image as a prompt for this model.";
+
+// The constraints paragraph, or "" for none.
+function constraintText(list) {
+  var parts = (list || []).map(function (x) {
+    return String(x || "").trim();
+  }).filter(Boolean);
+  return parts.length ? "Constraints: " + parts.join(" ") : "";
+}
+
+// o: { model_id, prompt, image ({bytes, mime}) | null, n (1 to 5),
+// constraints ([sentence]) }
 function bodyFor(o) {
   if (!priceChecks.validModelId(o.model_id)) throw new errorsMod.ScenarioError("InvalidParameter", "model_id is not a Scenario model id.");
   var body = { mode: MODE, modelId: o.model_id, numResults: Math.max(1, Math.min(5, o.n || 3)) };
   var p = String(o.prompt || "").trim();
-  if (p) body.prompt = p.slice(0, MAX_PROMPT);
-  if (o.image && o.image.bytes) body.images = [dataUrl(o.image)];
-  if (!body.prompt && !body.images) throw new errorsMod.ScenarioError("InvalidParameter", "Suggest needs a prompt or a picture.");
+  var hasImage = !!(o.image && o.image.bytes);
+  if (!p && !hasImage) throw new errorsMod.ScenarioError("InvalidParameter", "Suggest needs a prompt or a picture.");
+  var c = constraintText(o.constraints);
+  if (c && !p) p = DESCRIBE;
+  if (p) {
+    var tail = c ? "\n\n" + c : "";
+    body.prompt = p.slice(0, Math.max(0, MAX_PROMPT - tail.length)) + tail;
+  }
+  if (hasImage) body.images = [dataUrl(o.image)];
   return body;
 }
 
@@ -74,4 +98,4 @@ async function suggest(deps, o) {
   return { state: "ready", items: items, charged: typeof out.charged === "number" ? out.charged : null };
 }
 
-module.exports = { suggest: suggest, bodyFor: bodyFor, clean: clean, MODE: MODE };
+module.exports = { suggest: suggest, bodyFor: bodyFor, clean: clean, constraintText: constraintText, DESCRIBE: DESCRIBE, MODE: MODE };

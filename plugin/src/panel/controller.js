@@ -1419,7 +1419,30 @@ function createController(o) {
   }
 
   function sparkKey(id) {
-    return [st.key, id, modelFor(id), String(st.prompt).trim()].join("|");
+    return [st.key, id, modelFor(id), String(st.prompt).trim(), sparkConstraints(id).join(" ")].join("|");
+  }
+
+  // What Prompt Spark must respect (prototype review findings): the size
+  // the result fills, the Style chip, a cut-out's transparent background.
+  // Sent as a closing paragraph of the request only (scenario/spark.js).
+  function sparkConstraints(id) {
+    var out = [];
+    var raw = st.raw || {};
+    var kind = st.ctx && st.ctx.kind;
+    var b = kind === "selection" ? raw.selection || raw.selection_raw : null;
+    var w = b ? b.width : raw.doc ? raw.doc.width : null;
+    var h = b ? b.height : raw.doc ? raw.doc.height : null;
+    if (!raw.doc && /^\d+:\d+$/.test(String(st.size || ""))) out.push("The result is a " + st.size + " image; do not propose another size or aspect.");
+    else if (w > 0 && h > 0) out.push("The result fills " + Math.round(w) + " x " + Math.round(h) + " px (" + (w > h * 1.05 ? "landscape" : h > w * 1.05 ? "portrait" : "square") + "); do not propose another size.");
+    if (st.style && matchOn(id)) out.push("The style comes from the last reference image; do not name another style or medium.");
+    else if (st.style && styleApplies(id)) out.push("The style is set by a trained model (" + st.style.name + "); do not name another style or medium.");
+    else if (raw.doc) out.push("Keep the style and medium of the picture as they are (for example do not call a painting photorealistic) unless the prompt asks for a change.");
+    if (kind === "cutout" || kind === "element") {
+      if (id === "background") out.push("The subject is a cut-out that stays as it is; describe only the new background behind it.");
+      else out.push("The subject is a cut-out on a transparent background; do not add a background.");
+    }
+    out.push("Leave out sizes, resolution and quality settings.");
+    return out;
   }
 
   function startSpark(id) {
@@ -1448,7 +1471,7 @@ function createController(o) {
         }
       }
       try {
-        return await sparkMod.suggest({ client: o.client, quotes: o.quotes, settings: o.settings }, { model_id: entry.model, prompt: prompt, image: image, n: 3 });
+        return await sparkMod.suggest({ client: o.client, quotes: o.quotes, settings: o.settings }, { model_id: entry.model, prompt: prompt, image: image, n: 3, constraints: sparkConstraints(id) });
       } catch (e) {
         return { state: "failed", reason: (e && e.message) || String(e) };
       }
