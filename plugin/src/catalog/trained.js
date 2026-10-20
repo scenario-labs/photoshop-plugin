@@ -96,10 +96,82 @@ function derive(row, bases) {
   };
 }
 
+// The words that call a trained model up in a prompt (its trigger), from
+// the model record only: the training's concept prompt, else the record's
+// prompt embedding, else one word in capitals that every sample prompt of
+// the training carries (measured live 2026-10-20: Scenario's FLUX.2 LoRA
+// trainings leave conceptPrompt empty and write the trigger, such as
+// "STYLENAMESTYLE", into each sample prompt). Null when none is found;
+// nothing is guessed from the name.
+var TRIGGER_MAX = 48;
+function triggerOf(rec) {
+  if (!rec || typeof rec !== "object") return null;
+  var p = rec.parameters && typeof rec.parameters === "object" ? rec.parameters : {};
+  var clean = function (v) {
+    if (typeof v !== "string") return null;
+    var t = v.replace(/\s+/g, " ").trim();
+    return t && t.length <= TRIGGER_MAX ? t : null;
+  };
+  var direct = clean(p.conceptPrompt) || clean(rec.promptEmbedding);
+  if (direct) return direct;
+  var samples = Array.isArray(p.samplePrompts)
+    ? p.samplePrompts.filter(function (x) {
+        return typeof x === "string" && x;
+      })
+    : [];
+  if (samples.length < 2) return null;
+  var first = samples[0].match(/\b[A-Z][A-Z0-9_]{3,}\b/g) || [];
+  for (var i = 0; i < first.length; i++) {
+    var w = first[i];
+    if (w.length > TRIGGER_MAX) continue;
+    var re = new RegExp("\\b" + w + "\\b");
+    var all = true;
+    for (var j = 1; j < samples.length && all; j++) if (!re.test(samples[j])) all = false;
+    if (all) return w;
+  }
+  return null;
+}
+
+// What a trained model is for, as its row says it (tags or name): a
+// character (a person, a creature, a mascot) or a style. Only a label: both
+// run the same way.
+function roleOf(row) {
+  var words = [row && row.name ? row.name : ""].concat(row && row.tags ? row.tags : []).join(" ");
+  return /character|person|portrait|mascot|creature|hero/i.test(words) ? "character" : "style";
+}
+
+// The base that runs several trained models at once (SPEC 3.4, stacking):
+// the first candidate of the first model that every other model also
+// lists, that takes the needed route (edit: an edit route; image: make new)
+// and as many LoRAs as there are. ds: derive() results. Returns
+// { base_model_id, reason }.
+function commonBase(ds, bases, family) {
+  if (!ds.length) return { base_model_id: null, reason: null };
+  var comps = ds.filter(function (d) {
+    return d.trained_kind === "composition";
+  });
+  if (comps.length && ds.length > 1) return { base_model_id: null, reason: "A composition runs alone: it cannot be combined with another trained model." };
+  var first = ds[0].base_model_ids;
+  for (var i = 0; i < first.length; i++) {
+    var id = first[i];
+    var ok = true;
+    for (var k = 1; k < ds.length && ok; k++) if (ds[k].base_model_ids.indexOf(id) < 0) ok = false;
+    if (!ok) continue;
+    var b = null;
+    for (var j = 0; j < bases.length; j++) if (bases[j].model_id === id) b = bases[j];
+    if (!b) continue;
+    if (family === "edit" && !editRoute(b)) continue;
+    if (family === "image" && makeNew(b) === false) continue;
+    if (ds.length > 1 && (!b.takes_loras || b.takes_loras.max < ds.length)) continue;
+    return { base_model_id: id, reason: null };
+  }
+  return { base_model_id: null, reason: ds.length > 1 ? "These trained models have no base model in common, so they cannot run together." : family === "edit" ? "This trained model's base cannot edit an image." : "This trained model's base cannot make a new image." };
+}
+
 // "LoRA via FLUX.2 Dev"
 function kindLabel(d) {
   if (!d.supported) return "This trained model type isn't supported by this version of the plugin.";
   return (d.trained_kind === "lora" ? "LoRA" : "Composition") + " via " + d.base_names[0];
 }
 
-module.exports = { derive: derive, editRoute: editRoute, makeNew: makeNew, kindLabel: kindLabel, defaultScale: defaultScale };
+module.exports = { derive: derive, editRoute: editRoute, makeNew: makeNew, kindLabel: kindLabel, defaultScale: defaultScale, triggerOf: triggerOf, roleOf: roleOf, commonBase: commonBase };

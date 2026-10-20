@@ -31,12 +31,34 @@
 //     resolve an Unknown job in Jobs, wait for the result, try Place while
 //     the document is closed (held), reopen the saved document, check that
 //     nothing landed by itself, Place, and close the document.
+//
+// Agent checks (M6, SPEC 12.2 item 11, test/live/m6-live-check.js):
+//   { id, agent: { steps: [ ... ] } } runs its steps in order and writes
+//   each step's outcome to result.json. Documents made by "open" stay open
+//   until a "close" step; only those are ever touched. Steps ("do"):
+//     switches  { set: { agents_may_modify, agents_may_run_commands,
+//                 active_document_only }, no_spend }
+//     open      { document, selection, name, layers: [names] } makes a
+//               document (plus empty named layers) and keeps it open
+//     front     { index } brings one of its own documents to the front
+//     call      { tool, args } calls an agent tool as the dev loop's client
+//     cards     lists the approval cards showing
+//     decide    { action: "approve" | "decline", kind, client, wait_s }
+//               waits for a card and answers it through the approvals
+//               module, the same path as the panel's buttons
+//     wait_job  { local_id | latest: true, states, timeout_s }
+//     inspect   { index } layers, Scenario metadata, History
+//     probe     { what: "chain" | "subject_pref" | "select_history" }
+//     activity  the activity log
+//     close     closes every document the agent steps made
 
 var png = require("../util/png.js");
 var trainedMod = require("../catalog/trained.js");
 var price = require("../forms/price.js");
 
 var REQUEST = "dev-live-run.json";
+// M6: the client name the dev loop's own agent calls carry.
+var DEV_CLIENT = { session: "dev-live", client_name: "dev loop" };
 var DIR = "dev-live";
 var POLL_MS = 2000;
 var EVIDENCE_LONG = 1024;
@@ -128,12 +150,272 @@ function start(app, hostRequire, o) {
     });
   }
 
+  // Brings a document it made to the front, as a click on its tab.
+  async function front(docId) {
+    return modal("Scenario dev: front", async function () {
+      var doc = findDoc(docId);
+      if (!doc) throw new Error("document is not open");
+      ps.app.activeDocument = doc;
+      return doc.id;
+    });
+  }
+
   async function openSaved(path) {
     var file = await entryFor(path);
     return modal("Scenario dev: open", async function () {
       var doc = await ps.app.open(file);
       return doc.id;
     });
+  }
+
+  // ---- M6 agent checks ----
+
+  var agentDocs = [];
+  // Cards a decide step answered: a card stays listed for a moment after its
+  // answer, and a later decide step must wait for the next one.
+  var decided = {};
+
+  function trimJson(v, max) {
+    var text = JSON.stringify(v, function (k, x) {
+      if (k === "data" && typeof x === "string" && x.length > 200) return "[" + x.length + " chars]";
+      return x;
+    });
+    if (text && text.length > (max || 20000)) return { truncated: true, head: text.slice(0, max || 20000) };
+    return text ? JSON.parse(text) : null;
+  }
+
+  function cardRow(c) {
+    return { id: c.id, kind: c.kind, session: c.session, client_name: c.client_name, title: c.title, lines: c.lines, price_label: c.price_label || null, waiting: c.waiting || 0 };
+  }
+
+  function docOf(step) {
+    var i = typeof step.index === "number" ? step.index : agentDocs.length - 1;
+    var d = agentDocs[i];
+    if (d === undefined) throw new Error("no agent document " + i);
+    return d;
+  }
+
+  async function front(docId) {
+    await modal("Scenario dev: front", async function () {
+      var doc = findDoc(docId);
+      if (!doc) throw new Error("document is not open");
+      ps.app.activeDocument = doc;
+    });
+  }
+
+  async function layerNames(docId) {
+    var doc = findDoc(docId);
+    return (doc.layers || []).map(function (L) {
+      return { id: L.id, name: L.name };
+    });
+  }
+
+  async function histories(docId) {
+    var doc = findDoc(docId);
+    var list = doc && doc.historyStates ? doc.historyStates : [];
+    var names = [];
+    for (var i = 0; i < list.length; i++) names.push(list[i].name);
+    return { count: names.length, last: names.slice(-4), current: doc && doc.activeHistoryState ? doc.activeHistoryState.name : null };
+  }
+
+  async function probe(step) {
+    var what = step.what;
+    if (what === "chain") {
+      // A reference chain without a document element: which document does
+      // Photoshop resolve it in? Two documents of its own, each with its
+      // own top layer name; the active one is switched between reads.
+      if (agentDocs.length < 2) throw new Error("chain needs two agent documents");
+      var outs = [];
+      for (var k = 0; k < 2; k++) {
+        var d = agentDocs[k];
+        await front(d);
+        var r = await modal("Scenario dev: probe", async function () {
+          return play([{ _obj: "get", _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }] }]);
+        });
+        var r2 = await modal("Scenario dev: probe", async function () {
+          return play([{ _obj: "get", _target: [{ _property: "name" }, { _ref: "layer", _enum: "ordinal", _value: "targetEnum" }] }]);
+        });
+        outs.push({ active: d, layer_name: r && r[0] ? r[0].name : null, layer_doc: r && r[0] ? r[0].documentID || null : null, property_form: r2 && r2[0] ? r2[0].name || null : null, expected: (await layerNames(d))[0] });
+      }
+      return outs;
+    }
+    if (what === "subject_pref") {
+      // The application descriptor's keys about Select Subject or image
+      // processing, and the autoCutout descriptor Photoshop accepts.
+      var app0 = await modal("Scenario dev: probe", async function () {
+        return play([{ _obj: "get", _target: [{ _ref: "application", _enum: "ordinal", _value: "targetEnum" }] }]);
+      });
+      var found = {};
+      function scan(o, path, depth) {
+        if (!o || typeof o !== "object" || depth > 4) return;
+        for (var key in o) {
+          var v = o[key];
+          var here = path ? path + "." + key : key;
+          if (/subject|cutout|cloud|device|processing|imageProcess/i.test(key)) found[here] = typeof v === "object" ? JSON.stringify(v).slice(0, 300) : v;
+          if (v && typeof v === "object") scan(v, here, depth + 1);
+        }
+      }
+      scan(app0 && app0[0], "", 0);
+      var keys = app0 && app0[0] ? Object.keys(app0[0]) : [];
+      return { matches: found, top_keys: keys.length, top_key_sample: keys.filter(function (x) {
+        return /pref|process|general|ai|subject/i.test(x);
+      }) };
+    }
+    if (what === "select_history") {
+      var d2 = docOf(step);
+      var before = await histories(d2);
+      var names = await layerNames(d2);
+      var ids = names.slice(0, 2).map(function (x) {
+        return x.id;
+      });
+      var res = await app.agentTools.handlers.select_layers({ document_id: d2, layer_ids: ids, mode: "replace" }, ctxOf(step));
+      var after = await histories(d2);
+      var res2 = await app.agentTools.handlers.select_layers({ document_id: d2, layer_ids: [names[names.length - 1].id], mode: "replace" }, ctxOf(step));
+      var after2 = await histories(d2);
+      return { before: before, after_first: after, after_second: after2, results: [res, res2] };
+    }
+    throw new Error("unknown probe " + what);
+  }
+
+  function ctxOf(step) {
+    return { session: step.session || DEV_CLIENT.session, client_name: step.client_name || DEV_CLIENT.client_name, connected_at: new Date(host.timers.now()).toISOString() };
+  }
+
+  async function agentStep(step) {
+    var at = app.agentTools;
+    if (!at) throw new Error("agent tools unavailable");
+    switch (step.do) {
+      case "switches": {
+        var set = step.set || {};
+        var order = ["agents_may_modify", "agents_may_run_commands", "active_document_only"];
+        for (var i = 0; i < order.length; i++) if (Object.prototype.hasOwnProperty.call(set, order[i])) await app.settings.setSwitch(order[i], !!set[order[i]]);
+        if (typeof step.no_spend === "boolean") await app.settings.setNoSpend(step.no_spend);
+        return { switches: app.settings.switches(), no_spend: app.settings.noSpend() };
+      }
+      case "open": {
+        var docId = await makeDocument(step.document || { width: 512, height: 512 }, step.selection || null, step.name || "Scenario dev agent");
+        agentDocs.push(docId);
+        var names = step.layers || [];
+        if (names.length) {
+          await modal("Scenario dev: layers", async function () {
+            for (var j = 0; j < names.length; j++) {
+              await play([{ _obj: "make", _target: [{ _ref: "layer" }] }]);
+              await play([{ _obj: "set", _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }], to: { _obj: "layer", name: names[j] } }]);
+            }
+          });
+        }
+        return { document_id: docId, index: agentDocs.length - 1, layers: await layerNames(docId), history: await histories(docId) };
+      }
+      case "front": {
+        await front(docOf(step));
+        return { active: host.activeDocumentId() };
+      }
+      case "call": {
+        var h = at.handlers[step.tool];
+        if (!h) throw new Error("unknown tool " + step.tool);
+        var args = JSON.parse(JSON.stringify(step.args || {}));
+        if (args.document_id === "$doc") args.document_id = docOf(step);
+        if (args.document_id === "$doc0") args.document_id = agentDocs[0];
+        if (args.document_id === "$doc1") args.document_id = agentDocs[1];
+        var t0 = host.timers.now();
+        var r = await h(args, ctxOf(step));
+        return { ms: host.timers.now() - t0, result: trimJson(r, step.max_chars || 6000) };
+      }
+      case "cards":
+        return app.approvals.showing().map(cardRow);
+      case "decide": {
+        var until = host.timers.now() + (step.wait_s || 60) * 1000;
+        var card = null;
+        while (!card && host.timers.now() < until) {
+          var list = app.approvals.showing();
+          for (var c = 0; c < list.length; c++) {
+            var x = list[c];
+            if (decided[x.id]) continue;
+            if (step.kind && x.kind !== step.kind) continue;
+            if (step.client && !new RegExp(step.client, "i").test(String(x.client_name))) continue;
+            card = x;
+            break;
+          }
+          if (!card) await sleep(host, 250);
+        }
+        if (!card) throw new Error("no card within " + (step.wait_s || 60) + " s");
+        var row = cardRow(card);
+        // A spend card is answered through the F5 card's own handler
+        // (controller.agentDecision, what Approve and Decline call), when
+        // the F5 card shows it; other cards through the approvals module.
+        var m = app.controller ? app.controller.model() : null;
+        var f5 = m && m.composer ? m.composer.agent : null;
+        row.f5_card = f5 ? { client_name: f5.client_name, what: f5.what, prompt: f5.prompt, model_name: f5.model_name, cu: f5.cu } : null;
+        if (card.kind === "spend" && f5) {
+          app.controller.agentDecision(step.action === "approve");
+          row.path = "controller.agentDecision";
+          await sleep(host, 200);
+        } else {
+          if (step.action === "approve") await app.approvals.approve(card.id);
+          else await app.approvals.decline(card.id);
+          row.path = "approvals";
+        }
+        decided[card.id] = true;
+        var gone = host.timers.now() + 5000;
+        while (host.timers.now() < gone && app.approvals.showing().some(function (y) {
+          return y.id === card.id;
+        })) await sleep(host, 100);
+        row.action = step.action;
+        return row;
+      }
+      case "wait_job": {
+        var id = step.local_id;
+        if (!id && step.latest) {
+          var all = app.ledger.all().filter(function (r0) {
+            return r0.origin && r0.origin.kind === "agent";
+          });
+          all.sort(function (a0, b0) {
+            return String(b0.created_at).localeCompare(String(a0.created_at));
+          });
+          id = all[0] ? all[0].local_id : null;
+        }
+        if (!id) throw new Error("no agent job");
+        var rec = await waitState(id, step.states || ["applied", "failed", "declined", "not_sent", "apply_failed"], (step.timeout_s || 180) * 1000);
+        return snap(rec || app.ledger.get(id));
+      }
+      case "inspect": {
+        var d = docOf(step);
+        var ins = await inspect(d);
+        ins.history_detail = await histories(d);
+        return ins;
+      }
+      case "probe":
+        return probe(step);
+      case "activity":
+        return app.approvals.activity().slice(0, 30);
+      case "close": {
+        var ids = agentDocs.slice();
+        agentDocs = [];
+        await closeDocs(ids);
+        return { closed: ids };
+      }
+      default:
+        throw new Error("unknown step " + step.do);
+    }
+  }
+
+  async function agentSteps(steps, dir, out) {
+    out.steps = [];
+    for (var i = 0; i < steps.length; i++) {
+      var step = steps[i];
+      var row = { do: step.do, tool: step.tool || null, label: step.label || null, expect_error: step.expect_error || null };
+      try {
+        row.out = await agentStep(step);
+      } catch (e) {
+        row.error = (e && e.type ? e.type + ": " : "") + ((e && e.message) || String(e));
+        if (step.expect_error && row.error.indexOf(step.expect_error) === 0) row.expected = true;
+        if (step.stop_on_error && !row.expected) {
+          out.steps.push(row);
+          break;
+        }
+      }
+      out.steps.push(row);
+    }
   }
 
   async function closeDocs(ids) {
@@ -421,6 +703,14 @@ function start(app, hostRequire, o) {
         await check(req, id, dir, out, made);
         return out;
       }
+      if (req.agent) {
+        req.keep_open = true;
+        await agentSteps(req.agent.steps || [], dir, out);
+        out.ok = !out.steps.some(function (x) {
+          return x.error && !x.expect_error;
+        });
+        return out;
+      }
       var a = JSON.parse(JSON.stringify(req.run || {}));
       if (req.trained_pick) {
         var t = await pickTrained(req.trained_pick);
@@ -518,8 +808,67 @@ function start(app, hostRequire, o) {
   }
 
   if (ps && lfs && o.poll !== false) host.timers.setTimeout(tick, POLL_MS);
+  // The panel's dev loop (dev/ui-loop.js) drives the real panel on a
+  // document of its own: these make, inspect and close it.
+  async function select(docId, sel) {
+    return modal("Scenario dev: select", async function () {
+      var doc = findDoc(docId);
+      if (!doc) throw new Error("document is not open");
+      if (!sel) {
+        await play([{ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }], to: { _enum: "ordinal", _value: "none" } }]);
+        return null;
+      }
+      var shape = sel.shape === "ellipse" ? "ellipse" : "rectangle";
+      await play([{ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }], to: { _obj: shape, top: px(sel.top), left: px(sel.left), bottom: px(sel.top + sel.height), right: px(sel.left + sel.width) }, antiAlias: true }]);
+      return sel;
+    });
+  }
+
+  // The layers of a document it made, top first: names, kinds, visibility,
+  // masks, Scenario metadata; and the active History state's name.
+  async function inspect(docId) {
+    var doc = findDoc(docId);
+    if (!doc) throw new Error("document is not open");
+    var out = { document_id: docId, history: null, history_count: null, layers: [] };
+    try {
+      out.history = doc.activeHistoryState ? doc.activeHistoryState.name : null;
+      out.history_count = doc.historyStates ? doc.historyStates.length : null;
+    } catch (e) {
+      out.history = null;
+    }
+    async function walk(list, depth, parent) {
+      for (var i = 0; i < list.length; i++) {
+        var L = list[i];
+        var meta = null;
+        try {
+          meta = await host.scenarioLayer(docId, L.id);
+        } catch (e) {
+          meta = null;
+        }
+        var info = null;
+        try {
+          info = await host.layerInfo(docId, L.id);
+        } catch (e) {
+          info = null;
+        }
+        out.layers.push({ id: L.id, name: L.name, depth: depth, parent: parent, kind: String(L.kind || ""), visible: L.visible !== false, has_mask: info ? info.has_mask : null, bounds: info ? info.bounds : null, fields: meta ? meta.fields : {} });
+        if (L.layers && L.layers.length) await walk(L.layers, depth + 1, L.id);
+      }
+    }
+    await walk(doc.layers || [], 0, null);
+    return out;
+  }
+
   return {
     run: run,
+    makeDocument: makeDocument,
+    saveDocument: saveDocument,
+    openSaved: openSaved,
+    front: front,
+    closeDocs: closeDocs,
+    select: select,
+    inspect: inspect,
+    composite: composite,
     stop: function () {
       stopped = true;
     },

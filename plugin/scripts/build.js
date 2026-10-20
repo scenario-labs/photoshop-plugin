@@ -8,7 +8,8 @@
 // own require at run time. No eval, no code generation at run time.
 //
 // Release builds (the default) replace src/dev/* with stubs. --dev keeps the
-// development-only pairing token and API key imports (see AGENTS.md).
+// development-only pairing token and API key imports and the panel's UI loop
+// (see AGENTS.md).
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -24,6 +25,8 @@ const REQUIRE = /\brequire\(\s*(["'])([^"']+)\1\s*\)/g;
 const DEV_STUBS = {
   "import-token.js": "{ importToken: async function () { return false; }, FILE: null }",
   "import-key.js": "{ importKey: async function () { return false; }, FILE: null, parse: null }",
+  "ui-loop.js": "{ start: function () { return null; }, COMMAND: null, RESULT: null }",
+  "ui-demo.js": "{ hook: function () { return null; }, run: null, DIR: null }",
   "live-run.js": "{ start: function () { return null; }, REQUEST: null, DIR: null }",
   "test-hooks.js": "{ create: function () { return { arm: function () {}, at: function () { return Promise.resolve(); }, value: function (p, v) { return v; }, wait: function () { return new Promise(function () {}); }, disarm: function () {}, active: false }; } }"
 };

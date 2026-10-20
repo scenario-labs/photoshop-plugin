@@ -96,7 +96,24 @@ async function priceCheck(client, modelId, body) {
   return classify(res);
 }
 
+// Prompt Spark (Suggest in the prompt box) has its own route,
+// POST /v1/generate/prompt, synchronous: the proposals come back in the
+// answer. Its price check is the same dry run on that route.
+var PROMPT_PATH = "/generate/prompt";
+
+async function promptCheck(client, body) {
+  var res;
+  try {
+    res = await client.request("POST", PROMPT_PATH, { query: DRY_RUN_QUERY, body: body, priceCheck: true });
+  } catch (err) {
+    throw refusal(err);
+  }
+  return classify(res);
+}
+
 module.exports = {
+  PROMPT_PATH: PROMPT_PATH,
+  promptCheck: promptCheck,
   DRY_RUN_QUERY: DRY_RUN_QUERY,
   DRY_RUN_SEARCH: DRY_RUN_SEARCH,
   priceCheck: priceCheck,

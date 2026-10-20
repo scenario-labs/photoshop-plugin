@@ -12,7 +12,7 @@ for (var i = 0; i < enums.job_status.length; i++) LABELS[enums.job_status[i].val
 var KIND_NAMES = { image: "Image", edit: "Edit", upscale: "Upscale", expand: "Expand", remove_background: "Remove BG" };
 
 var TEXT = {
-  empty: "Jobs you start here or from an agent appear here. Jobs from another Photoshop version are on the On Scenario tab, which comes in a later build.",
+  empty: "No jobs yet. What you generate here, or an AI agent generates for you, shows up here.",
   mark_confirm: "Click again to mark it not sent. If a job for it exists on Scenario, it ran and was charged: check Jobs on app.scenario.com first.",
   unknown_help: "Unknown: the request may or may not have reached Scenario. Nothing is retried until you decide in Jobs.",
   ready_banner: "Ready. Describe a new image below, or select an area and use Edit to change it.",
@@ -145,11 +145,18 @@ var ACTION_LABELS = {
   copy_error: "Copy error"
 };
 
+// States that wait for the person (the Jobs row and the header badge show
+// them in the warning color).
+var ATTENTION = ["uncertain", "awaiting_approval", "apply_failed", "download_failed", "failed", "blocked"];
+
 function row(rec) {
   var meta = [origin(rec), charges.words(rec), timeOf(rec.created_at)].filter(Boolean).join(" · ");
   var acts = actions(rec);
   return {
     title: title(rec) + "  " + statusLabel(rec.state),
+    name: title(rec),
+    status: statusLabel(rec.state),
+    attention: ATTENTION.indexOf(rec.state) >= 0,
     meta: meta,
     detail: rec.state === "uncertain" ? TEXT.unknown_help : rec.error || (rec.placement && rec.placement.notes ? rec.placement.notes.join(" ") : ""),
     actions: acts.map(function (a) {
@@ -158,4 +165,28 @@ function row(rec) {
   };
 }
 
-module.exports = { statusLabel: statusLabel, title: title, tray: tray, row: row, actions: actions, timeOf: timeOf, TEXT: TEXT, ACTION_LABELS: ACTION_LABELS };
+// The header's Jobs popover: the newest jobs, one line each (name, then
+// status when not placed, time, CU and who started it).
+var POP_STATES_QUIET = ["applied"];
+function popRows(records, max) {
+  var out = [];
+  for (var i = 0; i < records.length && out.length < (max || 6); i++) {
+    var rec = records[i];
+    var cu = rec.cu_charged !== null && rec.cu_charged !== undefined ? rec.cu_charged : rec.cu_quoted;
+    var parts = [];
+    if (POP_STATES_QUIET.indexOf(rec.state) < 0) parts.push(statusLabel(rec.state));
+    parts.push(timeOf(rec.created_at));
+    if (cu !== null && cu !== undefined && cu !== "") parts.push(cu + " CU");
+    if (origin(rec) !== "You") parts.push("by " + origin(rec));
+    out.push({ local_id: rec.local_id, label: title(rec), sub: parts.filter(Boolean).join(" · "), done: rec.state === "applied", attention: ATTENTION.indexOf(rec.state) >= 0 });
+  }
+  return out;
+}
+
+TEXT.pop_title = "Jobs on this computer";
+TEXT.pop_empty = "No jobs on this computer yet.";
+TEXT.pop_note = "Every file stays in the output folder, kept or not.";
+TEXT.pop_all = "All jobs";
+TEXT.pop_all_sub = "Place, open or resolve a job";
+
+module.exports = { statusLabel: statusLabel, title: title, tray: tray, row: row, actions: actions, timeOf: timeOf, popRows: popRows, TEXT: TEXT, ACTION_LABELS: ACTION_LABELS };

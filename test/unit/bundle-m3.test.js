@@ -1,7 +1,7 @@
 "use strict";
 // M3 on the release bundle UXP loads, run in the fake UXP over the fake
-// Photoshop modules against the fixture mock: after sign-in, Generate in the
-// Image lane sends one paid request with no query string, polls the job,
+// Photoshop modules against the fixture mock: after sign-in, New layer from
+// prompt (one take) sends one paid request with no query string, polls the job,
 // downloads the result from the CDN host the manifest declares (no key),
 // and places it as an embedded smart object in one History state with its
 // XMP packet. Nothing goes to any other host; the key never reaches the
@@ -34,9 +34,26 @@ test("release bundle: Generate places the result in one History state, after one
   doc.byId("signin-save").click();
   await waitFor(() => doc.shown("view-main"), { label: "signed in" });
   ps.entrypoints[0].panels.scenarioPanel.show();
-  await waitFor(() => doc.text("generate") === "Generate (2 CU)", { label: "price on the button", timeout: 5000 });
-  doc.byId("generate").click();
-  await waitFor(() => doc.text("tray-status") === "Placed: 1 take", { label: "placed", timeout: 8000 });
+  const attached = (el) => {
+    for (let n = el; n; n = n.parentNode) if (n.id && doc.els.get(n.id) === n) return true;
+    return false;
+  };
+  const find = (attr, value) => doc.all.find((e) => e.getAttribute(attr) === value && attached(e));
+  await waitFor(() => find("data-act", "new_layer"), { label: "the New layer chip" });
+  find("data-act", "new_layer").click();
+  await waitFor(() => find("data-pop", "takes"), { label: "the Takes chip" });
+  find("data-pop", "takes").click();
+  await waitFor(() => find("data-value", "1"), { label: "the Takes menu" });
+  find("data-value", "1").click();
+  // The measured answers are for quality Low (Advanced; Medium by default).
+  await waitFor(() => doc.byId("gear") && doc.byId("gear").style.display !== "none", { label: "the Advanced button" });
+  doc.byId("gear").click();
+  await waitFor(() => find("data-adv", "quality:low"), { label: "the Quality setting" });
+  find("data-adv", "quality:low").click();
+  doc.type("prompt", "A lighthouse on a rocky coast at dusk");
+  await waitFor(() => doc.text("go-label") === "New layer" && doc.text("go-cu") === "· 2 CU", { label: "price on the button", timeout: 5000 });
+  doc.byId("go").click();
+  await waitFor(() => ps.ps.history.length === 1, { label: "placed", timeout: 8000 });
 
   assert.equal(mock.paidCalls.length, 1);
   for (const r of mock.requests.filter((x) => x.path.startsWith("/v1/generate"))) {

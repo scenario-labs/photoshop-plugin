@@ -3,7 +3,8 @@
 // (SPEC 3.8): the active document, its selection (clipped to the canvas) and
 // its active layer. Read only: no modal scope, nothing changes.
 //
-// Resolves { doc: { id, width, height, title } | null, selection: bounds
+// Resolves { doc: { id, width, height, title, layers (top-level count),
+// selected (selected layers) } | null, selection: bounds
 // clipped to the canvas | null, selection_raw: bounds as read | null, layer:
 // host.activeLayerInfo() | null }.
 
@@ -30,8 +31,16 @@ async function read(host) {
     layer = null;
   }
   var canvas = { width: size.width, height: size.height };
+  var stats = null;
+  if (typeof host.documentStats === "function") {
+    try {
+      stats = host.documentStats(id);
+    } catch (e) {
+      stats = null;
+    }
+  }
   return {
-    doc: { id: id, width: size.width, height: size.height, title: title },
+    doc: { id: id, width: size.width, height: size.height, title: title, layers: stats ? stats.layers : null, selected: stats ? stats.selected : null },
     selection: raw ? shapeMod.clip(raw, canvas) : null,
     selection_raw: raw,
     layer: layer

@@ -1,12 +1,13 @@
 "use strict";
-// The panel shell: header, lane tabs (their bodies are ui/lanes.js), and the
-// agent link status with the pairing token. Uses Spectrum UXP widgets from
-// index.html; this file only binds them. No overlays, no animation.
+// The panel shell: icons, the header's agent status (icon, dot and the
+// agent's name, FLOWS v2), and Settings > Connect an AI agent (link status
+// and the pairing token, the technical words under Details). The creation
+// view itself is ui/create-view.js. No animation.
 
 var view = require("./view.js");
+var icons = require("./icons.js");
 
-// doc: the panel's document. actions: { copyToken(), resetToken(), token(),
-// onLane(id) (optional: a lane tab was chosen) }.
+// doc: the panel's document. actions: { copyToken(), resetToken(), token() }.
 function createPanel(doc, actions, version) {
   if (!doc || typeof doc.getElementById !== "function") return null;
   var byId = function (id) {
@@ -16,27 +17,18 @@ function createPanel(doc, actions, version) {
   var resetArmed = false;
   var resetTimer = null;
   var lastLink = null;
+  var detailsOpen = false;
 
   function setText(id, text) {
     var el = byId(id);
     if (el) el.textContent = text || "";
   }
-
-  function selectLane(id) {
-    var lane = null;
-    for (var i = 0; i < view.LANES.length; i++) if (view.LANES[i].id === id) lane = view.LANES[i];
-    if (!lane) return;
-    var buttons = doc.querySelectorAll ? doc.querySelectorAll("[data-lane]") : [];
-    for (var b = 0; b < buttons.length; b++) {
-      if (buttons[b].getAttribute("data-lane") === id) buttons[b].setAttribute("selected", "");
-      else buttons[b].removeAttribute("selected");
-    }
-    setText("lane-title", lane.label);
-    setText("lane-purpose", lane.purpose);
-    // The lane bodies (ui/lanes.js) fill the rest; without them, a placeholder.
-    if (actions.onLane) actions.onLane(id);
-    else setText("lane-note", view.NOT_BUILT);
+  function setTitle(id, text) {
+    var el = byId(id);
+    if (el && el.setAttribute) el.setAttribute("title", text || "");
   }
+
+  icons.fill(doc);
 
   function renderToken() {
     setText("token-value", view.maskToken(actions.token(), tokenShown));
@@ -49,10 +41,11 @@ function createPanel(doc, actions, version) {
     var dot = byId("link-dot");
     if (dot) dot.className = "dot " + d.dot;
     var headerDot = byId("agent-dot");
-    if (headerDot) {
-      headerDot.className = "dot " + d.dot;
-      headerDot.setAttribute("title", d.headline);
-    }
+    if (headerDot) headerDot.className = "dot " + d.dot;
+    // The header names the first connected agent (FLOWS v2: "Claude ●").
+    var name = d.names && d.names.length ? d.names[0] : "";
+    setText("agent-name", name.length > 14 ? name.slice(0, 13) + "\u2026" : name);
+    setTitle("agent-hit", name ? d.names.join(", ") + (d.names.length > 1 ? " are" : " is") + " connected" : d.headline);
     setText("link-headline", d.headline);
     setText("link-detail", d.detail);
   }
@@ -61,20 +54,21 @@ function createPanel(doc, actions, version) {
     setText("token-note", text);
   }
 
+  function renderDetails() {
+    var el = byId("agents-details");
+    if (el && el.style) el.style.display = detailsOpen ? "block" : "none";
+    icons.set(byId("agents-details-icon"), detailsOpen ? "chevron-down" : "chevron-right");
+  }
+
   function on(id, fn) {
     var el = byId(id);
     if (el) el.addEventListener("click", fn);
   }
 
-  var laneButtons = doc.querySelectorAll ? doc.querySelectorAll("[data-lane]") : [];
-  for (var i = 0; i < laneButtons.length; i++) {
-    (function (btn) {
-      btn.addEventListener("click", function () {
-        selectLane(btn.getAttribute("data-lane"));
-      });
-    })(laneButtons[i]);
-  }
-
+  on("agents-details-toggle", function () {
+    detailsOpen = !detailsOpen;
+    renderDetails();
+  });
   on("token-show", function () {
     tokenShown = !tokenShown;
     renderToken();
@@ -86,10 +80,10 @@ function createPanel(doc, actions, version) {
       })
       .then(
         function () {
-          note("Copied. Paste it into your agent client's config as SCENARIO_PHOTOSHOP_TOKEN.");
+          note(view.AGENTS.copied);
         },
         function (e) {
-          note("Could not copy: " + ((e && e.message) || e) + ". Use Show and copy it by hand.");
+          note("Could not copy: " + ((e && e.message) || e) + ". Open Details, use Show and copy it by hand.");
         }
       );
   });
@@ -97,7 +91,7 @@ function createPanel(doc, actions, version) {
     if (!resetArmed) {
       resetArmed = true;
       setText("token-reset", "Confirm reset");
-      note("Resetting disconnects every agent client that uses this token. Click again to confirm.");
+      note(view.AGENTS.reset_confirm);
       resetTimer = setTimeout(function () {
         resetArmed = false;
         setText("token-reset", "Reset");
@@ -116,7 +110,7 @@ function createPanel(doc, actions, version) {
         function () {
           tokenShown = false;
           renderToken();
-          note("New token made. Agent clients need it in their config before they can connect.");
+          note(view.AGENTS.reset_done);
         },
         function (e) {
           note("Reset failed: " + ((e && e.message) || e));
@@ -124,17 +118,27 @@ function createPanel(doc, actions, version) {
       );
   });
 
-  setText("version", "Scenario for Photoshop " + version + " · Generative AI by Scenario");
-  selectLane("image");
+  setText("agents-intro", view.AGENTS.intro);
+  setText("agents-pair", view.AGENTS.pair);
+  setText("agents-tech", view.AGENTS.tech);
+  setText("version", "Scenario for Photoshop " + version);
+  renderDetails();
   renderToken();
 
   return {
     renderLink: renderLink,
     renderToken: renderToken,
-    selectLane: selectLane,
+    // The last link state described (the agent popover's words).
+    link: function () {
+      return view.describeLink(lastLink);
+    },
     refresh: function () {
       renderToken();
       if (lastLink) renderLink(lastLink);
+    },
+    openDetails: function (open) {
+      detailsOpen = open !== false;
+      renderDetails();
     }
   };
 }

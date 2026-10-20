@@ -16,6 +16,7 @@ var TEXT = {
   no_capture: "This model takes no image, so it can't edit an area.",
   no_selection_note: "No selection: edits the whole canvas, lands unmasked.",
   no_selection_layer_note: "No selection: edits the current layer's area, lands unmasked.",
+  matte_note: "The layer's transparent parts go to the model as gray; the takes land on gray. Remove background cuts one out.",
   pad_note: "The canvas is smaller than the size this model generates; the edge pixels are repeated, then cropped away.",
   reference_hint: "Say what to change and what to keep",
   change_amount: "Lower keeps closer to your layer.",

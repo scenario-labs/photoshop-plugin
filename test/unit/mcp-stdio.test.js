@@ -92,19 +92,20 @@ test("initialize negotiates the protocol version and passes the client name on",
   assert.equal((await h.next()).result.protocolVersion, "2025-11-25", "unknown versions get the newest supported one");
 });
 
-test("tools/list offers the four tools of this build, within the size caps", async () => {
+test("tools/list offers the 29 v1 tools, within the size caps", async () => {
   const h = harness();
   h.send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } });
   await h.next();
   h.send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
   const r = await h.next();
   const tools = r.result.tools;
-  assert.deepEqual(tools.map((x) => x.name), ["scenario_status", "list_models", "model_schema", "estimate_cost"]);
+  assert.deepEqual(tools.map((x) => x.name), ["scenario_status", "document_summary", "layer_detail", "preview_document", "list_models", "model_schema", "recommend_models", "estimate_cost", "job_status", "wait_for_job", "list_local_jobs", "list_generations", "list_assets", "search_assets", "list_collections", "inspect_result_previews", "capture_reference", "upload_reference", "reference_upload_status", "generate", "recover_local_job", "recover_cloud_job", "cancel_prepared_job", "prepare_result_application", "apply_result_application", "select_layers", "set_selection", "remove_scenario_layers", "execute_batchplay"]);
   assert.equal(tools[0].annotations.readOnlyHint, true);
   for (const name of ["list_models", "model_schema"]) assert.equal(tools.find((x) => x.name === name).annotations.readOnlyHint, true, name);
   assert.equal(tools.find((x) => x.name === "estimate_cost").annotations.readOnlyHint, false, "estimate_cost may upload a blank stand-in");
   assert.equal(tools[0].annotations.destructiveHint, false);
   assert.ok(tools[0].outputSchema, "outputSchema from 2025-06-18 on");
+  assert.match(tools.find((x) => x.name === "generate").description, /^SPENDS CU\./, "the paid tool says so first");
   assert.equal(tools[0].release, undefined, "catalog-only fields are not sent");
   assert.ok(JSON.stringify(r.result).length <= 40000, "tools/list under 40,000 characters");
   for (const tool of tools) assert.ok(tool.description.length <= 2500, `${tool.name} description under 2,500 characters`);
@@ -186,10 +187,10 @@ test("arguments are checked against the input schema; null means none", async ()
 
 test("JSON-RPC errors: unknown tool, unknown method, parse error, invalid request", async () => {
   const h = harness();
-  h.send({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "generate", arguments: {} } });
+  h.send({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "export_image", arguments: {} } });
   const unknownTool = await h.next();
   assert.equal(unknownTool.error.code, -32602);
-  assert.match(unknownTool.error.message, /Unknown tool: generate/);
+  assert.match(unknownTool.error.message, /Unknown tool: export_image/);
   h.send({ jsonrpc: "2.0", id: 2, method: "sampling/createMessage", params: {} });
   assert.equal((await h.next()).error.code, -32601);
   h.send("{not json");

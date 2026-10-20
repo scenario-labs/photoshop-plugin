@@ -17,6 +17,7 @@
 
 var canonical = require("../util/canonical-json.js");
 var slugMod = require("../util/slug.js");
+var builtinMod = require("../util/builtin.js");
 var xmp = require("../util/xmp.js");
 
 var HISTORY = { image: "Scenario: Place image", edit: "Scenario: Place edit", expand: "Scenario: Expand", upscale: "Scenario: Place upscale", cutout: "Scenario: Place cutout", library: "Scenario: Place library" };
@@ -24,6 +25,7 @@ var ASPECT_TOLERANCE = 0.01;
 
 function kindOf(lane) {
   if (lane === "remove_background") return "cutout";
+  if (lane === "library") return "library";
   return lane === "image" || lane === "edit" || lane === "upscale" || lane === "expand" ? lane : "image";
 }
 
@@ -57,7 +59,7 @@ function parametersText(params, freeText, leavePrompts) {
 }
 
 function names(kind, prompt, assetIds, leavePrompts) {
-  var slug = leavePrompts ? "" : slugMod.slug(prompt);
+  var slug = leavePrompts ? "" : slugMod.slug(builtinMod.nameOf(prompt) || prompt);
   var lead = "Scenario " + kind + (slug ? " " + slug : "");
   if (assetIds.length === 1) return { layers: [lead + " " + slugMod.tail(assetIds[0])], group: null };
   var layers = assetIds.map(function (id, i) {
@@ -74,18 +76,25 @@ function names(kind, prompt, assetIds, leavePrompts) {
 // canvas (Expand), duplicate ({name}: land in a copy), reads (for the
 // checks), cutout (Remove BG: { layer_id, background (the source was the
 // Background), lands, box, mask_box, source_path }) }.
+function agentHistory(rec, name) {
+  return rec.origin && rec.origin.kind === "agent" ? name.replace(/^Scenario: /, "Scenario agent: ") : name;
+}
+
 function build(rec, o) {
   o = o || {};
   var kind = kindOf(rec.lane);
   var outputs = (rec.outputs || []).filter(function (x) {
-    return x && x.path;
+    return x && x.path && (!o.assets || o.assets.indexOf(x.asset_id) >= 0);
   });
   if (!outputs.length) throw new Error("no saved results to place");
   var ids = outputs.map(function (x) {
     return x.asset_id;
   });
   var prompt = rec.parameters && typeof rec.parameters.prompt === "string" ? rec.parameters.prompt : "";
-  var n = names(kind, prompt, ids, !!o.leave_prompts);
+  // A run started from a Suggest proposal keeps the person's short prompt
+  // as its name (FLOWS v2, changes after review 8).
+  var short = typeof rec.name === "string" && rec.name ? rec.name : null;
+  var n = names(kind, short || prompt, ids, !!o.leave_prompts);
   var params = parametersText(rec.parameters || {}, o.free_text || [], !!o.leave_prompts);
   var box = o.box;
   if (!box) {
@@ -100,6 +109,7 @@ function build(rec, o) {
     modelName: rec.model_name,
     trainedModelIds: (rec.trained_model_ids || []).join(","),
     prompt: o.leave_prompts ? null : prompt || null,
+    runName: o.leave_prompts ? null : short,
     negativePrompt: o.leave_prompts || !rec.parameters ? null : rec.parameters.negativePrompt || null,
     parameters: params,
     inputAssetIds: (rec.inputs && rec.inputs.asset_ids ? rec.inputs.asset_ids : []).join(","),
@@ -136,13 +146,15 @@ function build(rec, o) {
       box: o.cutout.box,
       mask_box: o.cutout.lands === "mask" ? o.cutout.mask_box : o.cutout.box,
       source_path: o.cutout.source_path || null,
+      drop_selection: !!o.cutout.drop_selection,
       source_fit: boxFit(o.cutout.box.width, o.cutout.box.height, o.cutout.box),
       name: takes[0].name,
       xmp: takes[0].xmp
     };
   }
   return {
-    history_name: HISTORY[kind] || "Scenario: Place " + kind,
+    // Agent placements are named "Scenario agent: <action>" (SPEC 6.5).
+    history_name: agentHistory(rec, HISTORY[kind] || "Scenario: Place " + kind),
     kind: kind,
     document_id: doc ? doc.id : null,
     new_document: doc ? null : { width: Math.round(box.width), height: Math.round(box.height), name: n.group || n.layers[0] },

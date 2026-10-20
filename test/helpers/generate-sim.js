@@ -48,7 +48,9 @@ async function bootGenerate(t, opts = {}) {
   const host = hostMod.createHost(ps.require, g);
   const doc = createFakeDocument();
   const pollMs = opts.pollMs || 20;
-  const app = await main.boot({ host, document: doc, console: null, apiBaseUrl: mock.url, downloadOrigins: [mock.origin], pollDelay: () => pollMs });
+  // URL and Blob as UXP 9.4 has them: reference chips show blob links.
+  const global = { URL: globalThis.URL, Blob: globalThis.Blob };
+  const app = await main.boot({ host, document: doc, console: null, global, apiBaseUrl: mock.url, downloadOrigins: [mock.origin], pollDelay: () => pollMs });
   t.after(async () => {
     stopped = true;
     for (const h of timers) clearTimeout(h);
@@ -60,7 +62,8 @@ async function bootGenerate(t, opts = {}) {
     doc.byId("signin-save").click();
     await waitFor(() => doc.shown("view-main"), { label: "signed in" });
   }
-  return { app, host, doc, mock, ps, pair, clipboard };
+  // port and token let an agent test start a real helper against this plugin.
+  return { app, host, doc, mock, ps, pair, clipboard, port, token: secure.get("scenario.pairing_token") };
 }
 
 // The ledger records on disk, parsed.

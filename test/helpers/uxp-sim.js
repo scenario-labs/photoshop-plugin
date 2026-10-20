@@ -104,6 +104,10 @@ function runBundle(code, { port, secure = new Map(), files = new Map(), refuse, 
     WebSocket: TrackedWebSocket,
     fetch: bundleFetch,
     AbortController: globalThis.AbortController,
+    // UXP 9.4 has both (measured with the probe plugin): the panel shows
+    // reference pictures through blob links.
+    URL: globalThis.URL,
+    Blob: globalThis.Blob,
     crypto: webcrypto,
     setTimeout: (fn, ms) => {
       if (dead) return null;

@@ -12,8 +12,12 @@ function invalid(text) {
   return new errorsMod.ScenarioError("InvalidParameter", text);
 }
 
-function checkLane(lane) {
-  if (enums.lane.v1.indexOf(lane) >= 0) return;
+// Lanes the panel's own flows use that agents are not offered (FLOWS v2, F9
+// Animate and Frame to layer): the agent tools keep the shared list.
+var PANEL_LANES = ["video"];
+
+function checkLane(lane, panel) {
+  if (enums.lane.v1.indexOf(lane) >= 0 || (panel && PANEL_LANES.indexOf(lane) >= 0)) return;
   if (enums.lane.v1_1 && enums.lane.v1_1.indexOf(lane) >= 0) throw invalid("The " + lane + " lane comes in a later release.");
   throw invalid("lane must be one of: " + enums.lane.v1.join(", ") + ".");
 }
@@ -28,6 +32,25 @@ function fileInput(schema, name) {
 function referenceInput(schema) {
   for (var i = 0; i < schema.file_inputs.length; i++) if (schema.file_inputs[i].role === "reference") return schema.file_inputs[i];
   return null;
+}
+
+// The reference input of an edit model when it is not the capture's own
+// input, or null.
+function separateReferenceInput(schema) {
+  var ref = referenceInput(schema);
+  return ref && ref.name !== schema.capture_input_name ? ref : null;
+}
+
+// How many references the input takes: its schema maximum, lowered by the
+// model's measured rule when a mask goes too (catalog-map
+// reference_max_with_mask: Ideogram 4.5 Precise Edit takes 4, or 3 with a
+// mask). null: no limit.
+function refMax(schema, input, masked) {
+  var most = input.multiple ? input.max || null : 1;
+  var facts = Object.prototype.hasOwnProperty.call(MAP.models, schema.model_id) ? MAP.models[schema.model_id] : null;
+  var withMask = facts && typeof facts.reference_max_with_mask === "number" ? facts.reference_max_with_mask : null;
+  if (masked && withMask !== null) most = most === null ? withMask : Math.min(most, withMask);
+  return most;
 }
 
 // The file inputs the lane fills from the document, as {name: count}. In
@@ -51,13 +74,27 @@ function pendingFor(lane, schema, params, refCount, opts) {
   var name = schema.capture_input_name;
   if (!name) throw invalid("This model takes no image input, so it can't run in the " + lane + " lane.");
   var input = fileInput(schema, name);
-  if (input && (input.multiple || params[name] === undefined)) pending[name] = 1 + (input.multiple && lane === "edit" ? refCount || 0 : 0);
+  // In the Edit lane the references go with the capture when its input
+  // takes several images, else to the model's own reference input (Ideogram
+  // 4.5 Precise Edit: image, mask, referenceImages).
+  var withCapture = !!(input && input.multiple && lane === "edit");
+  if (input && (input.multiple || params[name] === undefined)) pending[name] = 1 + (withCapture ? refCount || 0 : 0);
   if (input && input.multiple && input.max && pending[name] > input.max) throw invalid("This model takes at most " + input.max + " images, the capture included.");
+  var masked = false;
   if ((lane === "edit" || lane === "expand") && opts.mask !== false) {
     for (var i = 0; i < schema.file_inputs.length; i++) {
       var f = schema.file_inputs[i];
-      if (f.role === "mask" && params[f.name] === undefined) pending[f.name] = 1;
+      if (f.role === "mask" && params[f.name] === undefined) {
+        pending[f.name] = 1;
+        masked = true;
+      }
     }
+  }
+  var own = lane === "edit" && refCount && !withCapture ? separateReferenceInput(schema) : null;
+  if (own) {
+    var most = refMax(schema, own, masked);
+    if (most !== null && refCount > most) throw invalid("This model takes at most " + most + " reference image" + (most === 1 ? "" : "s") + (masked && most !== (own.multiple ? own.max || null : 1) ? " with a selection." : "."));
+    pending[own.name] = refCount;
   }
   return pending;
 }
@@ -82,7 +119,7 @@ function checkModelLane(schema, lane, trained) {
 //      (how many references wait for upload), mask (false: no mask input
 //      filled), trained (a trained edit on this base) }
 function build(schema, a) {
-  checkLane(a.lane);
+  checkLane(a.lane, a.lane === "video" && a.target && (a.target.kind === "video" || a.target.kind === "frames"));
   checkModelLane(schema, a.lane, !!a.trained);
   var params = a.parameters || {};
   return {
@@ -90,10 +127,12 @@ function build(schema, a) {
     lane: a.lane,
     parameters: params,
     takes: a.takes === undefined ? null : a.takes,
-    pending: pendingFor(a.lane, schema, params, a.references || 0, { mask: a.mask }),
+    // Frame to layer sends a clip already on Scenario (its asset id): nothing
+    // waits for upload.
+    pending: a.target && a.target.kind === "frames" ? {} : pendingFor(a.lane, schema, params, a.references || 0, { mask: a.mask }),
     source_size: a.source_size || null,
     target: a.target || null
   };
 }
 
-module.exports = { build: build, pendingFor: pendingFor, checkLane: checkLane, referenceInput: referenceInput, fileInput: fileInput };
+module.exports = { build: build, pendingFor: pendingFor, checkLane: checkLane, referenceInput: referenceInput, separateReferenceInput: separateReferenceInput, refMax: refMax, fileInput: fileInput };

@@ -83,22 +83,23 @@ test("panel page: local resources only, one script at the end of the body", () =
   assert.equal(scripts.length, 1);
   assert.match(scripts[0][1], /src="dist\/main\.js"/);
   assert.equal(scripts[0][2].trim(), "", "no inline script");
-  assert.ok(html.indexOf("<script") > html.indexOf("<section class=\"agents\">"), "the script runs after the elements it binds");
+  assert.ok(html.indexOf("<script") > html.indexOf('id="settings-agents"'), "the script runs after the elements it binds");
+  assert.ok(html.indexOf("<script") > html.lastIndexOf("</section>"), "after every view");
   assert.ok(!/(src|href)="(https?:)?\/\//.test(html), "nothing loaded from the network");
   assert.ok(!/\son[a-z]+=/i.test(html), "no inline event handlers");
-  for (const id of ["link-dot", "link-headline", "link-detail", "token-value", "token-show", "token-copy", "token-reset", "token-note", "version", "lane-title", "lane-purpose", "lane-note"]) {
+  for (const id of ["link-dot", "link-headline", "link-detail", "token-value", "token-show", "token-copy", "token-reset", "token-note", "version", "ctx-title", "acts", "mid-card", "refs", "prompt", "cchips", "go", "pop", "jobs-badge"]) {
     assert.ok(html.includes(`id="${id}"`), `#${id} exists`);
   }
-  for (const lane of view.LANES) assert.ok(html.includes(`data-lane="${lane.id}"`), `lane ${lane.id} has a button`);
+  assert.ok(!html.includes("data-lane="), "no lane tabs: the actions follow the context");
   const css = fs.readFileSync(path.join(ROOT, "plugin", "styles.css"), "utf8");
   assert.ok(!/url\(\s*["']?https?:/.test(css), "no remote CSS resources");
   assert.ok(!/@keyframes|animation\s*:/.test(css), "no animation");
 });
 
-test("catalog: the four tools of this build, with schemas the server can serve", () => {
+test("catalog: the 29 v1 tools of MCP.md section 4, with schemas the server can serve", () => {
   assert.equal(typeof catalog.catalog_version, "string");
   assert.equal(catalog.server.name, "scenario-photoshop");
-  assert.deepEqual(catalog.tools.map((t) => t.name), ["scenario_status", "list_models", "model_schema", "estimate_cost"]);
+  assert.deepEqual(catalog.tools.map((t) => t.name), ["scenario_status", "document_summary", "layer_detail", "preview_document", "list_models", "model_schema", "recommend_models", "estimate_cost", "job_status", "wait_for_job", "list_local_jobs", "list_generations", "list_assets", "search_assets", "list_collections", "inspect_result_previews", "capture_reference", "upload_reference", "reference_upload_status", "generate", "recover_local_job", "recover_cloud_job", "cancel_prepared_job", "prepare_result_application", "apply_result_application", "select_layers", "set_selection", "remove_scenario_layers", "execute_batchplay"]);
   // Every tool name of this build is one MCP.md section 4 defines.
   for (const tool of catalog.tools) assert.ok(MCP_MD.includes("| `" + tool.name + "` |"), `${tool.name} is in MCP.md`);
   for (const tool of catalog.tools) {
@@ -106,8 +107,14 @@ test("catalog: the four tools of this build, with schemas the server can serve",
     assert.ok(tool.title && tool.description);
     assert.ok(tool.description.length <= 2500);
     assert.equal(tool.inputSchema.type, "object");
-    assert.equal(tool.outputSchema.type, "object");
-    for (const r of tool.outputSchema.required) assert.ok(r in tool.outputSchema.properties, `${r} is described`);
+    // outputSchema only where the result shape is fixed (the first four tools).
+    if (tool.outputSchema) {
+      assert.equal(tool.outputSchema.type, "object");
+      for (const r of tool.outputSchema.required) assert.ok(r in tool.outputSchema.properties, `${r} is described`);
+    }
+    // Document changes declare destructiveHint; read tools readOnlyHint.
+    if (["apply_result_application", "select_layers", "set_selection", "remove_scenario_layers", "execute_batchplay"].includes(tool.name)) assert.equal(tool.annotations.destructiveHint, true, tool.name);
+    if (["document_summary", "layer_detail", "preview_document", "job_status", "list_local_jobs", "list_assets", "list_collections"].includes(tool.name)) assert.equal(tool.annotations.readOnlyHint, true, tool.name);
     for (const k of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) assert.equal(typeof tool.annotations[k], "boolean");
   }
   const status = catalog.tools[0];
@@ -152,18 +159,18 @@ test("panel wording: every link phase has a headline, the token is masked by def
     assert.ok(["on", "off", "warn"].includes(d.dot), phase);
     assert.ok(d.headline && d.headline !== phase, `${phase} has its own headline`);
   }
-  assert.equal(view.describeLink({ phase: "connected", clients: [{ client_name: "Codex" }, { client_name: null }] }).headline, "Connected: Codex, Agent client", "a client without a name yet shows the SPEC 2.6 default");
-  assert.equal(view.describeLink({ phase: "plugin_busy", detail: "d" }).headline, "Agents are connected to another Photoshop.");
-  assert.equal(view.describeLink({ phase: "pairing_failed", detail: "d" }).headline, "A client tried to connect with an old pairing token.");
+  assert.equal(view.describeLink({ phase: "connected", clients: [{ client_name: "Codex" }, { client_name: null }] }).headline, "Agent connected: Codex, Agent client", "a client without a name yet shows the SPEC 2.6 default");
+  assert.equal(view.describeLink({ phase: "plugin_busy", detail: "d" }).headline, "Agents are connected to another Photoshop");
+  assert.equal(view.describeLink({ phase: "pairing_failed", detail: "d" }).headline, "An agent tried an old pairing token");
+  // The link's own words (which name the local program and its port) are the detail, shown under Details.
+  assert.equal(view.describeLink({ phase: "pairing_failed", detail: "d" }).detail, "d");
   assert.equal(view.describeLink({ phase: "connected", clients: [] }).dot, "on");
   assert.equal(view.describeLink({ phase: "pairing_failed" }).dot, "warn");
   assert.equal(view.describeLink(null).headline, "No agent connected");
   const token = "A".repeat(39) + "wxyz";
-  assert.equal(view.maskToken(token, false), "Ending in wxyz");
+  assert.equal(view.maskToken(token, false), "....wxyz");
   assert.equal(view.maskToken(token, true), token);
   assert.equal(view.maskToken(null, true), "Not created yet");
-  assert.equal(view.LANES.map((l) => l.label).join(","), "Image,Edit,Enhance,Trained,Library");
-  assert.match(view.NOT_BUILT, /early build/);
 });
 
 test("errors.json lists exactly the types of MCP.md section 8", () => {

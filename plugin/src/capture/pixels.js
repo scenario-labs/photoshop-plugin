@@ -84,8 +84,11 @@ function fitLong(width, height, longSide) {
   return { width: Math.max(1, Math.round(width * k)), height: Math.max(1, Math.round(height * k)) };
 }
 
-function toRgb(img) {
+// matte: the gray level transparent pixels take (0 to 255), white when
+// omitted.
+function toRgb(img, matte) {
   if (img.components === 3) return img;
+  var bg = typeof matte === "number" ? matte : 255;
   var n = img.width * img.height;
   var out = new Uint8Array(n * 3);
   for (var i = 0; i < n; i++) {
@@ -93,8 +96,9 @@ function toRgb(img) {
       out[i * 3] = out[i * 3 + 1] = out[i * 3 + 2] = img.data[i];
     } else {
       var a = img.components === 4 ? img.data[i * 4 + 3] / 255 : 1;
-      // Transparent pixels read as white, as an RGB file would show them.
-      for (var c = 0; c < 3; c++) out[i * 3 + c] = Math.round(img.data[i * img.components + c] * a + 255 * (1 - a));
+      // Transparent pixels read as white (as an RGB file would show them)
+      // or as the matte.
+      for (var c = 0; c < 3; c++) out[i * 3 + c] = Math.round(img.data[i * img.components + c] * a + bg * (1 - a));
     }
   }
   return { width: img.width, height: img.height, components: 3, data: out };

@@ -17,6 +17,7 @@ var panelMod = require("./ui/panel.js");
 var accountPanelMod = require("./ui/account-panel.js");
 var devImport = require("./dev/import-token.js");
 var devKeyImport = require("./dev/import-key.js");
+var devUiLoop = require("./dev/ui-loop.js");
 var redactMod = require("./util/redact.js");
 var accountsMod = require("./auth/accounts.js");
 var authMod = require("./auth/auth.js");
@@ -26,7 +27,9 @@ var catalogMod = require("./catalog/catalog.js");
 var assetsMod = require("./scenario/assets.js");
 var quotesMod = require("./forms/quotes.js");
 var catalogToolsMod = require("./bridge/catalog-tools.js");
-var lanesMod = require("./ui/lanes.js");
+var controllerMod = require("./panel/controller.js");
+var createViewMod = require("./ui/create-view.js");
+var mapMod = require("./catalog/map.js");
 var pickerMod = require("./ui/picker.js");
 var ledgerMod = require("./jobs/ledger.js");
 var runnerMod = require("./jobs/runner.js");
@@ -34,11 +37,23 @@ var downloadMod = require("./scenario/download.js");
 var referencesMod = require("./capture/references.js");
 var captureMod = require("./capture/capture.js");
 var flowMod = require("./lanes/flow.js");
+var hostMoreMod = require("./host-more.js");
+var libraryMod = require("./panel/library.js");
 var devLive = require("./dev/live-run.js");
 var devHooks = require("./dev/test-hooks.js");
 var jobsModelMod = require("./jobs/view-model.js");
 var jobsViewMod = require("./ui/jobs-view.js");
+var jobsTextMod = require("./ui/jobs-text.js");
+var menuMod = require("./ui/menu.js");
+var thumbsMod = require("./ui/thumbs.js");
 var API = require("../../shared/scenario-api.json");
+var approvalsMod = require("./agents/approvals.js");
+var psHostMod = require("./agents/ps-host.js");
+var inputsMod = require("./agents/inputs.js");
+var agentToolsMod = require("./agents/tools.js");
+var agentCardsMod = require("./ui/agent-cards.js");
+var agentsSettingsMod = require("./ui/agents-settings.js");
+var connectClientMod = require("./ui/connect-client.js");
 
 var VERSION = manifest.version;
 var LOG_FILE = "scenario-link.log";
@@ -99,7 +114,7 @@ function boot(env) {
   var host = env.host || hostMod.createHost(env.hostRequire, env.global);
   var redactor = redactMod.createRedactor();
   var logger = createLogger(host, env.console, redactor);
-  var settings = statusMod.createSettings();
+  var settings = statusMod.createSettings({ host: host, log: logger.log });
   var errors = diagnosticsMod.createErrorLog();
   var accounts = accountsMod.createAccounts(host, redactor);
   var client = clientMod.createClient({
@@ -115,7 +130,8 @@ function boot(env) {
   var standIns = assetsMod.createStandIns({ client: client, host: host, account: accounts.current, log: logger.log });
   var panel = null;
   var accountPanel = null;
-  var lanes = null;
+  var controller = null;
+  var createView = null;
   var picker = null;
   var link = null;
   var diagnostics = null;
@@ -125,23 +141,36 @@ function boot(env) {
   var references = null;
   var capture = null;
   var jobsView = null;
+  var menu = null;
   var jobsModel = null;
+  var library = null;
   // Development builds only (dev/test-hooks.js); release builds carry a stub
   // whose points do nothing.
   var hooks = flags.DEV || env.testHooks ? devHooks.create({ log: logger.log, timers: host.timers }) : null;
 
-  // UXP wants entrypoints declared during the first synchronous run.
-  host.setupEntrypoints({
-    panels: {
-      scenarioPanel: {
-        show: function () {
-          if (panel) panel.refresh();
-          // Price checks start when the panel is first shown, never at launch.
-          if (lanes) lanes.activate();
+  // UXP wants entrypoints declared during the first synchronous run. A
+  // reloaded panel (development builds) finds them declared already. The
+  // panel menu (ui/menu.js) holds Jobs, Projects, Settings, Connect an AI
+  // Agent, Diagnostics, Help, About and Sign Out.
+  try {
+    host.setupEntrypoints({
+      panels: {
+        scenarioPanel: {
+          show: function () {
+            if (panel) panel.refresh();
+            // Price checks start when the panel is first shown, never at launch.
+            if (controller) controller.activate();
+          },
+          menuItems: menuMod.items(),
+          invokeMenu: function (id) {
+            if (menu) menu.invoke(id);
+          }
         }
       }
-    }
-  });
+    });
+  } catch (e) {
+    logger.log("entrypoints not set: " + ((e && e.message) || e));
+  }
 
   var random = null;
   try {
@@ -163,7 +192,9 @@ function boot(env) {
       errors.record("DryRunCreatedJob");
     }
   });
-  var catalogTools = catalogToolsMod.createCatalogTools({ catalog: catalog, quotes: quotes, host: host, settings: settings });
+  // The agent tools (M6) fill captureRequest and onQuote below, once they exist.
+  var catalogToolsOpts = { catalog: catalog, quotes: quotes, host: host, settings: settings };
+  var catalogTools = catalogToolsMod.createCatalogTools(catalogToolsOpts);
   var session = sessionMarker(random, host.timers.now);
   // Paid generation needs a secure random source for the job ids; without
   // one, prices still show and Generate stays off.
@@ -179,6 +210,8 @@ function boot(env) {
       origins: env.downloadOrigins,
       hooks: hooks
     });
+    // Open from Library and + Reference > Library (panel/library.js).
+    library = libraryMod.createLibrary({ client: client, downloader: downloader, host: host, log: logger.log });
     runner = runnerMod.createRunner({
       client: client,
       quotes: quotes,
@@ -198,7 +231,9 @@ function boot(env) {
       pollDelay: env.pollDelay,
       hooks: hooks,
       blockedTexts: env.blockedTexts,
-      offlineMs: env.offlineMs
+      offlineMs: env.offlineMs,
+      // The later flows' landings (host-more.js), by target kind.
+      placers: env.placers || hostMoreMod.createMorePlacers(host, { log: logger.log })
     });
     jobsModel = jobsModelMod.createJobsModel({
       ledger: ledger,
@@ -215,6 +250,76 @@ function boot(env) {
     });
     references = referencesMod.createReferences({ host: host, random: random, log: logger.log });
   }
+  // Agents (M6, SPEC 6.6 and 7.3): approval cards, the Photoshop side of the
+  // agent tools, captures and uploads, and the tool handlers. Paid tools
+  // need the ledger, so they exist only with a secure random source.
+  var approvals = approvalsMod.createApprovals({ timers: host.timers, log: logger.log });
+  var agentTools = null;
+  var inputs = null;
+  var psHost = typeof host.internals === "function" ? psHostMod.createPsHost(host) : null;
+  if (random && runner && psHost) {
+    var scopeProxy = {
+      readDoc: function (id) {
+        return agentTools.scope.readDoc(id);
+      },
+      changeDoc: function (id) {
+        return agentTools.scope.changeDoc(id);
+      },
+      jobVisible: function (rec) {
+        return agentTools.scope.jobVisible(rec);
+      }
+    };
+    inputs = inputsMod.createInputs({
+      host: host,
+      catalog: catalog,
+      capture: capture,
+      references: references,
+      client: client,
+      settings: settings,
+      approvals: approvals,
+      scope: scopeProxy,
+      random: random,
+      now: host.timers.now,
+      log: logger.log,
+      session: session,
+      ledger: ledger,
+      account: accounts.current
+    });
+    agentTools = agentToolsMod.createAgentTools({
+      host: host,
+      ps: psHost,
+      settings: settings,
+      approvals: approvals,
+      inputs: inputs,
+      ledger: ledger,
+      runner: runner,
+      quotes: quotes,
+      catalog: catalog,
+      catalogTools: catalogTools,
+      client: client,
+      account: accounts.current,
+      session: session,
+      random: random,
+      timers: host.timers,
+      log: logger.log,
+      version: VERSION
+    });
+    catalogToolsOpts.captureRequest = function (args, schema) {
+      return inputs.captureRequest(args, schema);
+    };
+    catalogToolsOpts.onQuote = function (q, req, args) {
+      return agentTools.onQuote(q, req, args);
+    };
+    // Files the person chooses in the panel can be named by an agent's
+    // upload_reference (MCP.md section 4).
+    var chooseFile = references.chooseFile;
+    references.chooseFile = async function (modelId) {
+      var f = await chooseFile(modelId);
+      if (f) inputs.chose(f.label, f);
+      return f;
+    };
+  }
+
   // The Edit and Enhance lanes' logic (lanes/), drawn by the panel.
   var flow = flowMod.createFlow({ catalog: catalog, quotes: quotes, host: host, runner: runner, capture: capture, account: accounts.current, log: logger.log });
 
@@ -233,6 +338,11 @@ function boot(env) {
       } catch (e) {
         logger.log("pairing token unavailable: " + e.message);
       }
+    }
+    try {
+      await settings.load();
+    } catch (e) {
+      logger.log("agent settings unavailable: " + e.message);
     }
     var jobsRead = false;
     if (ledger) {
@@ -279,22 +389,44 @@ function boot(env) {
       },
       catalogHash: catalogHash(),
       switches: settings.switches,
-      handlers: {
-        scenario_status: statusMod.createStatusHandler(host, settings, VERSION, auth, ledger),
-        list_models: catalogTools.list_models,
-        model_schema: catalogTools.model_schema,
-        estimate_cost: catalogTools.estimate_cost
-      },
+      handlers: (function () {
+        var h = {
+          scenario_status: statusMod.createStatusHandler(host, settings, VERSION, auth, ledger),
+          list_models: catalogTools.list_models,
+          model_schema: catalogTools.model_schema,
+          estimate_cost: catalogTools.estimate_cost
+        };
+        if (agentTools) for (var name in agentTools.handlers) h[name] = agentTools.handlers[name];
+        return h;
+      })(),
       timers: host.timers,
       log: logger.log,
       onState: function (s) {
         if (panel) panel.renderLink(s);
+        if (agentsSettings) agentsSettings.render();
+        if (connectClient && connectClient.isOpen()) connectClient.render();
       },
       onSessionsEnded: function (ids, why) {
         if (settings.endSessions(ids)) logger.log("agent allowance ended (" + why + ")");
+        if (agentTools) agentTools.endSessions(ids);
+        else approvals.endSessions(ids);
       }
     });
 
+    // Copies text that holds the pairing token; cleared from the clipboard
+    // after 60 s if it is still there (SPEC 4.3).
+    function copySecret(text) {
+      return Promise.resolve(host.clipboardWrite(text)).then(function () {
+        host.timers.setTimeout(function () {
+          Promise.resolve(host.clipboardClearIf(text)).then(
+            function (cleared) {
+              if (cleared) logger.log("clipboard cleared (it still held the pairing token)");
+            },
+            function () {}
+          );
+        }, env.clipboardClearMs || CLIPBOARD_CLEAR_MS);
+      });
+    }
     var panelActions = {
       token: function () {
         return pairing ? pairing.current() : null;
@@ -318,11 +450,6 @@ function boot(env) {
         await pairing.reset();
         logger.log("pairing token reset");
         link.restart("Pairing token reset. Agent clients need the new token.");
-      },
-      onLane: function (id) {
-        if (!lanes) return;
-        lanes.select(id);
-        lanes.activate();
       }
     };
     panel = panelMod.createPanel(env.document, panelActions, VERSION);
@@ -331,29 +458,10 @@ function boot(env) {
       host: host,
       log: logger.log,
       onChoose: function (row) {
-        var lane = lanes ? lanes.choose(row) : null;
-        if (lane && panel) panel.selectLane(lane);
+        if (controller) controller.chooseModel(row);
       },
       onClose: function () {
-        if (lanes) lanes.restore();
-      }
-    });
-    lanes = lanesMod.createLanes(env.document, {
-      catalog: catalog,
-      quotes: quotes,
-      host: host,
-      account: accounts.current,
-      timers: host.timers,
-      log: logger.log,
-      openPicker: function (tab, tool) {
-        if (picker) picker.open(tab, tool);
-      },
-      runner: runner,
-      references: references,
-      ledger: ledger,
-      settings: settings,
-      openJobs: function () {
-        if (jobsView) jobsView.open();
+        if (createView) createView.render();
       }
     });
     diagnostics = diagnosticsMod.createDiagnostics({ version: VERSION, build: flags.BUILD, host: host, settings: settings, auth: auth, link: link, errors: errors, jobs: ledger });
@@ -381,21 +489,110 @@ function boot(env) {
           return host.clipboardWrite(redactor.apply(text));
         },
         timers: host.timers,
-        log: logger.log
+        log: logger.log,
+        popover: true
       });
     }
+    // The creation panel (FLOWS v2): the controller reads Photoshop and runs
+    // the actions on the lanes' logic; the view draws it.
+    controller = controllerMod.createController({
+      host: host,
+      catalog: catalog,
+      quotes: quotes,
+      flow: flow,
+      runner: runner,
+      ledger: ledger,
+      references: references,
+      library: library,
+      openFile: hostMoreMod.createOpener(host),
+      client: client,
+      account: accounts.current,
+      settings: settings,
+      jobsModel: jobsModel,
+      session: session,
+      timers: host.timers,
+      log: logger.log,
+      urls: thumbsMod.createUrls(env.global)
+    });
+    createView = createViewMod.createCreateView(env.document, controller, {
+      log: logger.log,
+      global: env.global,
+      openPicker: function (lane) {
+        if (picker) picker.open(mapMod.laneTab(lane || "image"), lane);
+      },
+      openSettings: function () {
+        if (accountPanel) accountPanel.menuHandlers.agents();
+      },
+      jobsMenu: ledger
+        ? function () {
+            return { title: jobsTextMod.TEXT.pop_title, rows: jobsTextMod.popRows(ledger.all(), 6), empty: jobsTextMod.TEXT.pop_empty, note: jobsTextMod.TEXT.pop_note, all: jobsTextMod.TEXT.pop_all, all_sub: jobsTextMod.TEXT.pop_all_sub };
+          }
+        : null,
+      openJobs: function () {
+        if (jobsView) jobsView.open();
+      },
+      agentMenu: function () {
+        var d = panel ? panel.link() : { names: [] };
+        var names = d.names || [];
+        return {
+          title: "Agent",
+          text: names.length ? names.join(", ") + (names.length > 1 ? " are" : " is") + " connected through the Scenario MCP. It can read the document and propose runs; spending waits for your approval." : d.headline && d.dot === "warn" ? d.headline + "." : "No agent connected. Connect Claude or another client through the Scenario MCP to let it propose runs here."
+        };
+      }
+    });
+    var menuHandlers = {};
+    if (accountPanel) {
+      for (var mk in accountPanel.menuHandlers) menuHandlers[mk] = accountPanel.menuHandlers[mk];
+    }
+    menuHandlers.jobs = function () {
+      if (jobsView) jobsView.open();
+    };
+    menu = menuMod.createMenu(menuHandlers);
     accounts.onChange(function () {
       if (accountPanel) accountPanel.refresh();
-      if (lanes) lanes.refresh();
+      if (controller) controller.refresh();
       // Jobs waiting for their project's key continue.
       if (runner) runner.resume();
     });
-    // Document, canvas and selection changes reprice the Image lane.
+    // Document, layer, canvas and selection changes update the context card
+    // and reprice the selected action.
     if (typeof host.onDocumentEvents === "function" && !host.onDocumentEvents(function () {
-      if (lanes) lanes.documentChanged();
+      if (controller) controller.documentChanged();
+      if (agentTools) agentTools.documentChanged();
     })) {
       logger.log("document events unavailable");
     }
+
+    // Agent cards in the creation view, Settings > Agents controls and
+    // Connect a client (M6).
+    var agentCards = agentCardsMod.createAgentCards(env.document, { approvals: approvals, controller: controller, settings: settings, log: logger.log });
+    var linkClients = function () {
+      var st = link.state ? link.state() : null;
+      return (st && st.clients) || [];
+    };
+    var connectClient = connectClientMod.createConnectClient(env.document, {
+      version: VERSION,
+      token: panelActions.token,
+      copySecret: copySecret,
+      copyText: function (text) {
+        return host.clipboardWrite(text);
+      },
+      openExternal: function (url) {
+        return host.openExternal(url);
+      },
+      clients: linkClients,
+      windows: /^win/i.test(String(host.osName() || "")),
+      log: logger.log
+    });
+    var agentsSettings = agentsSettingsMod.createAgentsSettings(env.document, {
+      settings: settings,
+      approvals: approvals,
+      clients: linkClients,
+      openConnect: function () {
+        if (connectClient) connectClient.open();
+      },
+      log: logger.log
+    });
 
     link.start();
     var app = {
@@ -412,7 +609,8 @@ function boot(env) {
       catalog: catalog,
       quotes: quotes,
       standIns: standIns,
-      lanes: lanes,
+      controller: controller,
+      createView: createView,
       picker: picker,
       catalogTools: catalogTools,
       accountPanel: accountPanel,
@@ -428,10 +626,19 @@ function boot(env) {
       diagnostics: diagnostics,
       errors: errors,
       redactor: redactor,
+      menu: menu,
+      approvals: approvals,
+      agentTools: agentTools,
+      inputs: inputs,
+      psHost: psHost,
+      agentCards: agentCards,
+      agentsSettings: agentsSettings,
+      connectClient: connectClient,
       copyToken: panelActions.copyToken,
       resetToken: panelActions.resetToken
     };
     if (flags.DEV) {
+      app.devUi = devUiLoop.start({ host: host, doc: env.document, global: env.global, app: app, log: logger.log, menu: menu });
       // Development builds only: the live check's requests, read from the
       // data folder (dev/live-run.js). Release builds carry a stub.
       try {

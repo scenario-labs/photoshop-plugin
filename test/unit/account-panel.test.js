@@ -52,7 +52,7 @@ test("first run: the sign-in view with the spec's texts; header 'Not signed in'"
   assert.equal(doc.text("signin-disclosure"), "Generative AI by Scenario.");
   assert.equal(doc.text("signin-plan"), "Needs a Scenario plan with API access (Starter or above).");
   assert.equal(doc.text("signin-step2"), "Paste the key and its secret.");
-  assert.equal(doc.text("signin-help-title"), "NO KEY YET?");
+  assert.equal(doc.text("signin-help-title"), "No key yet?");
   assert.equal(doc.text("signin-step1"), "Create a Project key with the Editor role in the project you want to use. A CU limit on the key caps what this plugin and connected agents can spend.");
   assert.equal(doc.text("signin-admins"), "Only team admins and project owners can create keys.");
   assert.equal(doc.text("signin-storage"), "Keys stay in Photoshop's secure storage on this computer.");
@@ -61,7 +61,8 @@ test("first run: the sign-in view with the spec's texts; header 'Not signed in'"
   assert.ok(!doc.shown("signin-status"));
   assert.deepEqual(app.auth.status(), { signed_in: false, project_name: null });
 
-  doc.byId("open-settings").click();
+  // Settings is in the panel menu, not in the header.
+  assert.equal(app.menu.invoke("settings"), true);
   assert.ok(doc.shown("view-settings"));
   assert.equal(doc.text("settings-none"), "Not signed in.");
   assert.ok(!doc.shown("settings-test") && !doc.shown("settings-signout"));
@@ -274,7 +275,12 @@ test("Projects view: a second key, the switch, and the list", async (t) => {
   assert.equal(doc.text("project-label"), "Mascot training");
   doc.byId("project").click();
   const rows = doc.byId("projects-list").children;
-  assert.deepEqual(rows.map((r) => r.textContent), [`Fall campaign   ....${a.key.slice(-4)}`, `Mascot training   ....${b.key.slice(-4)}`]);
+  // Each row: a check on the current project, the name, the key's last characters.
+  assert.deepEqual(
+    rows.map((r) => [r.children[1].textContent, r.children[2].textContent]),
+    [["Fall campaign", `....${a.key.slice(-4)}`], ["Mascot training", `....${b.key.slice(-4)}`]]
+  );
+  assert.deepEqual(rows.map((r) => r.children[0].getAttribute("data-icon")), ["blank", "check"]);
   assert.deepEqual(rows.map((r) => r.getAttribute("selected")), [null, ""]);
   rows[0].click();
   await waitFor(() => doc.text("project-label") === "Fall campaign", { label: "switched" });
@@ -297,7 +303,8 @@ test("Settings: Test connection, a confirmed Sign out per project, then signed o
   doc.byId("project").click();
   doc.byId("projects-add").click();
   await signIn(doc, b);
-  doc.byId("open-settings").click();
+  app.menu.invoke("settings");
+  assert.ok(doc.shown("view-settings"));
   assert.equal(doc.byId("settings-accounts").children.length, 2);
   doc.byId("settings-test").click();
   await waitFor(() => doc.shown("settings-status"));
@@ -311,9 +318,12 @@ test("Settings: Test connection, a confirmed Sign out per project, then signed o
   assert.deepEqual(shownActions(doc, "settings"), ["enter_again", "create_key"]);
   mock.setHandler(null);
 
-  doc.byId("settings-signout").click();
+  // Sign Out in the panel menu opens Settings with the confirm armed.
+  doc.byId("settings-back").click();
+  app.menu.invoke("signout");
+  assert.ok(doc.shown("view-settings"));
   assert.equal(doc.text("settings-signout"), "Confirm sign out");
-  assert.equal(app.auth.status().project_name, "Mascot training", "the first click only asks");
+  assert.equal(app.auth.status().project_name, "Mascot training", "the menu only asks");
   doc.byId("settings-signout").click();
   await waitFor(() => doc.text("project-label") === "Fall campaign", { label: "fell back to the other project" });
   assert.equal(doc.text("settings-note"), "Signed out. Now using Fall campaign.");
@@ -332,12 +342,13 @@ test("Settings: Test connection, a confirmed Sign out per project, then signed o
 
 test("Copy diagnostics shows the text first; it names no project, key or secret", async (t) => {
   const pair = newKeyPair();
-  const { doc, host } = await bootPanel(t, { accounts: [{ ...pair, projects: [projectRecord(pair.key, { name: "Secret project name" })] }] });
+  const { doc, host, app } = await bootPanel(t, { accounts: [{ ...pair, projects: [projectRecord(pair.key, { name: "Secret project name" })] }] });
   doc.paste("signin-key", `${pair.key}:wrong`);
   doc.byId("signin-save").click();
   await waitFor(() => doc.shown("signin-status"));
   await signIn(doc, pair);
-  doc.byId("open-settings").click();
+  app.menu.invoke("diagnostics");
+  assert.ok(doc.shown("view-settings"));
   doc.byId("diag-copy").click();
   assert.ok(doc.shown("diag-preview"));
   const text = doc.text("diag-text");

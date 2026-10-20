@@ -76,7 +76,7 @@ test("the key, the secret and the project listing never reach logs, files, the h
 
   // 3. Test connection against a server that echoes everything; Copy error.
   mock.setHandler(({ authorization }) => ({ status: 500, body: { message: `upstream refused ${authorization} for ${good.key}:${good.secret}` } }));
-  doc.byId("open-settings").click();
+  ps.entrypoints[0].panels.scenarioPanel.invokeMenu("settings");
   doc.byId("settings-test").click();
   await waitFor(() => doc.shown("settings-status"), { label: "test failed" });
   assert.equal(doc.text("settings-status-text"), "Scenario could not check this key.");

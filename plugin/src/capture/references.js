@@ -99,8 +99,9 @@ function createReferences(o) {
   }
 
   // source: "selection" | "layer" | "visible". modelId picks the encoding,
-  // maxLong the input size. Resolves a reference.
-  async function capture(source, docId, modelId, maxLong) {
+  // maxLong the input size, layerId a layer other than the active one (a
+  // document reference). Resolves a reference.
+  async function capture(source, docId, modelId, maxLong, layerId) {
     var size = o.host.documentSize(docId);
     if (!size) throw invalid("Open or create a document to add a reference from it.");
     maxLong = maxLong || MAP.capture.default_long_side_px;
@@ -121,8 +122,8 @@ function createReferences(o) {
       h = req.bounds.height;
       label = "Selection " + w + " x " + h;
     } else if (source === "layer") {
-      var layer = await o.host.activeLayerInfo(size.id);
-      if (!layer) throw invalid("Select a layer first.");
+      var layer = layerId && typeof o.host.layerInfo === "function" ? await o.host.layerInfo(size.id, layerId) : await o.host.activeLayerInfo(size.id);
+      if (!layer) throw invalid(layerId ? "The reference layer is gone from this document." : "Select a layer first.");
       if (layer.visible === false) throw invalid('Layer "' + layer.name + '" is hidden. Show it to use it as the source.');
       req.layer_id = layer.id;
       if (layer.bounds && layer.bounds.width > 0 && layer.bounds.height > 0) {
@@ -147,7 +148,12 @@ function createReferences(o) {
   async function chooseFile(modelId) {
     var file = await o.host.chooseImageFile();
     if (!file) return null;
-    var bytes = file.bytes;
+    return fromBytes(file.bytes, file.name, modelId, "file");
+  }
+
+  // A PNG or JPEG file's bytes as a reference (a file on this computer, or
+  // a Library image saved in the data folder).
+  function fromBytes(bytes, name, modelId, source) {
     var out;
     if (png.isPng(bytes)) {
       var p = png.stripPng(bytes);
@@ -163,14 +169,14 @@ function createReferences(o) {
     }
     if (out.bytes.length >= LIMIT) throw invalid("This file is " + mb(out.bytes.length) + " without its metadata; files must be under 4 MB. Open it in Photoshop and add it as a layer to send it reduced.");
     out.id = newId();
-    out.source = "file";
-    out.label = String(file.name || "File");
+    out.source = source || "file";
+    out.label = String(name || "File");
     out.reduced = false;
     out.document_id = null;
     return out;
   }
 
-  return { capture: capture, chooseFile: chooseFile };
+  return { capture: capture, chooseFile: chooseFile, fromBytes: fromBytes };
 }
 
 module.exports = { createReferences: createReferences, acceptsJpeg: acceptsJpeg, LIMIT: LIMIT };

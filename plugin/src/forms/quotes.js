@@ -43,6 +43,22 @@ function ruleFor(schema, f) {
   return { rule: "after_upload" };
 }
 
+// How many files of a "count" input are priced without one, for this body.
+// free_when: { parameter: [values] } limits the free slots to those values:
+// GPT Image 2.5 prices its first reference image at no cost at quality Low
+// only (measured 2026-10-20: Flare, 2 takes, 1024 x 1024: Low 3 CU with or
+// without a reference, Medium 6 without and 7 with one of any size).
+function freeSlots(rule, body) {
+  var free = rule.free || 0;
+  var when = rule.free_when;
+  if (!when || typeof when !== "object") return free;
+  for (var k in when) {
+    if (!Object.prototype.hasOwnProperty.call(when, k)) continue;
+    if (!Array.isArray(when[k]) || when[k].indexOf(body[k]) < 0) return 0;
+  }
+  return free;
+}
+
 // Fits a size inside the read cap, keeping its aspect.
 function capSize(w, h) {
   var cap = MAP.stand_ins.read_cap_px;
@@ -132,7 +148,7 @@ function createQuotes(o) {
       if (rule.rule === "omit") continue;
       if (rule.rule === "count") {
         var total = given + waiting;
-        if (total <= (rule.free || 0)) continue;
+        if (total <= freeSlots(rule, body)) continue;
         var small = await o.standIns.get(MAP.stand_ins.small_px, MAP.stand_ins.small_px);
         var ids = Array.isArray(body[f.name]) ? body[f.name].slice() : body[f.name] ? [body[f.name]] : [];
         for (var c = 0; c < waiting; c++) ids.push(small);
@@ -255,6 +271,27 @@ function createQuotes(o) {
     return { kind: q.kind, thousandths: q.thousandths, max: q.max, fingerprint: q.fingerprint, issued_at: q.issued_at };
   }
 
+  // Checks 3 to 5 without using the quote (MCP.md section 3: the agent's
+  // generate runs them before No-spend and the allowance; redeem() runs
+  // them again when the request is claimed).
+  async function peek(quoteId, approvedCost, req) {
+    prune();
+    var q = Object.prototype.hasOwnProperty.call(store, quoteId) ? store[quoteId] : null;
+    if (!q) throw new errorsMod.ScenarioError("QuoteExpired", "This plugin issued no such quote, or it is older than 10 minutes. Call estimate_cost again.");
+    if (q.used) throw new errorsMod.ScenarioError("QuoteUsed", "This quote was already used. Call estimate_cost again.");
+    if (now() - q.issued_at >= QUOTE_TTL_MS) throw new errorsMod.ScenarioError("QuoteExpired", "This quote is older than 120 s. Call estimate_cost again.");
+    if (typeof approvedCost !== "string" || approvedCost !== q.exact) throw new errorsMod.ScenarioError("CostMismatch", "approved_cost must be the quote's cu_cost_exact, " + q.exact + ", character for character.");
+    var acc = o.account();
+    var params;
+    try {
+      params = paramsOf(await o.catalog.schema(req.model_id), req);
+    } catch (e) {
+      params = null;
+    }
+    if (!acc || !params || fingerprint(acc, req, params) !== q.fingerprint) throw new errorsMod.ScenarioError("QuoteMismatch", "The request differs from what the quote priced (model, parameters, inputs, target or project).");
+    return { kind: q.kind, thousandths: q.thousandths, max: q.max, fingerprint: q.fingerprint, issued_at: q.issued_at, exact: q.exact };
+  }
+
   // The fingerprint a request would carry (SPEC 6.2 step 2: the in-flight
   // block runs before the quote checks).
   async function fingerprintFor(req) {
@@ -292,6 +329,7 @@ function createQuotes(o) {
   return {
     estimate: estimate,
     redeem: redeem,
+    peek: peek,
     fingerprintFor: fingerprintFor,
     bodyFor: bodyFor,
     recheck: recheck,

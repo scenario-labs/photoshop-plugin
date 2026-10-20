@@ -54,6 +54,7 @@ var price = require("../forms/price.js");
 var charges = require("./charges.js");
 var planMod = require("../apply/plan.js");
 var checksMod = require("../apply/checks.js");
+var growMod = require("../apply/grow.js");
 var pixelsMod = require("../capture/pixels.js");
 var shapeMod = require("../capture/shape.js");
 var slugMod = require("../util/slug.js");
@@ -204,7 +205,7 @@ function createRunner(o) {
   function targetRecord(a) {
     var t = a.req.target || {};
     var out = { kind: t.kind || null, session: o.session || null, sample: t.sample || null };
-    var keep = ["canvas", "upload", "layer_id", "selection", "margin", "feather", "source", "read", "output", "lands", "expand", "route", "overlap", "anchor", "mask_box", "background"];
+    var keep = ["canvas", "upload", "layer_id", "selection", "margin", "feather", "source", "read", "output", "lands", "expand", "route", "overlap", "anchor", "mask_box", "background", "insert", "expect", "mode", "format", "text", "duration", "clip_asset", "mask_layer_id", "edit_mode"];
     for (var i = 0; i < keep.length; i++) if (t[keep[i]] !== undefined) out[keep[i]] = JSON.parse(JSON.stringify(t[keep[i]]));
     if (t.kind === "new_document") {
       out.width = t.width;
@@ -232,11 +233,13 @@ function createRunner(o) {
     if (!acc) throw err("NotSignedIn", "No Scenario key is saved in the plugin.");
     var q = a.quote;
     if (!q || typeof q.quote_id !== "string") throw err("QuoteExpired", "No current price. Wait for the price on the button.");
-    var key = q.quote_id;
+    // Agents pass their idempotency key (MCP.md section 3); the person's
+    // runs use the quote id.
+    var key = a.key || q.quote_id;
     var fp = await o.quotes.fingerprintFor(a.req);
     var existing = o.ledger.findByKey(key);
     if (existing) {
-      if (existing.fingerprint !== fp) throw err("IdempotencyConflict", "This price was already used for another request.");
+      if (existing.fingerprint !== fp || (a.request_hash && existing.request_hash && existing.request_hash !== a.request_hash)) throw err("IdempotencyConflict", "This key was already used for another request.");
       return { replayed: true, record: existing, state: existing.state };
     }
     var flying = o.ledger.inFlight(fp);
@@ -250,14 +253,18 @@ function createRunner(o) {
     var capFiles = cap ? cap.files || [] : [];
     var red;
     try {
-      red = await o.quotes.redeem(key, q.cu_cost_exact, a.req);
+      red = await o.quotes.redeem(q.quote_id, q.cu_cost_exact, a.req);
       var body = await o.quotes.bodyFor(a.req);
       rec = await o.ledger.create({
         idempotency_key: key,
         fingerprint: fp,
-        origin: { kind: "person" },
+        request_hash: a.request_hash || null,
+        origin: a.origin || { kind: "person" },
+        approval: a.hold ? { state: "pending" } : a.origin && a.origin.kind === "agent" ? { state: a.allowance ? "none" : "approved" } : { state: "none" },
         project: { name: acc.project_name || null, key_hash: acc.key_hash || null, id_hash: projectHash(acc.project_id) },
         lane: a.req.lane,
+        // The person's short prompt when the sent one is a Suggest proposal.
+        name: typeof a.name === "string" && a.name.trim() ? a.name.trim().slice(0, 80) : null,
         model_id: a.req.model_id,
         model_name: a.model_name || null,
         trained_model_ids: trainedIds(body),
@@ -276,10 +283,12 @@ function createRunner(o) {
                 })
               }
             : null,
-          asset_ids: []
+          asset_ids: a.input_assets ? a.input_assets.slice() : []
         },
         target: targetRecord(a),
-        state: refs.length || capFiles.length ? "uploading_inputs" : "submitting",
+        state: refs.length || capFiles.length ? "uploading_inputs" : a.hold ? "awaiting_approval" : "submitting",
+        cu_quoted_new: a.hold ? q.cu_cost_exact : null,
+        price_checked_at: a.hold ? new Date(a.priced_at || now()).toISOString() : null,
         job_id: null,
         remote_status: null,
         progress: null,
@@ -305,6 +314,9 @@ function createRunner(o) {
     if (cap && o.capture && typeof o.capture.link === "function") o.capture.link(cap.id, rec.local_id);
     emit({ type: "started", local_id: rec.local_id });
     if (refs.length || capFiles.length) return uploadThenCheck(rec, refs, red, capFiles);
+    // An agent's request under Ask each time waits for the person's
+    // approval card; nothing is sent until Approve.
+    if (a.hold) return { record: rec, state: "awaiting_approval" };
     return send(rec.local_id);
   }
 
@@ -415,7 +427,18 @@ function createRunner(o) {
   // The person's Generate on the "Price changed after upload" card. A
   // price older than 120 s is checked again first; if it moved, the card
   // shows the new one and nothing is sent.
+  var approving = {};
   async function approve(id) {
+    if (approving[id]) throw err("Internal", "This job is being approved.");
+    approving[id] = true;
+    try {
+      return await approveNow(id);
+    } finally {
+      delete approving[id];
+    }
+  }
+
+  async function approveNow(id) {
     var rec = o.ledger.get(id);
     if (!rec || rec.state !== "awaiting_approval") throw err("Internal", "This job is not waiting for approval.");
     if (o.settings && typeof o.settings.noSpend === "function" && o.settings.noSpend()) throw err("NoSpend", "No-spend mode is on. Nothing was sent.");
@@ -429,14 +452,32 @@ function createRunner(o) {
         return { record: r, state: "awaiting_approval", price: price.exactString(again), changed: true };
       }
     }
-    await update(id, { cu_quoted: rec.cu_quoted_new, cu_quoted_new: null });
+    var patch = { cu_quoted: rec.cu_quoted_new, cu_quoted_new: null };
+    if (rec.approval && rec.approval.state === "pending") patch.approval = { state: "approved", at: iso() };
+    await update(id, patch);
     return send(id);
   }
 
-  function decline(id) {
+  // why (agent requests): "declined" (SpendDeclined), "expired" (the card
+  // went unanswered for 10 minutes or its session ended), "withdrawn" (the
+  // agent's cancel_prepared_job).
+  function decline(id, why) {
     var rec = o.ledger.get(id);
-    if (!rec || rec.state !== "awaiting_approval") return Promise.resolve(null);
-    return finish(id, "not_sent", { error: "Not sent: Declined." });
+    if (!rec || rec.state !== "awaiting_approval" || approving[id]) return Promise.resolve(null);
+    var patch = { error: "Not sent: Declined." };
+    if (rec.approval && rec.approval.state === "pending") {
+      if (why === "expired") {
+        patch.approval = { state: "expired", at: iso() };
+        patch.error = "Not sent: the approval card expired.";
+      } else if (why === "withdrawn") {
+        patch.approval = { state: "none", at: iso() };
+        patch.error = "Not sent: withdrawn by the agent.";
+      } else {
+        patch.approval = { state: "declined", at: iso() };
+        patch.error = "SpendDeclined: the person declined the approval card. Nothing was spent.";
+      }
+    }
+    return finish(id, "not_sent", patch);
   }
 
   // 5: the paid request.
@@ -619,7 +660,8 @@ function createRunner(o) {
     stops[id] = token;
     try {
       await update(id, { state: "downloading", error: null });
-      var kind = planMod.kindOf(rec.lane);
+      // Clips go to their own folder (FLOWS v2, F9).
+      var kind = rec.lane === "video" ? "video" : planMod.kindOf(rec.lane);
       var dp = datePath(rec.submitted_at || rec.created_at);
       var dir = OUTPUT_FOLDER + "/" + kind + "/" + dp.folder;
       var slug = slugMod.slug(rec.parameters && rec.parameters.prompt);
@@ -748,7 +790,7 @@ function createRunner(o) {
     var active = o.host.activeDocumentId();
     var memo = memos[rec.local_id] || {};
     var first = (rec.outputs || [])[0] || {};
-    var newDoc = opts.new_document || t.kind === "new_document" || !t.kind || (t.kind === "upscale" && t.lands === "new_document");
+    var newDoc = opts.new_document || t.kind === "new_document" || (!t.kind && !opts.current_document) || (t.kind === "upscale" && t.lands === "new_document" && !opts.current_document);
     if (newDoc) {
       var w = t.kind === "new_document" ? t.width : first.width;
       var h = t.kind === "new_document" ? t.height : first.height;
@@ -778,7 +820,10 @@ function createRunner(o) {
     if (rec.lane === "image") {
       var mask = t.kind === "selection" ? memo.mask || null : null;
       if (t.kind === "selection" && !mask) notes.push("Placed unmasked: the selection mask is kept until Photoshop quits.");
-      return { document: doc, box: box, fit: "cover", mask: mask, notes: notes };
+      // New layer lands above the active layer, Add background below it
+      // (the panel's actions, SPEC 3).
+      var ins = t.layer_id && (t.insert === "above" || t.insert === "below") ? { layer_id: t.layer_id, below: t.insert === "below" } : null;
+      return { document: doc, box: box, fit: "cover", mask: mask, insert: ins, notes: notes };
     }
     if (rec.lane === "edit") {
       var m = null;
@@ -791,7 +836,10 @@ function createRunner(o) {
       }
       var check = sameCanvas ? memo.check : null;
       var R = check ? { bounds: check.region, width: check.width, height: check.height } : null;
-      return { document: doc, box: box, fit: "box", mask: m, insert: t.sample === "layer" && t.layer_id ? { layer_id: t.layer_id } : null, reads: R ? { before: R, takes: R, after: R } : null, notes: notes };
+      var edited = { document: doc, box: box, fit: "box", mask: m, insert: t.sample === "layer" && t.layer_id ? { layer_id: t.layer_id } : null, reads: R ? { before: R, takes: R, after: R } : null, notes: notes };
+      memo.grown = null;
+      if (m && check && t.edit_mode === "bolder") edited.decide = growDecide(rec, memo, check, m, edited);
+      return edited;
     }
     if (t.kind === "expand") {
       if (!sameCanvas) throw canvasChanged();
@@ -834,9 +882,53 @@ function createRunner(o) {
       if (!sameCanvas) throw canvasChanged();
       var src = rec.inputs && rec.inputs.capture ? rec.inputs.capture.source_path : null;
       if (t.lands === "new_layer" && !src) throw err("Internal", "The source pixels of this cutout were not saved; use Open as document.");
-      return { document: doc, box: box, fit: "box", mask: null, cutout: { layer_id: t.layer_id, background: !!t.background, lands: t.lands, box: box, mask_box: t.mask_box ? boxOf(t.mask_box) : box, source_path: src }, notes: notes };
+      // A cut-out of a selection lands as a new layer and drops the
+      // selection, as Layer via Copy does (FLOWS v2, F1).
+      var drop = t.source === "selection" && t.lands === "new_layer";
+      return { document: doc, box: box, fit: "box", mask: null, cutout: { layer_id: t.layer_id, background: !!t.background, lands: t.lands, box: box, mask_box: t.mask_box ? boxOf(t.mask_box) : box, source_path: src, drop_selection: drop }, notes: notes };
     }
     return { document: doc, box: box, fit: "box", mask: null, notes: notes };
+  }
+
+  // Replace inside, Bolder (mask strategy test of 2026-10-20): each take's
+  // mask grows over what the model drew past the selection, on the reads
+  // taken before the masks go on (apply/grow.js). where.plan is the plan
+  // being placed, for the takes' metadata.
+  function growDecide(rec, memo, check, base, where) {
+    var t = rec.target || {};
+    var s = t.selection || [0, 0, 0, 0];
+    var feather = typeof t.feather === "number" ? t.feather : 0;
+    return function (reads) {
+      if (!reads.takes || !reads.takes.length) return null;
+      var context = reads.before || check.context;
+      var out = [];
+      var masks = [];
+      var packets = [];
+      var any = false;
+      for (var i = 0; i < reads.takes.length; i++) {
+        var g;
+        try {
+          g = growMod.growMask(context, rgbOf(reads.takes[i]), check.mask, { scale: check.scale, margin: t.margin || 0, sel_long: Math.max(s[2], s[3]) });
+        } catch (e) {
+          log("jobs: the mask did not grow (" + ((e && e.message) || e) + ")");
+          g = null;
+        }
+        out.push(g ? { grown_pct: g.applied ? g.grown_pct : 0, capped: g.capped, mask: g.applied ? g.mask : null } : { grown_pct: 0, capped: false, mask: null });
+        masks.push(g && g.applied ? growMod.placementOf(g.mask, base, feather) : base);
+        if (g && g.applied) any = true;
+        var take = where.plan && where.plan.takes ? where.plan.takes[i] : null;
+        var fields = take ? xmpMod.parse(take.xmp) : null;
+        if (fields && g && g.applied) {
+          fields.maskGrownPct = String(g.grown_pct);
+          packets.push(xmpMod.build(fields));
+        } else packets.push(null);
+      }
+      memo.grown = out;
+      if (!any) return null;
+      var most = 0;
+      for (var k = 0; k < out.length; k++) most = Math.max(most, out[k].grown_pct);
+      return { masks: masks, xmp: packets, note: "Kept the new subject whole: the mask grew by " + most + "% past the selection." };
+    };
   }
 
   function rgbOf(img) {
@@ -861,19 +953,23 @@ function createRunner(o) {
     });
     if (rec.lane === "edit" && memo.check && reads.takes && reads.takes.length) {
       var ck = memo.check;
+      var grown = memo.grown || [];
       for (var i = 0; i < reads.takes.length; i++) {
         var c = checksMod.check({
           context: ck.context,
           result: rgbOf(reads.takes[i]),
-          mask: ck.mask,
+          mask: grown[i] && grown[i].mask ? grown[i].mask : ck.mask,
           scale: ck.scale,
           shaped: t.upload ? { width: t.upload[0], height: t.upload[1] } : null,
           result_size: outputs[i] ? { width: outputs[i].width, height: outputs[i].height } : null,
-          masked: !!where.mask && result.masked
+          masked: !!where.mask && result.masked,
+          cleared: t.expect === "cleared"
         });
-        out.checks.push(summary(c));
+        var sc = summary(c);
+        if (grown[i]) sc.mask_grown_pct = grown[i].grown_pct;
+        out.checks.push(sc);
       }
-      if (reads.before && reads.after && where.mask && result.masked) out.verify = checksMod.verify({ before: reads.before, after: reads.after, mask: ck.mask, feather: t.feather || 0, scale: ck.scale });
+      if (reads.before && reads.after && where.mask && result.masked) out.verify = checksMod.verify({ before: reads.before, after: reads.after, mask: grown[0] && grown[0].mask ? grown[0].mask : ck.mask, feather: t.feather || 0, scale: ck.scale });
     } else if (t.kind === "expand" && memo.expand && reads.takes && reads.takes.length && reads.before) {
       for (var j = 0; j < reads.takes.length; j++) {
         var b = checksMod.bandCheck({ context: reads.before, result: rgbOf(reads.takes[j]), band: memo.expand.band, scale: memo.expand.scale });
@@ -885,6 +981,7 @@ function createRunner(o) {
       var badges = checksMod.badges(out.checks[k] || null, k === 0 ? out.verify : null, { masked: !!where.mask && result.masked });
       var small = smallResult(rec, outputs[k]);
       if (small) badges.push(small);
+      if (memo.grown && memo.grown[k] && memo.grown[k].capped) badges.push("The result spills past the selection");
       out.badges.push(badges);
     }
     return out;
@@ -906,7 +1003,9 @@ function createRunner(o) {
       inside_mean: c.inside ? c.inside.mean : null,
       outside_mean: c.outside ? c.outside.mean : null,
       seam: c.seam ? { bias: c.seam.bias, residual: c.seam.residual } : null,
-      seam_ok: c.seam_ok
+      seam_ok: c.seam_ok,
+      kept_share: c.kept_share === undefined ? null : c.kept_share,
+      shift_px: typeof c.shift_px === "number" ? c.shift_px : null
     };
   }
 
@@ -1000,6 +1099,8 @@ function createRunner(o) {
       var already = await checkPlaced(id);
       if (already) return already;
     }
+    var placer = o.placers && rec.target && rec.target.kind ? o.placers[rec.target.kind] : null;
+    if (placer) return placeWith(placer, id, rec, opts);
     var where;
     try {
       where = placement(rec, opts);
@@ -1007,7 +1108,8 @@ function createRunner(o) {
       if (e && e.canvasChanged && !opts.auto) await update(id, { error: e.message });
       throw e;
     }
-    var p = planMod.build(rec, { version: o.version, document: where.document, box: where.box, mask: where.mask, restore_active: !!opts.auto, fit: where.fit, insert: where.insert, canvas: where.canvas, duplicate: where.duplicate, reads: where.reads, cutout: where.cutout });
+    var p = planMod.build(rec, { version: o.version, document: where.document, box: opts.box || where.box, mask: where.mask, restore_active: !!opts.auto, fit: opts.fit || where.fit, insert: where.insert, canvas: where.canvas, duplicate: where.duplicate, reads: where.reads, cutout: where.cutout, assets: opts.assets || null });
+    where.plan = p;
     var before = rec.state;
     await update(id, { state: "applying", placement_checked: true });
     await hooks.at("place", { local_id: id, document_id: where.document ? where.document.id : null });
@@ -1051,6 +1153,58 @@ function createRunner(o) {
       }
       if (opts.auto && e && e.notActive) {
         await update(id, { state: "ready", error: null });
+        return o.ledger.get(id);
+      }
+      await update(id, { state: before === "applied" ? "applied" : "apply_failed", error: "Place failed: " + ((e && e.message) || e) });
+      throw e;
+    }
+  }
+
+  // The later flows' landings (FLOWS v2, F7 to F10: split layers, text, a
+  // selection, an artboard, a clip, a frame): the placer builds the plan
+  // and carries it out (apply/more-plan.js, host-more.js) in the job's own
+  // document, which must be in front; the record keeps what landed, as for
+  // every other placement.
+  async function placeWith(placer, id, rec, opts) {
+    var t = rec.target || {};
+    var active = o.host.activeDocumentId();
+    if (!placer.anyDocument) {
+      var home = homeDoc(rec);
+      if (!home) throw err("DocumentClosed", "Open " + docTitle(rec) + " to place this result there.");
+      if (home.id !== active) {
+        if (opts.auto) return o.ledger.get(id);
+        throw err("DocumentNotActive", "Bring " + docTitle(rec) + " to the front to place this result there.");
+      }
+      var size = o.host.documentSize(active);
+      if (t.canvas && size && (size.width !== t.canvas[0] || size.height !== t.canvas[1]) && !placer.anyCanvas) throw canvasChanged();
+    }
+    var before = rec.state;
+    await update(id, { state: "applying", placement_checked: true });
+    await hooks.at("place", { local_id: id, document_id: active });
+    try {
+      var result = await placer.place(rec, { document_id: active, version: o.version, auto: !!opts.auto, memo: memos[rec.local_id] || {} });
+      var done = await update(id, {
+        state: "applied",
+        error: null,
+        placement: {
+          document_id: result.document_id,
+          layer_ids: result.layer_ids || [],
+          group_id: result.group_id || null,
+          history: result.history || null,
+          masked: !!result.masked,
+          notes: result.notes || [],
+          checks: result.checks || [],
+          verify: null,
+          badges: result.badges || [],
+          undone: false,
+          landed: result.landed || null
+        }
+      });
+      emit({ type: "placed", local_id: id, auto: !!opts.auto, first: false });
+      return done;
+    } catch (e) {
+      if (opts.auto && e && (e.busy || e.notActive)) {
+        await update(id, { state: before === "applied" ? "applied" : "ready", error: null });
         return o.ledger.get(id);
       }
       await update(id, { state: before === "applied" ? "applied" : "apply_failed", error: "Place failed: " + ((e && e.message) || e) });
@@ -1194,8 +1348,68 @@ function createRunner(o) {
     resume();
   }
 
+  // A finished job of the current project, or a Library asset, added to the
+  // ledger and downloaded (recover_cloud_job, Library placement). Never
+  // submits a generation. fields: { origin, lane, model_id, model_name,
+  // job_id, asset_ids, parameters, cu_charged, created_at }.
+  async function adopt(fields) {
+    var acc = o.account();
+    if (!acc) throw err("NotSignedIn", "No Scenario key is saved in the plugin.");
+    var rec = await o.ledger.create({
+      idempotency_key: "adopt:" + (fields.job_id || fields.asset_ids[0]),
+      fingerprint: null,
+      origin: fields.origin || { kind: "person" },
+      approval: { state: "none" },
+      project: { name: acc.project_name || null, key_hash: acc.key_hash || null, id_hash: projectHash(acc.project_id) },
+      lane: fields.lane,
+      model_id: fields.model_id || null,
+      model_name: fields.model_name || null,
+      trained_model_ids: [],
+      parameters: fields.parameters || {},
+      inputs: { references: [], capture: null, asset_ids: [] },
+      target: { kind: null, session: o.session || null },
+      state: "succeeded",
+      job_id: fields.job_id || null,
+      remote_status: null,
+      progress: null,
+      cu_quoted: null,
+      cu_quoted_max: null,
+      price_kind: null,
+      quote_mode: null,
+      cu_record: fields.cu_charged === undefined ? null : fields.cu_charged,
+      cu_discount: null,
+      cu_charged: fields.cu_charged === undefined ? null : fields.cu_charged,
+      refunded: false,
+      no_refund: false,
+      outputs: fields.asset_ids.map(function (a) {
+        return { asset_id: a, state: "pending", path: null };
+      }),
+      placement: null,
+      error: null,
+      adopted: fields.adopted || "cloud_job",
+      submitted_at: fields.created_at || null,
+      finished_at: iso()
+    });
+    download(rec.local_id);
+    return rec;
+  }
+
+  // What a placement keeps in memory for a job (the capture checks).
+  function memoFor(id) {
+    return memos[id] || null;
+  }
+
+  // An agent's job finds its document again (MCP.md section 2).
+  function docOf(rec) {
+    return homeDoc(rec);
+  }
+
   return {
     start: start,
+    adopt: adopt,
+    docOf: docOf,
+    memoFor: memoFor,
+    placement: placement,
     approve: approve,
     decline: decline,
     place: place,
@@ -1208,6 +1422,7 @@ function createRunner(o) {
     isChecking: resolver.isChecking,
     resumeDownload: resumeDownload,
     stopDownload: stopDownload,
+    download: download,
     resume: resume,
     recover: recover,
     pausedFor: pausedFor,

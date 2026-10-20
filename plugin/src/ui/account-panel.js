@@ -1,12 +1,15 @@
 "use strict";
 // The account part of the panel: the sign-in view (first run, and Add a key
 // for another project), the project name in the header, the Projects view,
-// and Settings with Account, Diagnostics and About. Binds the elements of
-// index.html; texts come from account-view.js. Text from Scenario (project
-// names, messages) is set with textContent only. No overlays, no animation.
+// Settings (Account, Connect an AI agent, Diagnostics, About) and the panel
+// menu items that lead there. Binds the elements of index.html; texts come
+// from account-view.js. Text from Scenario (project names, messages) is set
+// with textContent only. No overlays, no animation.
 
 var view = require("./account-view.js");
 var split = require("../auth/split.js");
+var icons = require("./icons.js");
+var uiDemo = require("../dev/ui-demo.js");
 
 var VIEWS = ["signin", "main", "projects", "settings", "jobs"];
 var STATUS_ACTIONS = ["enter_again", "create_key", "open_plans", "copy_admin_request", "copy_error", "retry"];
@@ -72,11 +75,27 @@ function createAccountPanel(doc, actions) {
 
   // ---- views ----
 
+  // Each view is a flex column: its own header row, then a part that scrolls.
   function showView(name) {
-    for (var i = 0; i < VIEWS.length; i++) show("view-" + VIEWS[i], VIEWS[i] === name, "block");
+    for (var i = 0; i < VIEWS.length; i++) show("view-" + VIEWS[i], VIEWS[i] === name, "flex");
     st.view = name;
     if (name === "projects" || name === "settings") renderLists();
     if (name === "signin") renderSignInMode();
+    var sc = byId(name + "-scroll");
+    if (sc) sc.scrollTop = 0;
+  }
+
+  // Shows Settings at one of its sections (the panel menu's items).
+  function showSection(id) {
+    showView("settings");
+    var el = byId(id);
+    if (el && typeof el.scrollIntoView === "function") {
+      try {
+        el.scrollIntoView();
+      } catch (e) {
+        // the section stays where it is
+      }
+    }
   }
 
   function homeView() {
@@ -89,7 +108,7 @@ function createAccountPanel(doc, actions) {
     var label = view.projectLabel(auth.current());
     setText("project-label", label);
     var el = byId("project");
-    if (el && el.setAttribute) el.setAttribute("title", label);
+    if (el && el.setAttribute) el.setAttribute("title", auth.current() ? "Project: " + label + ". Click to switch project." : "Sign in to Scenario");
   }
 
   function renderSignInMode() {
@@ -105,10 +124,22 @@ function createAccountPanel(doc, actions) {
     var list = auth.list();
     for (var i = 0; i < list.length; i++) {
       (function (a) {
-        var row = doc.createElement("sp-action-button");
-        row.textContent = view.rowLabel(a);
+        // A row like Photoshop's lists: a check on the current project, the
+        // name (cut with an ellipsis) and the key's last characters.
+        var row = doc.createElement("div");
+        row.className = a.current ? "list-row current" : "list-row";
         row.setAttribute("data-account", a.id);
+        row.setAttribute("title", a.current ? "Current project" : "Switch to this project");
         if (a.current) row.setAttribute("selected", "");
+        row.appendChild(icons.icon(doc, a.current ? "check" : "blank"));
+        var name = doc.createElement("span");
+        name.className = "name";
+        name.textContent = view.projectLabel(a);
+        row.appendChild(name);
+        var key = doc.createElement("span");
+        key.className = "key";
+        key.textContent = view.keyEnding(a.key_last4);
+        row.appendChild(key);
         row.addEventListener("click", function () {
           pick(a, errorId);
         });
@@ -377,7 +408,7 @@ function createAccountPanel(doc, actions) {
     setText("signin-storage", T.storage_note);
     setText("projects-note", T.projects_note);
     setText("settings-signout-note", T.sign_out_note);
-    setText("settings-about", "Scenario for Photoshop " + actions.version + ". " + T.disclosure);
+    setText("settings-about", T.disclosure + " Open source, MIT license.");
     for (var i = 0; i < STATUS_ACTIONS.length; i++) {
       setText("signin-act-" + STATUS_ACTIONS[i], view.ACTION_LABELS[STATUS_ACTIONS[i]]);
       setText("settings-act-" + STATUS_ACTIONS[i], view.ACTION_LABELS[STATUS_ACTIONS[i]]);
@@ -386,9 +417,6 @@ function createAccountPanel(doc, actions) {
 
   bind("project", "click", function () {
     showView(auth.current() ? "projects" : "signin");
-  });
-  bind("open-settings", "click", function () {
-    showView("settings");
   });
   bind("settings-back", "click", function () {
     disarmSignOut();
@@ -442,6 +470,9 @@ function createAccountPanel(doc, actions) {
   bind("settings-privacy", "click", function () {
     link("privacy");
   });
+  bind("settings-get-help", "click", function () {
+    link("get_help");
+  });
 
   // SPEC 4.2 step 3: "key:secret" or two lines pasted into the key field are
   // split on the paste event; the secret goes to the masked field at once.
@@ -485,9 +516,40 @@ function createAccountPanel(doc, actions) {
   renderHeader();
   showView(homeView());
 
+  // The panel menu's items that lead to the account views (ui/menu.js).
+  var menuHandlers = {
+    projects: function () {
+      showView(auth.current() ? "projects" : "signin");
+    },
+    settings: function () {
+      showSection("settings-account");
+    },
+    agents: function () {
+      showSection("settings-agents");
+    },
+    diagnostics: function () {
+      showSection("settings-diagnostics");
+    },
+    about: function () {
+      showSection("settings-about-section");
+    },
+    help: function () {
+      link("get_help");
+    },
+    // Sign out asks first: the menu opens Settings with the confirm armed.
+    signout: function () {
+      showSection("settings-account");
+      if (auth.current() && !st.signOutArmed) signOut();
+    }
+  };
+
   return {
+    // Development builds only (a stub in release): sample states.
+    dev: uiDemo.hook("account", { renderFailure: renderFailure, renderConnected: renderConnected, showBanner: showBanner, startAdding: startAdding }),
     refresh: refresh,
     showView: showView,
+    showSection: showSection,
+    menuHandlers: menuHandlers,
     homeView: homeView,
     view: function () {
       return st.view;

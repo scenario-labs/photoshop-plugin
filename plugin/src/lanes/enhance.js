@@ -200,7 +200,7 @@ function ratioText(r) {
 // o: { mode: "aspect" (default) | "sides", ratio ("4:5", or {width, height}
 //      for Custom), anchor (shape.ANCHORS, default "center"), sides {left,
 //      top, right, bottom}, lands: "document" (default) | "copy", overlap
-//      (default 32), prompt, takes }
+//      (default 32), prompt, takes, quality (models with a quality input) }
 function expandView(schema, ctx, o) {
   o = o || {};
   var v = base("expand", "expand", schema);
@@ -216,6 +216,8 @@ function expandView(schema, ctx, o) {
   var doc = ctx.doc;
   var canvas = { width: doc.width, height: doc.height };
   var params = common.presetFor("expand", schema.model_id);
+  var qp = common.param(schema, "quality");
+  if (o.quality && qp && qp.enum && qp.enum.indexOf(o.quality) >= 0) params.quality = o.quality;
   var ratio = o.ratio || "1:1";
   if (route === "exact_size") {
     if (mode === "sides" || anchor !== "center") {

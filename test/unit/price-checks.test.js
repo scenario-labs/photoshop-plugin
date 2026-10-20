@@ -261,6 +261,7 @@ test("prices: integer thousandths, exact strings without trailing zeros, K and M
   assert.equal(price.label("exact", 2000), "2 CU");
   assert.equal(price.label("range", 2000, 4500), "2 to 4.5 CU");
   assert.equal(price.label("from", 1000), "from 1 CU");
+  assert.equal(price.label("exact", 0), "Free", "an exact price of nothing reads Free");
 });
 
 test("every price check sent by this file had exactly ?dryRun=true; nothing else reached /generate", () => {

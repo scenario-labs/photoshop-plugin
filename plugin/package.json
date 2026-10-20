@@ -1,6 +1,6 @@
 {
   "name": "@scenario-labs/photoshop-plugin-uxp",
-  "version": "0.5.0",
+  "version": "0.6.2",
   "private": true,
   "description": "Scenario UXP plugin for Adobe Photoshop (sources; build with plugin/scripts/build.js)",
   "license": "MIT",

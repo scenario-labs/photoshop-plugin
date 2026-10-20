@@ -25,6 +25,11 @@
 //   replaced by a text asset id that GET /v1/assets/{id} answers with the
 //   text in metadata.preview (153). opts.jobsList(request) can answer
 //   instead (errors); `mock.jobs` rows without `createdAt` read as now.
+// - POST /v1/generate/prompt (Prompt Spark): with the price-check flag it
+//   answers 0 CU, as measured on 2026-10-20 (opts.sparkPrice(body) can
+//   answer instead); with no query string and opts.paid it is recorded in
+//   `sparkCalls` and answered with three proposals in the documented shape
+//   (opts.spark(body) can answer instead).
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -113,6 +118,7 @@ async function startFixtureScenario(opts = {}) {
   const priceChecks = [];
   const violations = [];
   const paidCalls = [];
+  const sparkCalls = [];
   const jobs = new Map();
   const results = new Map();
   const cdnRequests = [];
@@ -271,6 +277,10 @@ async function startFixtureScenario(opts = {}) {
       job.polls++;
       return { status: 200, body: out };
     }
+    // M7: the Library's list, GET /v1/assets?type=…, answered by
+    // opts.assetsList(request) (no recorded answer: the row shape follows
+    // what hosted Scenario MCP showed on 2026-10-20).
+    if (r.method === "GET" && r.path === "/v1/assets" && opts.assetsList) return opts.assetsList(r);
     const am = /^\/v1\/assets\/([^/]+)$/.exec(r.path);
     if (r.method === "GET" && am) {
       const id = decodeURIComponent(am[1]);
@@ -290,6 +300,21 @@ async function startFixtureScenario(opts = {}) {
       rec.asset.metadata.width = res.width;
       rec.asset.metadata.height = res.height;
       return { status: 200, body: rec };
+    }
+    if (r.method === "POST" && r.path === "/v1/generate/prompt" && (r.search === "?dryRun=true" || (opts.paid && r.search === ""))) {
+      if (r.search) {
+        priceChecks.push({ model: "prompt", search: r.search, body: r.body, key: "prompt", matched: true });
+        if (opts.sparkPrice) return opts.sparkPrice(r.body);
+        return { status: 269, body: { creativeUnitsCost: 0, creativeUnitsDiscount: 0, costDetails: {} } };
+      }
+      sparkCalls.push({ body: r.body, search: r.search });
+      if (opts.spark) {
+        const custom = opts.spark(r.body);
+        if (custom) return custom;
+      }
+      const base = (r.body && r.body.prompt) || "the layer";
+      const prompts = [1, 2, 3].slice(0, (r.body && r.body.numResults) || 1).map((i) => `Proposal ${i} \u2014 ${base}, with more detail`);
+      return { status: 200, body: { mode: "contextual-v2", prompts, calls: prompts.map((t) => ({ modelId: r.body.modelId, parameters: { prompt: t, quality: "high" } })), job: { jobId: `job_spark${sparkCalls.length}`, status: "success", billing: { cuCost: 0, cuDiscount: 0 } } } };
     }
     if (r.path.startsWith("/v1/generate")) {
       if (r.method !== "POST" || !g || r.search !== "?dryRun=true") {
@@ -311,7 +336,7 @@ async function startFixtureScenario(opts = {}) {
 
   const mock = await startMockScenario({ accounts: opts.accounts || [], handle });
   mockOrigin = mock.origin;
-  return Object.assign(mock, { uploads, priceChecks, violations, assets, catalogRows, records: recs, paidCalls, jobs, results, cdnRequests, texts, textId });
+  return Object.assign(mock, { uploads, priceChecks, violations, assets, catalogRows, records: recs, paidCalls, sparkCalls, jobs, results, cdnRequests, texts, textId });
 }
 
 module.exports = { startFixtureScenario, measured, catalogRows, records, pngSize, solidPng, jobsFixture };

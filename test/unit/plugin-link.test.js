@@ -125,7 +125,7 @@ test("an owner with another token: the plugin shows the old-token message", asyn
   await waitFor(() => plugin.phase() === "pairing_failed", { label: "pairing_failed" });
   assert.equal(plugin.link.state().detail, "Copy its setup again.");
   const view = require("../../plugin/src/ui/view.js");
-  assert.equal(view.describeLink(plugin.link.state()).headline, "A client tried to connect with an old pairing token.");
+  assert.equal(view.describeLink(plugin.link.state()).headline, "An agent tried an old pairing token");
 });
 
 test("a helper speaking another protocol version is reported as a version mismatch", async (t) => {
@@ -352,7 +352,7 @@ test("a second Photoshop is refused with plugin_busy and says so; the first keep
   t.after(() => second.stop());
   await waitFor(() => second.phase() === "plugin_busy", { label: "second refused" });
   const view = require("../../plugin/src/ui/view.js");
-  assert.equal(view.describeLink(second.link.state()).headline, "Agents are connected to another Photoshop.");
+  assert.equal(view.describeLink(second.link.state()).headline, "Agents are connected to another Photoshop");
   assert.equal(first.phase(), "connected");
   assert.ok(o.pluginInfo());
   const r = await o.callOwn("scenario_status", {});

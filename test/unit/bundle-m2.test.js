@@ -20,6 +20,28 @@ const { freePort, newToken, waitFor, sleep } = require("../helpers/fakes.js");
 
 const release = bundle({ dev: false });
 
+// The creation panel on a layer: New layer, one take, a prompt.
+// Its controls are created by the panel (no id), found in the fake DOM.
+async function choose1Take(doc, prompt) {
+  const attached = (el) => {
+    for (let n = el; n; n = n.parentNode) if (n.id && doc.els.get(n.id) === n) return true;
+    return false;
+  };
+  const find = (attr, value) => doc.all.find((e) => e.getAttribute(attr) === value && attached(e));
+  await waitFor(() => find("data-act", "new_layer"), { label: "the New layer chip" });
+  find("data-act", "new_layer").click();
+  await waitFor(() => find("data-pop", "takes"), { label: "the Takes chip" });
+  find("data-pop", "takes").click();
+  await waitFor(() => find("data-value", "1"), { label: "the Takes menu" });
+  find("data-value", "1").click();
+  // The measured answers are for quality Low (Advanced; Medium by default).
+  await waitFor(() => doc.byId("gear") && doc.byId("gear").style.display !== "none", { label: "the Advanced button" });
+  doc.byId("gear").click();
+  await waitFor(() => find("data-adv", "quality:low"), { label: "the Quality setting" });
+  find("data-adv", "quality:low").click();
+  doc.type("prompt", prompt);
+}
+
 test("release bundle: the panel and estimate_cost give the exact prices of the three families, through price checks only", async (t) => {
   const pair = newKeyPair();
   const mock = await startFixtureScenario({ accounts: [{ ...pair, projects: [projectRecord(pair.key, { name: "Bundle project" })] }] });
@@ -44,9 +66,9 @@ test("release bundle: the panel and estimate_cost give the exact prices of the t
   assert.equal(mock.requests.filter((r) => r.path.startsWith("/v1/generate")).length, 0, "no price check before the panel is shown");
 
   ps.entrypoints[0].panels.scenarioPanel.show();
-  await waitFor(() => doc.text("generate") === "Generate (2 CU)", { label: "Image price on the button", timeout: 5000 });
-  assert.equal(doc.byId("generate").getAttribute("disabled"), null, "the Image lane generates");
-  assert.equal(doc.text("generate-note"), "");
+  await choose1Take(doc, "a red fox in snow");
+  await waitFor(() => doc.text("go-label") === "New layer" && doc.text("go-cu") === "· 2 CU", { label: "Image price on the button", timeout: 5000 });
+  assert.equal(doc.byId("go").getAttribute("aria-disabled"), "false", "New layer generates");
 
   const listed = await o.callOwn("list_models", { lane: "remove_background", limit: 5 });
   assert.equal(listed.models[0].model_id, "model_851-labs-background-remover");
