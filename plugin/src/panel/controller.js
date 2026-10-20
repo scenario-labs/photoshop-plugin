@@ -13,6 +13,7 @@
 //      references (capture/references.js), account() -> {id} | null,
 //      settings, jobsModel, session, timers, log, urls (ui/thumbs.js) }
 
+var builtinMod = require("../util/builtin.js");
 var actionsMod = require("./actions.js");
 var imageMod = require("./image.js");
 var docRefsMod = require("./doc-refs.js");
@@ -96,9 +97,12 @@ function laneOf(id) {
 
 // A run's short name: its prompt, else what it was.
 function runName(prompt, kind) {
+  var named = builtinMod.nameOf(prompt);
+  if (named) return named;
   var p = String(prompt || "").trim();
   if (p) return p.length > 60 ? p.slice(0, 57) + "..." : p;
-  return kind === "edit" ? "Edit" : "Image";
+  var KINDS = { edit: "Edit", cutout: "Cut out", upscale: "Upscale", expand: "Extend canvas" };
+  return KINDS[kind] || "Image";
 }
 
 // The takes a layer's metadata describes (the results model): a Scenario
@@ -294,6 +298,18 @@ function createController(o) {
 
   function maskLayerOf(run) {
     return run ? run.group_id || run.layer_id : null;
+  }
+
+  // The run's capture box from its layers' metadata ("left,top,width,height"),
+  // the box its mask was made for.
+  function boxOf(run) {
+    var kids = (run && run.children) || [];
+    for (var i = 0; i < kids.length; i++) {
+      var v = kids[i].fields && kids[i].fields.captureBox;
+      var n = v ? String(v).split(",").map(Number) : [];
+      if (n.length === 4 && n.every(isFinite) && n[2] > 0 && n[3] > 0) return { left: n[0], top: n[1], width: n[2], height: n[3] };
+    }
+    return null;
   }
 
   function shownChild(run) {
@@ -832,7 +848,7 @@ function createController(o) {
         args.refs = refs;
         if (id === "more_like" && args.context.selection) {
           // The capture reads the selection: the run's own, from its mask.
-          await o.host.selectionFromMask(d, maskLayerOf(cardRun()));
+          await o.host.selectionFromMask(d, maskLayerOf(cardRun()), boxOf(cardRun()));
         }
         out = await o.flow.generate(args, q);
       }
@@ -934,7 +950,7 @@ function createController(o) {
       st.keepAction = true;
       st.prompt = "";
       if (wasMasked(rec)) {
-        await o.host.selectionFromMask(d, maskLayerOf(run));
+        await o.host.selectionFromMask(d, maskLayerOf(run), boxOf(run));
         if (rec.target.layer_id) await o.host.selectLayer(d, rec.target.layer_id).catch(function () {});
         st.action = "replace";
       } else {
@@ -1259,7 +1275,8 @@ function createController(o) {
       out.count = r.children.length > 1 ? r.children.length : null;
       var name = runName(r.prompt, r.kind);
       out.title = (r.group_id ? (kept ? "Kept take" : r.children.length + " takes") : "1 take") + " · " + name;
-      if (st.action === "compare") out.detail = kept ? "Take " + (Number(sh.child.fields.take) || 1) + " kept in the group" : "Showing take " + (Number(sh.child.fields.take) || sh.i + 1) + " · click a take to compare";
+      // One take outside a group is a single layer: there is no group to name.
+      if (st.action === "compare") out.detail = !r.group_id ? "One take, placed as a layer" : kept ? "Take " + (Number(sh.child.fields.take) || 1) + " kept in the group" : "Showing take " + (Number(sh.child.fields.take) || sh.i + 1) + " · click a take to compare";
     } else {
       var lay = raw.layer;
       var lw = lay && lay.bounds ? lay.bounds.width : raw.doc.width;

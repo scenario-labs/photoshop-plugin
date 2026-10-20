@@ -816,6 +816,10 @@ body {
   font-size: 13px;
   font-weight: bold;
   line-height: 17px;
+  /* One line, as in the prototype; the full title is the tooltip. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cp .ctx-detail {
@@ -1361,6 +1365,31 @@ body {
   font-size: 12px;
 }
 
+/* The prompt's stand-in while a popover is open (create-view.js cover). */
+.cp .prompt-ghost {
+  display: none;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  background-color: rgba(0, 0, 0, 0.3);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.cp .prompt-ghost.ph {
+  font-style: italic;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+/* Text in the refs row was seen drawn through an open popover on 27.11. */
+.cp .composer.covered .ref-add span,
+.cp .composer.covered .refs .hint {
+  color: transparent;
+}
+
 .cp .noprompt,
 .cp .cnote {
   display: none;
@@ -1651,6 +1680,12 @@ body {
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.44);
   background-color: var(--uxp-host-background-color);
+}
+
+/* A long menu scrolls: its rows keep their height instead of shrinking
+   into each other (seen live on 27.11). */
+.pop > * {
+  flex-shrink: 0;
 }
 
 .pop .h5 {

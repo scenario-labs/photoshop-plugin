@@ -20,7 +20,8 @@
 // Driving the real creation panel, on documents the loop makes itself (it
 // never touches another document): makedoc (a new document from a fixture
 // in the data folder, with a selection), select (sets or drops the selection
-// of its document), state (the controller's state and the model the view
+// of its document), layer (makes one of its layers active), selection (its
+// selection's bounds), state (the controller's state and the model the view
 // draws), click (an element by id, or by a data attribute and its value, as
 // a person would), prompt (types into the prompt), pop (opens a chip menu by
 // kind, or closes it), inspect (its document's layers, masks, Scenario
@@ -173,8 +174,9 @@ function start(o) {
     return d;
   }
 
+  // An element by id is "el": "id" carries the command's own request id.
   function find(cmd) {
-    if (cmd.id) return doc.getElementById(cmd.id);
+    if (cmd.el) return doc.getElementById(cmd.el);
     var all = doc.querySelectorAll("[" + cmd.attr + "]");
     for (var i = 0; i < all.length; i++) if (all[i].getAttribute(cmd.attr) === String(cmd.value) && !hidden(all[i])) return all[i];
     return null;
@@ -193,6 +195,15 @@ function start(o) {
         return { selection: await live().select(own(cmd.document_id), cmd.selection || null) };
       case "state":
         return { state: app.controller.state(), model: app.controller.model(), pop: app.createView ? app.createView.popKind() : null };
+      case "layer": {
+        // Makes a layer of a document the loop made the active one, as a
+        // click in the Layers panel does.
+        var ld = own(cmd.document_id);
+        await o.host.selectLayer(ld, Number(cmd.layer_id));
+        return { layer_id: Number(cmd.layer_id) };
+      }
+      case "selection":
+        return { selection: await o.host.selectionBounds(own(cmd.document_id)) };
       case "click": {
         var el = find(cmd);
         if (!el) throw new Error("no such element shown");

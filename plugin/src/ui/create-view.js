@@ -135,6 +135,8 @@ function createCreateView(doc, ctl, o) {
       show(cnt, !!c.count);
     }
     setText("ctx-title", c.title);
+    var ct = byId("ctx-title");
+    if (ct) ct.setAttribute("title", c.title || "");
     var d = byId("ctx-detail");
     if (d) {
       d.textContent = c.detail || "";
@@ -440,7 +442,10 @@ function createCreateView(doc, ctl, o) {
     setText("noprompt-text", c.none || "");
     var pr = byId("prompt");
     if (pr) {
-      show(pr, !noteOnly && !!c.prompt, "block");
+      // While a popover is open the field stays hidden behind its stand-in
+      // (cover): UXP draws text fields above everything else.
+      if (pop.covered) pop.promptShown = !noteOnly && !!c.prompt;
+      else show(pr, !noteOnly && !!c.prompt, "block");
       if (c.prompt) {
         if (pr.getAttribute("placeholder") !== c.prompt.placeholder) pr.setAttribute("placeholder", c.prompt.placeholder);
         var changed = lastAction !== c.action;
@@ -490,6 +495,36 @@ function createCreateView(doc, ctl, o) {
     if (p) clear(p);
     show(p, false);
     show(byId("pop-scrim"), false);
+    cover(false);
+  }
+
+  // UXP draws an sp-textarea above every other element, so an open popover
+  // would show the prompt through it (verified live on 27.11). While one is
+  // open, the field is hidden and a plain stand-in of the same size shows its
+  // text, so the layout does not move.
+  function cover(on) {
+    var t = byId("prompt");
+    var g = byId("prompt-ghost");
+    var comp = byId("composer");
+    if (!t || !g) return;
+    if (on && !pop.covered) {
+      var shown = t.style.display !== "none";
+      pop.covered = true;
+      pop.promptShown = shown;
+      if (comp) comp.className = "composer covered";
+      if (!shown) return;
+      var r = t.getBoundingClientRect ? t.getBoundingClientRect() : null;
+      g.style.height = (r && r.height ? Math.round(r.height) : 46) + "px";
+      g.textContent = t.value || t.getAttribute("placeholder") || "";
+      g.className = t.value ? "prompt-ghost" : "prompt-ghost ph";
+      g.style.display = "block";
+      t.style.display = "none";
+    } else if (!on && pop.covered) {
+      pop.covered = false;
+      if (comp) comp.className = "composer";
+      g.style.display = "none";
+      t.style.display = pop.promptShown ? "block" : "none";
+    }
   }
 
   function togglePop(anchor, kind) {
@@ -513,7 +548,11 @@ function createCreateView(doc, ctl, o) {
     }
     var left = Math.min(Math.max(8, r.left - app.left), W - width - 8);
     p.style.left = Math.max(8, Math.round(left)) + "px";
-    var above = r.top - app.top;
+    // A popover opening upward stops under the header: header text was seen
+    // drawn through it on 27.11.
+    var hdr = rect(byId("header"));
+    var floor = hdr ? hdr.bottom : app.top;
+    var above = r.top - floor;
     var below = app.bottom - r.bottom;
     if (above > below) {
       p.style.top = "auto";
@@ -538,6 +577,7 @@ function createCreateView(doc, ctl, o) {
         clear(p);
         fillPop(p, kind, m || {});
         place(p, anchor);
+        cover(true);
         show(byId("pop-scrim"), true, "block");
         show(p, true);
       },

@@ -17,11 +17,7 @@
 
 // The model needs a prompt even where the person gives none; these are sent
 // then, and named in SPEC 3.
-var BUILTIN = {
-  remove: "Remove what is inside the masked area and fill it so it matches the surroundings, as if it was never there.",
-  variations: "A variation of this image: same subject, composition and colors, new details.",
-  extend: "Extend the image into the empty area so it continues the scene naturally, with the same light and style."
-};
+var BUILTIN = require("../util/builtin.js").BUILTIN;
 
 function plural(n, one) {
   return n + " " + one + (n === 1 ? "" : "s");

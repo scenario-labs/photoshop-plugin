@@ -206,6 +206,10 @@ test("F1 a selection: Replace inside lands masked as a group above the layer; Re
   assert.ok(group.mask || group.layers.every((l) => l.mask), "the result is masked to the selection");
   assert.equal(ps.history.filter((h) => h.document_id === 7).length, 1, "one History state");
   assert.equal(xmp.parse(group.xmp).kind, "edit");
+  // Placing drops the selection in Photoshop; the masked edit loads it back
+  // from its mask, so the person can run again on the same area.
+  assert.equal(d.selection && d.selection.from_mask, group.id, "the selection is back after the edit lands");
+  assert.ok(d.selection.cut_to, "cut to the capture box: Photoshop reveals everything outside a mask's pixels");
 
   // The card shows in the selection context too, until closed.
   await waitFor(() => tiles(doc).length === 2, { label: "the run's takes in the card" });
@@ -544,6 +548,39 @@ test("Style: No style, Match an image with a picture from the document (any mode
   const x = findAll(doc, "data-ref").find((e) => /\bsref\b/.test(e.className)).children.find((c) => c.className === "sx");
   x.click();
   await waitFor(() => find(doc, "data-pop", "style").textContent.includes("No style"), { label: "No style again" });
+});
+
+test("an open popover hides the prompt field behind a stand-in of the same text (UXP draws text fields above popovers), and closing it puts the field back", async (t) => {
+  const { app, doc, ps } = await bootGenerate(t, { docs: [POSTER], active: 7, mockOpts: { answer: flarePrice() } });
+  await show(app, ps);
+  await waitFor(() => doc.byId("prompt").style.display === "block", { label: "the prompt shows" });
+  doc.type("prompt", "a red kite");
+  find(doc, "data-pop", "takes").click();
+  await waitFor(() => doc.byId("pop").style.display !== "none" && doc.byId("pop").style.display !== "", { label: "the Takes menu opens" });
+  assert.equal(doc.byId("prompt").style.display, "none", "the field is hidden while the menu is open");
+  assert.equal(doc.byId("prompt-ghost").style.display, "block");
+  assert.equal(doc.byId("prompt-ghost").textContent, "a red kite", "the stand-in shows the prompt");
+  doc.byId("pop-scrim").click();
+  await waitFor(() => doc.byId("prompt").style.display === "block", { label: "the field is back" });
+  assert.equal(doc.byId("prompt-ghost").style.display, "none");
+});
+
+test("Remove on a selection: the job records that the selection should be cleared, so the checks measure how much of it came back unchanged", async (t) => {
+  const sel = { left: 100, top: 200, width: 512, height: 512 };
+  const { app, doc, ps } = await bootGenerate(t, { docs: [{ ...POSTER, selection: sel }], active: 7, mockOpts: { answer: flarePrice() } });
+  await show(app, ps);
+  await ctxTitle(doc, "Selection 512 × 512 on Background");
+  find(doc, "data-act", "remove").click();
+  await waitFor(() => /^Remove · \d/.test(go(doc)), { label: "Remove is priced without a prompt" });
+  doc.byId("go").click();
+  await landed(app);
+  const rec = app.ledger.all()[0];
+  assert.equal(rec.target.expect, "cleared", "the record keeps the expectation");
+  const checks = rec.placement && rec.placement.checks && rec.placement.checks[0];
+  assert.ok(checks && typeof checks.kept_share === "number", "the checks measured the share left unchanged");
+  // The run goes by its action, not by the text of the built-in prompt.
+  assert.match(ps.doc(7).layers[0].name, /^Scenario edit remove( |$)/);
+  await waitFor(() => app.controller.model().card && app.controller.model().card.title === "Remove", { label: "the card reads Remove" });
 });
 
 test("Cut out subject on a selection: a new layer above, the layer untouched, the selection dropped in the same History state; the new layer is selected and the context becomes the cut-out, led by Add background", async (t) => {

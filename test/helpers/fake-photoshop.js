@@ -403,6 +403,19 @@ function createFakePhotoshop(opts = {}) {
       target.selection = { left: m.left, top: m.top, width: m.width, height: m.height, shape: "rect", from_mask: layer.id };
       return {};
     }
+    if (d._obj === "intersectWith" && d._target[0]._property === "selection") {
+      // The selection's box cut to a rectangle (pixels are not modeled).
+      const target = app.activeDocument;
+      const s0 = target.selection;
+      if (!s0) return {};
+      const v = (k) => d.to[k]._value;
+      const left = Math.max(s0.left, v("left"));
+      const top = Math.max(s0.top, v("top"));
+      const right = Math.min(s0.left + s0.width, v("right"));
+      const bottom = Math.min(s0.top + s0.height, v("bottom"));
+      target.selection = right > left && bottom > top ? { ...s0, left, top, width: right - left, height: bottom - top, cut_to: [v("left"), v("top"), v("right"), v("bottom")] } : null;
+      return {};
+    }
     if (d._obj === "set" && d._target[0]._ref === "channel" && d._target[0]._property === "selection" && d.to && d.to._enum === "ordinal") {
       app.activeDocument.selection = null;
       return {};
@@ -445,6 +458,8 @@ function createFakePhotoshop(opts = {}) {
     if (d._obj === "placeEvent") {
       if (!inModal) throw new Error("placeEvent needs a modal scope");
       const target = app.activeDocument;
+      // Placing a file drops the selection (seen live on 27.11).
+      target.selection = null;
       const path = ps.tokens.get(d.null._path);
       if (!path) throw new Error("fake: unknown session token");
       const bytes = files.get(path);

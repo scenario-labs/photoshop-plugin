@@ -17,6 +17,7 @@
 
 var canonical = require("../util/canonical-json.js");
 var slugMod = require("../util/slug.js");
+var builtinMod = require("../util/builtin.js");
 var xmp = require("../util/xmp.js");
 
 var HISTORY = { image: "Scenario: Place image", edit: "Scenario: Place edit", expand: "Scenario: Expand", upscale: "Scenario: Place upscale", cutout: "Scenario: Place cutout", library: "Scenario: Place library" };
@@ -57,7 +58,7 @@ function parametersText(params, freeText, leavePrompts) {
 }
 
 function names(kind, prompt, assetIds, leavePrompts) {
-  var slug = leavePrompts ? "" : slugMod.slug(prompt);
+  var slug = leavePrompts ? "" : slugMod.slug(builtinMod.nameOf(prompt) || prompt);
   var lead = "Scenario " + kind + (slug ? " " + slug : "");
   if (assetIds.length === 1) return { layers: [lead + " " + slugMod.tail(assetIds[0])], group: null };
   var layers = assetIds.map(function (id, i) {

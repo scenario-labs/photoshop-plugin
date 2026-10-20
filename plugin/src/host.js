@@ -328,6 +328,19 @@ function createHost(hostRequire, g) {
     }
   }
 
+  // A layer's mask loaded as the selection. Photoshop reveals everything
+  // outside the mask's own pixels, so the selection is cut to the box the
+  // mask was made for (the run's capture box), which leaves the selection.
+  async function maskToSelection(layerId, box) {
+    await play([{ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }], to: { _ref: [{ _ref: "channel", _enum: "channel", _value: "mask" }, { _ref: "layer", _id: layerId }] } }]);
+    if (box && box.width > 0 && box.height > 0) {
+      var u = function (v) {
+        return { _unit: "pixelsUnit", _value: v };
+      };
+      await play([{ _obj: "intersectWith", _target: [{ _ref: "channel", _property: "selection" }], to: { _obj: "rectangle", top: u(box.top), left: u(box.left), bottom: u(box.top + box.height), right: u(box.left + box.width) } }]);
+    }
+  }
+
   // The Background layer becomes a normal layer (Remove BG's Mask on the
   // layer, SPEC 3.6), as Layer > New > Layer from Background does.
   async function fromBackground(doc, layer) {
@@ -825,11 +838,15 @@ function createHost(hostRequire, g) {
       });
     },
     // Loads a layer's mask as the selection (Refine and More like this on
-    // a selection edit: the same selection again).
-    selectionFromMask: function (docId, layerId) {
-      return modal("Scenario: Load selection", async function () {
-        activeDoc(docId);
-        await play([{ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }], to: { _ref: [{ _ref: "channel", _enum: "channel", _value: "mask" }, { _ref: "layer", _id: layerId }] } }]);
+    // a selection edit: the same selection again), cut to the run's capture
+    // box when it is known.
+    selectionFromMask: function (docId, layerId, box) {
+      return modal("Scenario: Load selection", async function (ctx) {
+        var doc = activeDoc(docId);
+        // One History state: the mask loaded and cut to the box.
+        await inOneState(ctx, doc, "Scenario: Load selection", function () {
+          return maskToSelection(layerId, box || null);
+        });
         return true;
       });
     },
@@ -995,6 +1012,17 @@ function createHost(hostRequire, g) {
           } catch (e) {
             before = [];
           }
+          // Placing a file drops the selection in Photoshop (seen on 27.11);
+          // a masked edit loads it back from its mask (SPEC 3.8 step 8).
+          var hadSelection = false;
+          if (plan.mask && !plan.cutout && !plan.new_document) {
+            try {
+              var sr = await play([{ _obj: "get", _target: [{ _property: "selection" }, { _ref: "document", _id: doc.id }] }]);
+              hadSelection = !!(sr && sr[0] && sr[0].selection && sr[0].selection.left !== undefined);
+            } catch (e) {
+              hadSelection = false;
+            }
+          }
           var reads = { before: null, takes: [], after: null };
           var R = plan.reads || {};
           var hc = ctx.hostControl;
@@ -1046,6 +1074,13 @@ function createHost(hostRequire, g) {
                   masked = true;
                 } catch (e) {
                   notes.push("Placed unmasked: the mask could not be applied.");
+                }
+                if (masked && hadSelection) {
+                  try {
+                    await maskToSelection(maskTarget.id, plan.mask);
+                  } catch (e) {
+                    // the selection stays dropped; the mask holds it
+                  }
                 }
               }
               if (after && after.move_below) {
