@@ -42,7 +42,7 @@ test("one client, no Photoshop: initialize, tools/list, and a status that says w
   const init = await h.initialize("e2e-client");
   assert.equal(init.result.serverInfo.name, "scenario-photoshop");
   const list = await h.request("tools/list", {});
-  assert.deepEqual(list.result.tools.map((x) => x.name), ["scenario_status", "list_models", "model_schema", "estimate_cost"]);
+  assert.deepEqual(list.result.tools.map((x) => x.name), ["scenario_status", "document_summary", "layer_detail", "preview_document", "list_models", "model_schema", "recommend_models", "estimate_cost", "job_status", "wait_for_job", "list_local_jobs", "list_generations", "list_assets", "search_assets", "list_collections", "inspect_result_previews", "capture_reference", "upload_reference", "reference_upload_status", "generate", "recover_local_job", "recover_cloud_job", "cancel_prepared_job", "prepare_result_application", "apply_result_application", "select_layers", "set_selection", "remove_scenario_layers", "execute_batchplay"]);
   const s = await h.status();
   assert.equal(s.connected, false);
   assert.equal(s.helper_role, "owner");

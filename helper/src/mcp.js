@@ -179,7 +179,7 @@ class McpServer {
     if (args === undefined || args === null) args = {};
     const problems = schema.validate(tool.inputSchema, args);
     if (problems.length) return this._toolError(new ToolError("InvalidParameter", problems.join("; ")));
-    const limit = this.timeouts[name] || 120000;
+    const limit = (typeof this.timeouts === "function" ? this.timeouts(name, args) : this.timeouts[name]) || 120000;
     let timer;
     try {
       const result = await Promise.race([
@@ -194,6 +194,15 @@ class McpServer {
           this.log(`${name} produced output outside its schema: ${bad.join("; ")}`);
           return this._toolError(new ToolError("Internal", `${name} produced an unexpected result; update the helper and the plugin to the same version.`));
         }
+      }
+      // Previews come back as image content blocks; the rest as JSON text.
+      if (result && Array.isArray(result._images)) {
+        const images = result._images;
+        const rest = { ...result };
+        delete rest._images;
+        const content = images.map((im) => ({ type: "image", data: im.data, mimeType: im.mimeType || "image/jpeg" }));
+        content.push({ type: "text", text: JSON.stringify(rest, null, 2) });
+        return { content, structuredContent: rest };
       }
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result };
     } catch (err) {

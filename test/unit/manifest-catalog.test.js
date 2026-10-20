@@ -96,10 +96,10 @@ test("panel page: local resources only, one script at the end of the body", () =
   assert.ok(!/@keyframes|animation\s*:/.test(css), "no animation");
 });
 
-test("catalog: the four tools of this build, with schemas the server can serve", () => {
+test("catalog: the 29 v1 tools of MCP.md section 4, with schemas the server can serve", () => {
   assert.equal(typeof catalog.catalog_version, "string");
   assert.equal(catalog.server.name, "scenario-photoshop");
-  assert.deepEqual(catalog.tools.map((t) => t.name), ["scenario_status", "list_models", "model_schema", "estimate_cost"]);
+  assert.deepEqual(catalog.tools.map((t) => t.name), ["scenario_status", "document_summary", "layer_detail", "preview_document", "list_models", "model_schema", "recommend_models", "estimate_cost", "job_status", "wait_for_job", "list_local_jobs", "list_generations", "list_assets", "search_assets", "list_collections", "inspect_result_previews", "capture_reference", "upload_reference", "reference_upload_status", "generate", "recover_local_job", "recover_cloud_job", "cancel_prepared_job", "prepare_result_application", "apply_result_application", "select_layers", "set_selection", "remove_scenario_layers", "execute_batchplay"]);
   // Every tool name of this build is one MCP.md section 4 defines.
   for (const tool of catalog.tools) assert.ok(MCP_MD.includes("| `" + tool.name + "` |"), `${tool.name} is in MCP.md`);
   for (const tool of catalog.tools) {
@@ -107,8 +107,14 @@ test("catalog: the four tools of this build, with schemas the server can serve",
     assert.ok(tool.title && tool.description);
     assert.ok(tool.description.length <= 2500);
     assert.equal(tool.inputSchema.type, "object");
-    assert.equal(tool.outputSchema.type, "object");
-    for (const r of tool.outputSchema.required) assert.ok(r in tool.outputSchema.properties, `${r} is described`);
+    // outputSchema only where the result shape is fixed (the first four tools).
+    if (tool.outputSchema) {
+      assert.equal(tool.outputSchema.type, "object");
+      for (const r of tool.outputSchema.required) assert.ok(r in tool.outputSchema.properties, `${r} is described`);
+    }
+    // Document changes declare destructiveHint; read tools readOnlyHint.
+    if (["apply_result_application", "select_layers", "set_selection", "remove_scenario_layers", "execute_batchplay"].includes(tool.name)) assert.equal(tool.annotations.destructiveHint, true, tool.name);
+    if (["document_summary", "layer_detail", "preview_document", "job_status", "list_local_jobs", "list_assets", "list_collections"].includes(tool.name)) assert.equal(tool.annotations.readOnlyHint, true, tool.name);
     for (const k of ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"]) assert.equal(typeof tool.annotations[k], "boolean");
   }
   const status = catalog.tools[0];

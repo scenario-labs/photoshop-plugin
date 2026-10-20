@@ -1255,7 +1255,7 @@ Settings > Agents > Connect a client. The plugin cannot write client config file
 | [ Copy command ]                     |
 +--------------------------------------+
 | Cursor               Not connected   |
-| [ Add to Cursor ]                    |
+| [ Copy command ]                     |
 +--------------------------------------+
 | Claude Desktop       Not connected   |
 | [ Get the extension ] [ Copy token ] |

@@ -139,6 +139,8 @@
               <div class="btn blue" id="agent-approve"><span class="bl" id="agent-approve-label">Approve</span></div>
             </div>
           </div>
+          <!-- M6: upload and proposal cards, a second client's request, the allowance line (ui/agent-cards.js). -->
+          <div class="agentcards" id="agent-cards"></div>
           <div class="declined" id="declined"></div>
           <div class="ccard" id="ccard">
             <div class="cnote" id="c-note"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="c-note-text"></span></div>
@@ -292,6 +294,9 @@
               <sp-action-button size="s" id="token-copy">Copy pairing token</sp-action-button>
             </div>
             <div class="note" id="token-note"></div>
+            <!-- M6: Connect a client (ui/connect-client.js) and the agent switches, spending and activity log (ui/agents-settings.js). -->
+            <div class="connect" id="connect-client"></div>
+            <div class="agents-controls" id="agents-controls"></div>
             <sp-action-button quiet size="s" class="disclosure" id="agents-details-toggle"><span class="ico" id="agents-details-icon" data-icon="chevron-right"></span><span>Details</span></sp-action-button>
             <div class="details" id="agents-details">
               <div class="note" id="link-detail"></div>

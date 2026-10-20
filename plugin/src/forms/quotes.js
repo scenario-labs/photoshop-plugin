@@ -271,6 +271,27 @@ function createQuotes(o) {
     return { kind: q.kind, thousandths: q.thousandths, max: q.max, fingerprint: q.fingerprint, issued_at: q.issued_at };
   }
 
+  // Checks 3 to 5 without using the quote (MCP.md section 3: the agent's
+  // generate runs them before No-spend and the allowance; redeem() runs
+  // them again when the request is claimed).
+  async function peek(quoteId, approvedCost, req) {
+    prune();
+    var q = Object.prototype.hasOwnProperty.call(store, quoteId) ? store[quoteId] : null;
+    if (!q) throw new errorsMod.ScenarioError("QuoteExpired", "This plugin issued no such quote, or it is older than 10 minutes. Call estimate_cost again.");
+    if (q.used) throw new errorsMod.ScenarioError("QuoteUsed", "This quote was already used. Call estimate_cost again.");
+    if (now() - q.issued_at >= QUOTE_TTL_MS) throw new errorsMod.ScenarioError("QuoteExpired", "This quote is older than 120 s. Call estimate_cost again.");
+    if (typeof approvedCost !== "string" || approvedCost !== q.exact) throw new errorsMod.ScenarioError("CostMismatch", "approved_cost must be the quote's cu_cost_exact, " + q.exact + ", character for character.");
+    var acc = o.account();
+    var params;
+    try {
+      params = paramsOf(await o.catalog.schema(req.model_id), req);
+    } catch (e) {
+      params = null;
+    }
+    if (!acc || !params || fingerprint(acc, req, params) !== q.fingerprint) throw new errorsMod.ScenarioError("QuoteMismatch", "The request differs from what the quote priced (model, parameters, inputs, target or project).");
+    return { kind: q.kind, thousandths: q.thousandths, max: q.max, fingerprint: q.fingerprint, issued_at: q.issued_at, exact: q.exact };
+  }
+
   // The fingerprint a request would carry (SPEC 6.2 step 2: the in-flight
   // block runs before the quote checks).
   async function fingerprintFor(req) {
@@ -308,6 +329,7 @@ function createQuotes(o) {
   return {
     estimate: estimate,
     redeem: redeem,
+    peek: peek,
     fingerprintFor: fingerprintFor,
     bodyFor: bodyFor,
     recheck: recheck,
