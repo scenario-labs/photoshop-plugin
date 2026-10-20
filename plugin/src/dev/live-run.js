@@ -572,6 +572,8 @@ function start(app, hostRequire, o) {
   return {
     run: run,
     makeDocument: makeDocument,
+    saveDocument: saveDocument,
+    openSaved: openSaved,
     closeDocs: closeDocs,
     select: select,
     inspect: inspect,

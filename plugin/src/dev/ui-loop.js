@@ -28,7 +28,11 @@
 // metadata and History state), adopt (takes on a document that a run
 // started from this loop opened, such as Create image's new document, so it
 // can be inspected and closed), closedoc (closes the documents it made,
-// without saving). The list of documents it made survives a reload of the
+// without saving), savedoc (saves one of its documents as a PSD under
+// dev-live/ in the data folder), opendoc (opens such a PSD again as one of
+// its documents, after a restart), hook (arms a test hook of
+// dev/test-hooks.js, such as a delay after a status read, to look at a
+// running job). The list of documents it made survives a reload of the
 // panel (dev-ui-made.json), so a reload never strands one.
 
 var uiDemo = require("./ui-demo.js");
@@ -241,6 +245,36 @@ function start(o) {
         return await live().inspect(own(cmd.document_id));
       case "composite":
         return { path: await live().composite(own(cmd.document_id), String(cmd.path || "dev-live/panel-composite.png")) };
+      case "savedoc": {
+        var sname = String(cmd.psd || "panel-check.psd").replace(/[^A-Za-z0-9 ._-]/g, "");
+        await live().saveDocument(own(cmd.document_id), "dev-live", sname);
+        return { saved: "dev-live/" + sname };
+      }
+      case "opendoc": {
+        var oname = String(cmd.psd || "panel-check.psd").replace(/[^A-Za-z0-9 ._-]/g, "");
+        var oid = await live().openSaved("dev-live/" + oname);
+        if (made.indexOf(oid) < 0) made.push(oid);
+        await saveMade();
+        return { document_id: oid };
+      }
+      case "placejob": {
+        // Places a saved result of this loop's runs again, in the loop's own
+        // active document (Place in current document), for the free checks
+        // of a takes state after a restart.
+        var act = typeof host.activeDocumentId === "function" ? host.activeDocumentId() : null;
+        own(act);
+        var rec = o.app.ledger ? o.app.ledger.get(String(cmd.local_id)) : null;
+        if (!rec) throw new Error("no such job record");
+        var done = await o.app.runner.place(rec.local_id, { current_document: true });
+        return { state: done && done.state, placement: done && done.placement ? { group_id: done.placement.group_id, layer_ids: done.placement.layer_ids } : null };
+      }
+      case "hook": {
+        var hk = o.app.hooks;
+        if (!hk || !hk.active) throw new Error("test hooks are off in this build");
+        var spec = cmd.spec && typeof cmd.spec === "object" ? cmd.spec : { action: "delay", ms: 20000 };
+        hk.arm(String(cmd.point), { action: String(spec.action || "delay"), ms: Math.min(120000, Number(spec.ms) || 0), skip: Number(spec.skip) || 0 });
+        return { armed: String(cmd.point) };
+      }
       case "closedoc": {
         var ids = cmd.all ? made.slice() : [own(cmd.document_id)];
         await live().closeDocs(ids);
