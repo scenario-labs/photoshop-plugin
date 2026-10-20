@@ -55,6 +55,9 @@ var charges = require("./charges.js");
 var planMod = require("../apply/plan.js");
 var checksMod = require("../apply/checks.js");
 var growMod = require("../apply/grow.js");
+var blendMod = require("../apply/expand-blend.js");
+var pngMod = require("../util/png.js");
+var inflateMod = require("../util/inflate.js");
 var pixelsMod = require("../capture/pixels.js");
 var shapeMod = require("../capture/shape.js");
 var slugMod = require("../util/slug.js");
@@ -847,20 +850,27 @@ function createRunner(o) {
       var old = { left: e.offset[0], top: e.offset[1], width: t.canvas[0], height: t.canvas[1] };
       var nc = { width: e.width, height: e.height };
       var inCanvas = shapeMod.clip(box, nc);
-      var pm = pixelsMod.expandPlacementMask(inCanvas, old, e.sides, t.overlap);
+      // The redrawn frame shows through an eased band inside the original,
+      // wider than the overlap (live runs of 2026-10-20 showed the join).
+      var blend = pixelsMod.blendWidth(old, t.overlap);
+      var pm = pixelsMod.expandPlacementMask(inCanvas, old, e.sides, t.overlap, blend);
       var cs = pixelsMod.fitLong(old.width, old.height, 512);
-      var band = pixelsMod.expandBand(old, cs.width, cs.height, old, e.sides, t.overlap);
+      var band = pixelsMod.expandBand(old, cs.width, cs.height, old, e.sides, blend);
       var scale = cs.width / old.width;
+      // The takes are read over the whole new canvas, so the checks see
+      // both sides of the old edge.
+      var full = { width: Math.max(1, Math.round(e.width * scale)), height: Math.max(1, Math.round(e.height * scale)) };
+      var off = [Math.round(e.offset[0] * scale), Math.round(e.offset[1] * scale)];
       var decide = null;
       if (t.route !== "mask") {
         decide = function (reads) {
           if (!reads.before || !reads.takes.length) return null;
-          var c = checksMod.bandCheck({ context: reads.before, result: reads.takes[0], band: band, scale: scale });
+          var c = checksMod.bandCheck({ context: reads.before, result: cropTo(rgbOf(reads.takes[0]), off, cs), band: band, scale: scale });
           if (c.seam_ok) return null;
           return { mask: false, note: "Placed unmasked for manual alignment: the result did not line up with the original on the overlap." };
         };
       }
-      memo.expand = { band: band, scale: scale };
+      memo.expand = { band: band, scale: scale, offset: off, size: cs, blend: blend * scale, sides: e.sides };
       memos[rec.local_id] = memo;
       return {
         document: doc,
@@ -869,7 +879,7 @@ function createRunner(o) {
         mask: pm,
         canvas: { width: e.width, height: e.height, offset: { x: e.offset[0], y: e.offset[1] } },
         duplicate: t.lands === "copy" ? { name: null } : null,
-        reads: { before: { bounds: { left: 0, top: 0, width: old.width, height: old.height }, width: cs.width, height: cs.height }, takes: { bounds: old, width: cs.width, height: cs.height }, after: { bounds: old, width: cs.width, height: cs.height } },
+        reads: { before: { bounds: { left: 0, top: 0, width: old.width, height: old.height }, width: cs.width, height: cs.height }, takes: { bounds: { left: 0, top: 0, width: e.width, height: e.height }, width: full.width, height: full.height }, after: { bounds: old, width: cs.width, height: cs.height } },
         decide: decide,
         notes: notes
       };
@@ -931,6 +941,24 @@ function createRunner(o) {
     };
   }
 
+  // The original's area of a whole-canvas read: size {width, height} at
+  // offset [x, y], in check px. A read that is not the whole canvas (the
+  // original's size already) is returned as it is.
+  function cropTo(img, offset, size) {
+    if (!img || (img.width === size.width && img.height === size.height)) return img;
+    var w = size.width;
+    var h = size.height;
+    var out = new Uint8Array(w * h * 3);
+    for (var y = 0; y < h; y++) {
+      var sy = Math.min(img.height - 1, y + offset[1]);
+      for (var x = 0; x < w; x++) {
+        var sx = Math.min(img.width - 1, x + offset[0]);
+        for (var c = 0; c < 3; c++) out[(y * w + x) * 3 + c] = img.data[(sy * img.width + sx) * img.components + c];
+      }
+    }
+    return { width: w, height: h, components: 3, data: out };
+  }
+
   function rgbOf(img) {
     return img && img.components === 4 ? { width: img.width, height: img.height, components: 3, data: dropAlpha(img) } : img;
   }
@@ -972,8 +1000,11 @@ function createRunner(o) {
       if (reads.before && reads.after && where.mask && result.masked) out.verify = checksMod.verify({ before: reads.before, after: reads.after, mask: grown[0] && grown[0].mask ? grown[0].mask : ck.mask, feather: t.feather || 0, scale: ck.scale });
     } else if (t.kind === "expand" && memo.expand && reads.takes && reads.takes.length && reads.before) {
       for (var j = 0; j < reads.takes.length; j++) {
-        var b = checksMod.bandCheck({ context: reads.before, result: rgbOf(reads.takes[j]), band: memo.expand.band, scale: memo.expand.scale });
-        out.checks.push({ seam: b.seam ? { bias: b.seam.bias, residual: b.seam.residual } : null, seam_ok: b.seam_ok, edited: null, aspect_ok: aspectOk(rec, outputs[j]) });
+        var mx = memo.expand;
+        var whole = rgbOf(reads.takes[j]);
+        var b = checksMod.bandCheck({ context: reads.before, result: cropTo(whole, mx.offset, mx.size), band: mx.band, scale: mx.scale });
+        var eg = checksMod.expandEdges({ original: reads.before, take: whole, offset: mx.offset, sides: mx.sides, blend: mx.blend });
+        out.checks.push({ seam: b.seam ? { bias: b.seam.bias, residual: b.seam.residual } : null, seam_ok: b.seam_ok && eg.step_ok && !eg.repeated, step: eg.step, step_ok: eg.step_ok, repeated: eg.repeated, edited: null, aspect_ok: aspectOk(rec, outputs[j]) });
       }
       if (reads.after && result.masked) out.verify = checksMod.verify({ before: reads.before, after: reads.after, mask: memo.expand.band, feather: 0, scale: memo.expand.scale });
     }
@@ -1108,6 +1139,7 @@ function createRunner(o) {
       if (e && e.canvasChanged && !opts.auto) await update(id, { error: e.message });
       throw e;
     }
+    if (rec.target && rec.target.kind === "expand" && where.mask) rec = await matchExpandTone(rec, where);
     var p = planMod.build(rec, { version: o.version, document: where.document, box: opts.box || where.box, mask: where.mask, restore_active: !!opts.auto, fit: opts.fit || where.fit, insert: where.insert, canvas: where.canvas, duplicate: where.duplicate, reads: where.reads, cutout: where.cutout, assets: opts.assets || null });
     where.plan = p;
     var before = rec.state;
@@ -1157,6 +1189,58 @@ function createRunner(o) {
       }
       await update(id, { state: before === "applied" ? "applied" : "apply_failed", error: "Place failed: " + ((e && e.message) || e) });
       throw e;
+    }
+  }
+
+  // Extend canvas, mask route (the model saw the original in place, so the
+  // frame lines up by construction): each PNG take's tone near the old edge
+  // is matched to the original's (apply/expand-blend.js) and saved beside it as
+  // "<take>-landed.png", which is what lands; the downloaded take stays as
+  // it came. The original is the capture's context file. Anything missing
+  // (a JPEG or WebP take, no context file) lands the take as it came, with
+  // a log line. The position and exact-size routes keep their own check:
+  // a take that does not line up lands unmasked, and a tone match there
+  // would hide the misalignment from it. Returns the record to build the
+  // plan from (not saved).
+  async function matchExpandTone(rec, where) {
+    var t = rec.target || {};
+    if (t.route !== "mask") return rec;
+    var cap = rec.inputs && rec.inputs.capture;
+    var e = t.expand;
+    if (!cap || !cap.id || !e || !o.host.readDataBinary || !o.host.writeDataBinary) return rec;
+    var cf = (cap.files || []).filter(function (f) {
+      return f.slot === "capture";
+    })[0];
+    if (!cf || cf.format !== "png") return rec;
+    try {
+      var cbytes = await o.host.readDataBinary("captures/" + cap.id + "/context.png");
+      if (!cbytes) return rec;
+      var context = inflateMod.decodePng(cbytes);
+      var old = { left: e.offset[0], top: e.offset[1], width: t.canvas[0], height: t.canvas[1] };
+      var box = boxOf(t.box);
+      var blend = pixelsMod.blendWidth(old, t.overlap);
+      var outputs = (rec.outputs || []).slice();
+      var changed = false;
+      for (var i = 0; i < outputs.length; i++) {
+        var out = outputs[i];
+        if (!out || !out.path || !/\.png$/i.test(out.path)) continue;
+        var bytes = await o.host.readDataBinary(out.path);
+        if (!bytes) continue;
+        var take = inflateMod.decodePng(bytes);
+        if (take.components < 3) continue;
+        var m = blendMod.toneMatch(take, context, { box: box, context_box: box, old: old, sides: e.sides, blend: blend });
+        if (!m.applied) continue;
+        var path = out.path.replace(/\.png$/i, "-landed.png");
+        await o.host.writeDataBinary(path, pngMod.encodePng({ width: m.image.width, height: m.image.height, channels: m.image.components, data: m.image.data }));
+        outputs[i] = Object.assign({}, out, { path: path });
+        changed = true;
+      }
+      if (!changed) return rec;
+      where.notes.push("Matched the new area's tone to the original along the old edge.");
+      return Object.assign({}, rec, { outputs: outputs });
+    } catch (err2) {
+      log("jobs: the tone match did not run (" + ((err2 && err2.message) || err2) + ")");
+      return rec;
     }
   }
 

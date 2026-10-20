@@ -293,12 +293,37 @@ test("Expand, mask route on Flare: the new canvas at its own size, original at t
   assert.deepEqual([d.width, d.height], [1024, 1024]);
   assert.ok(d.layers[0].mask && d.layers[0].mask.data, "masked to the new area plus the overlap");
   assert.equal(rec.placement.masked, true);
-  assert.ok(rec.placement.badges[0].includes("Seam ok"), JSON.stringify(rec.placement.badges));
+  // The fixture paints the new area one flat color: the band lines up, and
+  // the old edge shows a step (the check across the edge, 2026-10-21).
+  assert.ok(rec.placement.badges[0].includes("Step at the old edge"), JSON.stringify(rec.placement.badges));
   assert.equal(rec.placement.verify.untouched, true, "the original stays authoritative inside");
   // The original's pixels, moved by the offset, are unchanged.
   const inside = ps.composite(7, { left: 100, top: 300, width: 800, height: 400 }, 200, 100);
   d.layers[0].visible = false;
   assert.deepEqual(Buffer.from(inside.data), Buffer.from(ps.composite(7, { left: 100, top: 300, width: 800, height: 400 }, 200, 100).data));
+});
+
+test("Expand, mask route on Flare: a redrawn frame 30 levels lighter is tone matched along the old edge; the matched copy lands, the take stays as it came", async (t) => {
+  const DOC = { id: 7, title: "poster.psd", width: 1024, height: 768 };
+  let ps;
+  const sim = await bootGenerate(t, {
+    docs: [DOC],
+    active: 7,
+    psOpts: { scene: true },
+    mockOpts: { answer: (model, body) => (model === FLARE && body.mask ? costAnswer(2) : undefined), cdn: cdnFor([() => pngOf(expandedTake(ps, 1024, 1024, 1024, 768, 0, 128, [120, 150, 190], 30))]) }
+  });
+  ps = sim.ps;
+  const { app } = sim;
+  const a = { tool: "expand", prompt: PROMPT, options: { ratio: "1:1" } };
+  const p = await app.flow.price(a);
+  const out = await app.flow.generate(a, p.quote);
+  const rec = await doneRec(app, out.record.local_id);
+  assert.equal(rec.state, "applied");
+  assert.equal(rec.placement.masked, true);
+  assert.ok(rec.placement.notes.includes("Matched the new area's tone to the original along the old edge."), JSON.stringify(rec.placement.notes));
+  assert.ok(rec.placement.checks[0].seam.bias < 4, "matched in the band: " + JSON.stringify(rec.placement.checks[0]));
+  assert.ok(!/-landed\.png$/.test(rec.outputs[0].path), "the downloaded take is kept as it came");
+  assert.equal(rec.placement.verify.untouched, true, "the original stays untouched past the band");
 });
 
 const REFRAME = {
@@ -346,7 +371,9 @@ test("Expand, position route (Reframe): the original and the anchor as position;
   assert.deepEqual([cap.width, cap.height], [1024, 768], "the original image, not a padded canvas");
   assert.equal(mock.paidCalls[0].body.image, cap.id);
   assert.equal(rec.placement.masked, true);
-  assert.ok(rec.placement.badges[0].includes("Seam ok"));
+  // The fixture paints the new area one flat color: the band lines up, and
+  // the old edge shows a step (the check across the edge, 2026-10-21).
+  assert.ok(rec.placement.badges[0].includes("Step at the old edge"), JSON.stringify(rec.placement.badges));
 
   // A second run whose result does not match the original on the overlap.
   tint = 40;
@@ -389,7 +416,9 @@ test("Expand, exact-size route (Photoroom): center only, the new size scaled to 
   assert.deepEqual([ps.doc(copyId).width, ps.doc(copyId).height], [1024, 1024]);
   assert.deepEqual(ps.history, [{ document_id: copyId, name: "Scenario: Expand" }]);
   assert.equal(rec.placement.masked, true);
-  assert.ok(rec.placement.badges[0].includes("Seam ok"), JSON.stringify(rec.placement.badges));
+  // The fixture paints the new area one flat color: the band lines up, and
+  // the old edge shows a step (the check across the edge, 2026-10-21).
+  assert.ok(rec.placement.badges[0].includes("Step at the old edge"), JSON.stringify(rec.placement.badges));
 });
 
 test("Upscale on Topaz: lands as a new document, as a layer in this document, and over a selection box", async (t) => {

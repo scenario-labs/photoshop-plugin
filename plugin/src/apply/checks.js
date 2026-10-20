@@ -378,6 +378,247 @@ function bandCheck(o) {
   return { seam: r, seam_ok: r.residual === null || (r.bias < LIMITS.seam_bias && r.residual < LIMITS.seam_residual) };
 }
 
+// ---- Extend canvas: the old edge (live runs of 2026-10-20) ----
+//
+// The band check above looks inside the original only. Two live extends
+// showed what it cannot see: a step where the old edge was, and a feature
+// of the original (the sun) drawn again in the new area. expandEdges reads
+// across the old edge on each grown side:
+// - step: per 16 px segment along the edge, the second difference of three
+//   strips at equal spacing (the take just outside the edge, the original
+//   just past the blend band, the original twice as far), worst channel;
+//   a straight gradient gives 0, a step gives its height. The same measure
+//   wholly inside the original is the picture's own texture and is taken
+//   off. The 75th percentile over segments; edge_ok: step < 10.
+// - repeated: textured 8 px blocks (half check scale) of the take within a
+//   zone past the old edge that match a block of the original near that
+//   edge (normalized correlation >= 0.9) when that block is unique in the
+//   original (no other block there matches it at 0.8): a feature drawn
+//   twice. Two such blocks or more flag it. A horizon or a repeating
+//   texture is not unique, so it is not counted.
+// o: { original (the original at check scale), take (the whole new canvas
+// at the same scale), offset [x, y] (the original in the take, check px),
+// sides (grown sides), blend (check px) }.
+var EDGE = { step: 10, seg: 16, strip: 3, gap: 2, blur: 2, block: 8, zone: 0.3, zone_max: 48, texture: 10, ncc: 0.9, unique: 0.8, repeats: 2 };
+
+function percentile(list, p) {
+  if (!list.length) return null;
+  var s = list.slice().sort(function (a, b) {
+    return a - b;
+  });
+  return s[Math.min(s.length - 1, Math.floor(p * s.length))];
+}
+
+// Mean RGB of a strip: `from` to `from + k` px from the old edge on `side`
+// (positive inside the original, negative outside), along t0..t1.
+function stripMean(img, ox, oy, ow, oh, side, from, k, t0, t1, out) {
+  var sum = [0, 0, 0];
+  var n = 0;
+  for (var dd = from; dd < from + k; dd++) {
+    for (var t = t0; t < t1; t++) {
+      var x;
+      var y;
+      if (side === "left") {
+        x = ox + dd;
+        y = oy + t;
+      } else if (side === "right") {
+        x = ox + ow - 1 - dd;
+        y = oy + t;
+      } else if (side === "top") {
+        x = ox + t;
+        y = oy + dd;
+      } else {
+        x = ox + t;
+        y = oy + oh - 1 - dd;
+      }
+      if (x < 0 || y < 0 || x >= img.width || y >= img.height) return false;
+      var i = (y * img.width + x) * 3;
+      sum[0] += img.data[i];
+      sum[1] += img.data[i + 1];
+      sum[2] += img.data[i + 2];
+      n++;
+    }
+  }
+  if (!n) return false;
+  for (var c = 0; c < 3; c++) out[c] = sum[c] / n;
+  return true;
+}
+
+function secondDiff(a, b, c) {
+  return Math.max(Math.abs(a[0] - 2 * b[0] + c[0]), Math.abs(a[1] - 2 * b[1] + c[1]), Math.abs(a[2] - 2 * b[2] + c[2]));
+}
+
+function stepOf(orig, take, off, sides, blend) {
+  var ob = pixels.boxBlur(rgbOf(orig), EDGE.blur);
+  var tb = pixels.boxBlur(rgbOf(take), EDGE.blur);
+  var ow = orig.width;
+  var oh = orig.height;
+  var k = EDGE.strip;
+  var go = EDGE.gap;
+  var gi = Math.ceil(blend) + EDGE.gap;
+  var sp = gi + go;
+  var steps = [];
+  var base = [];
+  var A = [0, 0, 0];
+  var B = [0, 0, 0];
+  var C = [0, 0, 0];
+  var D = [0, 0, 0];
+  ["left", "right", "top", "bottom"].forEach(function (side) {
+    if (!(sides[side] > 0)) return;
+    var across = side === "left" || side === "right" ? ow : oh;
+    var along = side === "left" || side === "right" ? oh : ow;
+    if (gi + sp + k > across) return;
+    var withBase = gi + 2 * sp + k <= across;
+    for (var t0 = 0; t0 + EDGE.seg <= along; t0 += EDGE.seg) {
+      var t1 = t0 + EDGE.seg;
+      // Outside: the take, read at the original's offset.
+      if (!stripMean(tb, off[0], off[1], ow, oh, side, -go - k, k, t0, t1, A)) continue;
+      if (!stripMean(ob, 0, 0, ow, oh, side, gi, k, t0, t1, B)) continue;
+      if (!stripMean(ob, 0, 0, ow, oh, side, gi + sp, k, t0, t1, C)) continue;
+      steps.push(secondDiff(A, B, C));
+      if (withBase && stripMean(ob, 0, 0, ow, oh, side, gi + 2 * sp, k, t0, t1, D)) base.push(secondDiff(B, C, D));
+    }
+  });
+  if (!steps.length) return null;
+  var s = percentile(steps, 0.75) - (base.length ? percentile(base, 0.75) : 0);
+  return Math.round(Math.max(0, s) * 100) / 100;
+}
+
+// Luma at half size (2 x 2 means).
+function halfLuma(img) {
+  var l = luma(img);
+  var w = img.width >> 1;
+  var h = img.height >> 1;
+  var out = new Float32Array(w * h);
+  for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) out[y * w + x] = (l[2 * y * img.width + 2 * x] + l[2 * y * img.width + 2 * x + 1] + l[(2 * y + 1) * img.width + 2 * x] + l[(2 * y + 1) * img.width + 2 * x + 1]) / 4;
+  return { w: w, h: h, d: out };
+}
+
+function blockStats(L, x, y, B) {
+  var m = 0;
+  for (var j = 0; j < B; j++) for (var i = 0; i < B; i++) m += L.d[(y + j) * L.w + x + i];
+  m /= B * B;
+  var v = 0;
+  for (var j2 = 0; j2 < B; j2++) for (var i2 = 0; i2 < B; i2++) v += Math.pow(L.d[(y + j2) * L.w + x + i2] - m, 2);
+  return { m: m, v: v };
+}
+
+function ncc(A, ax, ay, as, Bm, bx, by, bs, B) {
+  var s = 0;
+  for (var j = 0; j < B; j++) for (var i = 0; i < B; i++) s += (A.d[(ay + j) * A.w + ax + i] - as.m) * (Bm.d[(by + j) * Bm.w + bx + i] - bs.m);
+  var den = Math.sqrt(as.v * bs.v);
+  return den > 0 ? s / den : 0;
+}
+
+// Block positions of the original's zone near `side` (half px), stride 2.
+function zoneBlocks(side, ow, oh, Z, B) {
+  var out = [];
+  var x0 = 0;
+  var x1 = ow - B;
+  var y0 = 0;
+  var y1 = oh - B;
+  if (side === "left") x1 = Math.min(x1, Z);
+  if (side === "right") x0 = Math.max(0, ow - B - Z);
+  if (side === "top") y1 = Math.min(y1, Z);
+  if (side === "bottom") y0 = Math.max(0, oh - B - Z);
+  for (var y = y0; y <= y1; y += 2) for (var x = x0; x <= x1; x += 2) out.push([x, y]);
+  return out;
+}
+
+function repeatsOf(orig, take, off, sides) {
+  var O = halfLuma(orig);
+  var T = halfLuma(take);
+  var ox = Math.round(off[0] / 2);
+  var oy = Math.round(off[1] / 2);
+  var B = EDGE.block;
+  var minVar = EDGE.texture * EDGE.texture * B * B;
+  var found = [];
+  ["left", "right", "top", "bottom"].forEach(function (side) {
+    if (!(sides[side] > 0)) return;
+    var horiz = side === "left" || side === "right";
+    var Z = Math.min(EDGE.zone_max, Math.round((horiz ? O.w : O.h) * EDGE.zone));
+    if (Z < B) return;
+    var zone = zoneBlocks(side, O.w, O.h, Z, B);
+    var zs = zone.map(function (p) {
+      return blockStats(O, p[0], p[1], B);
+    });
+    // Take blocks wholly past the old edge, within Z of it.
+    var cands = [];
+    var tx0;
+    var tx1;
+    var ty0;
+    var ty1;
+    if (side === "left") {
+      tx0 = Math.max(0, ox - Z);
+      tx1 = ox - B - 1;
+      ty0 = oy;
+      ty1 = oy + O.h - B;
+    } else if (side === "right") {
+      tx0 = ox + O.w + 1;
+      tx1 = Math.min(T.w - B, ox + O.w + Z - B);
+      ty0 = oy;
+      ty1 = oy + O.h - B;
+    } else if (side === "top") {
+      ty0 = Math.max(0, oy - Z);
+      ty1 = oy - B - 1;
+      tx0 = ox;
+      tx1 = ox + O.w - B;
+    } else {
+      ty0 = oy + O.h + 1;
+      ty1 = Math.min(T.h - B, oy + O.h + Z - B);
+      tx0 = ox;
+      tx1 = ox + O.w - B;
+    }
+    tx0 = Math.max(0, tx0);
+    ty0 = Math.max(0, ty0);
+    tx1 = Math.min(T.w - B, tx1);
+    ty1 = Math.min(T.h - B, ty1);
+    for (var y = ty0; y <= ty1; y += B / 2) for (var x = tx0; x <= tx1; x += B / 2) cands.push([x, y]);
+    for (var c = 0; c < cands.length; c++) {
+      var ts = blockStats(T, cands[c][0], cands[c][1], B);
+      if (ts.v < minVar) continue;
+      var best = -1;
+      var bi = -1;
+      for (var z = 0; z < zone.length; z++) {
+        if (zs[z].v < minVar * 0.25) continue;
+        var r = ncc(T, cands[c][0], cands[c][1], ts, O, zone[z][0], zone[z][1], zs[z], B);
+        if (r > best) {
+          best = r;
+          bi = z;
+        }
+      }
+      if (best < EDGE.ncc) continue;
+      // Unique in the original: no other block of the zone, a block or more
+      // away, looks the same.
+      var other = -1;
+      for (var z2 = 0; z2 < zone.length; z2++) {
+        if (Math.abs(zone[z2][0] - zone[bi][0]) < B && Math.abs(zone[z2][1] - zone[bi][1]) < B) continue;
+        if (zs[z2].v < minVar * 0.25) continue;
+        other = Math.max(other, ncc(O, zone[bi][0], zone[bi][1], zs[bi], O, zone[z2][0], zone[z2][1], zs[z2], B));
+        if (other >= EDGE.unique) break;
+      }
+      if (other >= EDGE.unique) continue;
+      found.push({ side: side, at: [cands[c][0] * 2, cands[c][1] * 2], from: [zone[bi][0] * 2, zone[bi][1] * 2], ncc: Math.round(best * 100) / 100 });
+    }
+  });
+  return found;
+}
+
+function expandEdges(o) {
+  readable(o.original, "original");
+  readable(o.take, "take");
+  var off = o.offset || [0, 0];
+  var step = stepOf(o.original, o.take, off, o.sides, o.blend || 0);
+  var rep = repeatsOf(o.original, o.take, off, o.sides);
+  return {
+    step: step,
+    step_ok: step === null || step < EDGE.step,
+    repeats: rep.length,
+    repeated: rep.length >= EDGE.repeats,
+    repeat_at: rep.slice(0, 4)
+  };
+}
+
 // After the apply: o: { before, after, mask, feather (document px), scale }.
 function verify(o) {
   readable(o.before, "before");
@@ -415,8 +656,10 @@ function badges(c, v, o) {
     if (o.masked && measured && !c.edited) out.push(c.polarity_suspect ? "Unchanged inside: the model may have read the mask inverted" : "Unchanged inside");
     else if (o.masked && c.kept_share !== null && c.kept_share !== undefined && c.kept_share >= LIMITS.kept_share) out.push("Part of the selection may be unchanged");
   }
+  if (c && c.step_ok === false) out.push("Step at the old edge");
+  if (c && c.repeated === true) out.push("Repeated detail past the old edge");
   if (v && !v.untouched) out.push("Changed outside");
   return out;
 }
 
-module.exports = { LIMITS: LIMITS, distanceTo: distanceTo, diffStats: diffStats, seam: seam, keptShare: keptShare, shiftOf: shiftOf, check: check, bandCheck: bandCheck, verify: verify, badges: badges, toneAndResidual: toneAndResidual };
+module.exports = { LIMITS: LIMITS, distanceTo: distanceTo, diffStats: diffStats, seam: seam, keptShare: keptShare, shiftOf: shiftOf, check: check, bandCheck: bandCheck, expandEdges: expandEdges, EDGE: EDGE, verify: verify, badges: badges, toneAndResidual: toneAndResidual };
