@@ -2,7 +2,7 @@
 // Mask growth for Replace inside on models that redraw past the selection
 // (GPT Image 2.5: the mask is a hint, the subject can come back larger than
 // the selection and is then cut by it). Measured in the mask strategy test
-// of 2026-10-20 (research, Plugin changes item 5). On the check-scale reads
+// of 2026-10-20 (four masked models on three selections). On the check-scale reads
 // of one take, in document pixels converted with the check scale:
 //
 // 1. Tone-match the take to the context in the ring 3 to 3 + max(24, 4% of

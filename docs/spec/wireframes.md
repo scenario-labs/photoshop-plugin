@@ -169,11 +169,35 @@ A selection (F1). The card names the selection and the layer; every selection ac
 | versions) (Cut out subject)          |
 +--------------------------------------+
 | a red-sailed fishing boat            |
-| [v No style] [v GPT Image 2.5 Flare] |
+| [v Edit Inside selection] [v No      |
+| style] [v Ideogram 4.5 Precise Edit] |
 | [v 2 takes]                          |
-| (    Replace inside . 3 CU     ) [*] |
+| (    Replace inside . 8 CU     ) [*] |
 +--------------------------------------+
 ```
+
+The Edit chip of Replace inside (SPEC 3.8), each choice with its line and its price. Bolder runs GPT Image 2.5 Flare and grows each take's mask over what it drew past the selection; Remove has no Edit chip and runs Ideogram 4.5:
+
+```
+|           +------------------------+ |
+|           | EDIT                   | |
+|           | v Inside selection 8 CU| |
+|           |   Changes only what is | |
+|           |   inside the selection.| |
+|           |   Everything outside   | |
+|           |   stays as it is.      | |
+|           |   Bolder           3 CU| |
+|           |   A stronger change.   | |
+|           |   The new subject may  | |
+|           |   reach past the       | |
+|           |   selection; the mask  | |
+|           |   grows to keep it     | |
+|           |   whole.               | |
+|           +------------------------+ |
+| [v Edit Inside selection] [v No      |
+```
+
+On the Takes card of a Replace inside run, while the selection is there, **Try Bolder** (or **Try Inside selection**) follows More like this: the same prompt, the other choice, priced on the button.
 
 A cut-out layer (a mask, or less than the canvas, or a Scenario cut-out): the checkerboard thumbnail, Add background first, the layer as an automatic reference. FLOWS v2 after review adds Relight to scene after Add background; it waits for the relight flow:
 
@@ -249,9 +273,10 @@ At the 280 px minimum width the chips wrap to more rows and the composer chips t
 | (Cut out subject)               |
 +---------------------------------+
 | a red-sailed fishing boat       |
-| [v No style] [v GPT Image 2.5   |
-| Flare] [v 2 takes]              |
-| (  Replace inside . 3 CU  ) [*] |
+| [v Edit Inside selection]       |
+| [v No style] [v Ideogram 4.5    |
+| Precis...] [v 2 takes]          |
+| (  Replace inside . 8 CU  ) [*] |
 +---------------------------------+
 ```
 
