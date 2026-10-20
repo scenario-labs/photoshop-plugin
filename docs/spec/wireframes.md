@@ -103,9 +103,9 @@ After sign-in the creation panel shows directly (section 2): no banner, no sampl
 
 Header, context card and action chips on top; the Takes card and Recent in the middle part, which scrolls; the composer pinned at the bottom (SPEC 3.1). The panel is one flex column whose middle part scrolls: UXP 9.4 has no `position: sticky`, CSS grid or `gap` (measured with the probe plugin). Chips, menus, popovers and the action button are plain elements: `sp-picker` does not show its value and `sp-action-button` with an icon and a label stacks them. The top (context card and action chips) never scrolls, so every chip row shows whole; on short panels it tightens instead (below 600 px of height a smaller context card and a two-line prompt, at the 420 px dock 22 px chips with 4 px gaps), and only below about 400 px does it scroll, never the composer. The middle part gives up its room first: the empty line goes, then Recent drops to one row of small thumbnails, then hides until there is room; the Takes card always wins. Under 300 px of width the Model chip cuts the model name at 100 px with an ellipsis.
 
-**Suggest** sits at the right end of the refs row (nothing can sit inside the prompt box in UXP). Its menu, "Suggest · Prompt Spark · Free", lists three fuller prompts for the action's model from the person's text, or describes the active layer when the prompt is empty; a pick replaces the prompt, and the run keeps the short prompt as its name. It is sent only when its price check answers 0 CU; otherwise the menu says the price and nothing is sent.
+**Suggest** sits in the footer of the prompt box: the prompt and the footer are one bordered box, the text field borderless inside it. Its menu, "Suggest · Prompt Spark · Free", lists three fuller prompts for the action's model from the person's text, or describes the active layer when the prompt is empty; a pick replaces the prompt, and the run keeps the short prompt as its name. It is sent only when its price check answers 0 CU; otherwise the menu says the price and nothing is sent.
 
-**Select…** in the layer context card (select by description) is not shown in this build: it needs the segmentation route (SAM 3.1 Image), which is SPEC v1.1.
+**Select…** sits under the title of the context card of a layer, a flat image, a cut-out or a split element (select by description, SAM 3.1 Image). Typing selects the action and the button prices it; Enter runs it; the masks become the document's selection. While a popover is open the field is hidden (UXP draws text fields above everything).
 
 The header is one row of 36 px that never wraps: the Scenario mark (monochrome), the project name with `v` (one line, cut with an ellipsis; the full name is its tooltip; it opens the Projects view), then the agent icon with its dot and the first connected client's name (`o` none, `*` connected, `!` needs the person; a click opens the agent popover) and **Jobs** with the number of jobs on this computer (`Jobs 2`; blue while one runs, amber when one waits for the person). Everything else is in Photoshop's panel menu `[=]`.
 
@@ -464,7 +464,70 @@ Otherwise the Model menu shows each model's price for this document and these se
 
 ## 6. Library
 
-Not in this build. Open from Library returns as a flow of the creation panel (SPEC 3.5, later flows); until then the Library stays in the web app and hosted Scenario MCP.
+Open from Library (no document) and `+ Reference > Library` show the project's 12 newest images as a 3-column grid in the composer (free reads; the plugin's own uploads are left out). A click opens the image as a new document, or adds it to the refs row; `x` closes the grid when it was opened for a reference.
+
+```
++--------------------------------------+
+| LIBRARY . Fall campaign          x   |
+| +--------+ +--------+ +--------+     |
+| |  [th]  | |  [th]  | |  [th]  |     |
+| +--------+ +--------+ +--------+     |
+| +--------+ +--------+ +--------+     |
+| |  [th]  | |  [th]  | |  [th]  |     |
+| +--------+ +--------+ +--------+     |
+| Click an image to open it as a new   |
+| document.                            |
++--------------------------------------+
+```
+
+## 6b. Later flows (P2)
+
+A flat image (one Background layer), Split into layers selected. The Select… field sits under the title:
+
+```
++--------------------------------------+
+| +----+ harbor.png . 2304 x 1536      |
+| |[th]| Lands above Background as a   |
+| +----+ group of layers               |
+| [ Select...                        ] |
+| ((Split into layers)) (Make          |
+| versions) (Upscale) (Formats)        |
+| (More v)                             |
++--------------------------------------+
+| (i) Splits the image into a          |
+|     background and its elements.     |
+| [v Seedream 5.0 Flash Layerize]      |
+| (  Split into layers . 28 CU  )      |
++--------------------------------------+
+```
+
+More v on a layer: Finish (Remove text, Formats, Upscale this layer), Select and cut (Cut out to a new layer), Layers (Split into layers, Split text), Make variants (Render sketch, New angle, Relight to scene), Animate. New angle's chip lists Turn left 45 deg, Turn right 45 deg, Side view, Back view, From above; Formats' chip lists 1:1, 4:5, 9:16, 16:9; Animate's chips are the duration (5 s, 10 s) and the model.
+
+The result card of an Animate run, and of an Upscale (the same region at 100%):
+
+```
+| CLIP . Minimax H3 Fast . 5 s         |
+| [th]  Opened as a new document       |
+| ( Frame to layer ) ( Open clip )     |
+
+| NEW DOCUMENT FROM harbor . x2        |
+| +--------------+ +--------------+    |
+| | source, 100% | | result, 100% |    |
+| +--------------+ +--------------+    |
+```
+
+The agent's plan card (F14), above the composer, only while a plan waits:
+
+```
++--------------------------------------+
+| * Claude plans 3 steps               |
+| 1. Render sketch            25 CU    |
+| 2. Formats 9:16             45 CU    |
+| 3. Upscale x2       10 CU . Approved |
+| (Decline) (Step by step)             |
+|           (  Approve all . 80 CU  )  |
++--------------------------------------+
+```
 
 ## 7. Composer
 
