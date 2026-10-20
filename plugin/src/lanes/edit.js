@@ -12,6 +12,8 @@
 //   quality: "low" | "medium" | "high" (models with a quality input),
 //   expect: "cleared" (Remove: the checks look for parts left unchanged),
 //   feather: px of the placed mask's edge (default 2),
+//   change: 0..1, the Change amount (Subtle to Free) for a model with a
+//            strength input, mapped onto that input's range,
 //   trained: null | { model_id, kind: "lora" | "composition", scale,
 //            strength (Change amount, image + strength route) } }
 // view: {
@@ -46,6 +48,15 @@ function sourceText(kind, ctx, sel) {
 function qualityOk(schema, q) {
   var p = common.param(schema, "quality");
   return !!(p && p.enum && p.enum.indexOf(q) >= 0);
+}
+
+// A Change amount (0..1) as a value of the model's strength input: its
+// range when the schema gives one, else 0 to 1; two decimals.
+function strengthAt(p, at) {
+  var lo = typeof p.min === "number" ? p.min : 0;
+  var hi = typeof p.max === "number" ? p.max : 1;
+  var v = lo + Math.max(0, Math.min(1, at)) * (hi - lo);
+  return Math.round(v * 100) / 100;
 }
 
 function editView(schema, ctx, o) {
@@ -132,6 +143,14 @@ function editView(schema, ctx, o) {
       view.controls.change_amount = { value: amount, min: sp ? sp.min : null, max: sp ? sp.max : null, default: sp ? sp.default : null, note: TEXT.change_amount };
     }
   }
+  // Change amount on any edit model with a strength input (the trained
+  // image + strength route above sets its own).
+  var sp0 = common.param(schema, "strength");
+  if (!trained && sp0 && typeof o.change === "number") {
+    var amount0 = strengthAt(sp0, o.change);
+    params.strength = amount0;
+    view.controls.change_amount = { value: amount0, min: sp0.min, max: sp0.max, default: sp0.default, note: TEXT.change_amount };
+  }
   var takes = common.takesFor(schema, "edit", o.takes);
   view.controls.takes = takes;
 
@@ -192,4 +211,4 @@ function trainedView(baseSchema, ctx, trained, o) {
   return editView(baseSchema, ctx, opts);
 }
 
-module.exports = { editView: editView, trainedView: trainedView, TEXT: TEXT };
+module.exports = { editView: editView, trainedView: trainedView, strengthAt: strengthAt, TEXT: TEXT };

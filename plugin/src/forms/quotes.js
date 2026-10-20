@@ -43,6 +43,22 @@ function ruleFor(schema, f) {
   return { rule: "after_upload" };
 }
 
+// How many files of a "count" input are priced without one, for this body.
+// free_when: { parameter: [values] } limits the free slots to those values:
+// GPT Image 2.5 prices its first reference image at no cost at quality Low
+// only (measured 2026-10-20: Flare, 2 takes, 1024 x 1024: Low 3 CU with or
+// without a reference, Medium 6 without and 7 with one of any size).
+function freeSlots(rule, body) {
+  var free = rule.free || 0;
+  var when = rule.free_when;
+  if (!when || typeof when !== "object") return free;
+  for (var k in when) {
+    if (!Object.prototype.hasOwnProperty.call(when, k)) continue;
+    if (!Array.isArray(when[k]) || when[k].indexOf(body[k]) < 0) return 0;
+  }
+  return free;
+}
+
 // Fits a size inside the read cap, keeping its aspect.
 function capSize(w, h) {
   var cap = MAP.stand_ins.read_cap_px;
@@ -132,7 +148,7 @@ function createQuotes(o) {
       if (rule.rule === "omit") continue;
       if (rule.rule === "count") {
         var total = given + waiting;
-        if (total <= (rule.free || 0)) continue;
+        if (total <= freeSlots(rule, body)) continue;
         var small = await o.standIns.get(MAP.stand_ins.small_px, MAP.stand_ins.small_px);
         var ids = Array.isArray(body[f.name]) ? body[f.name].slice() : body[f.name] ? [body[f.name]] : [];
         for (var c = 0; c < waiting; c++) ids.push(small);

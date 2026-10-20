@@ -102,7 +102,29 @@ async function submit(client, modelId, body) {
   return classifyAnswer(res);
 }
 
+// Prompt Spark (scenario/spark.js): the same marker on POST
+// /v1/generate/prompt, sent once, never retried. Its answer is synchronous:
+// { prompts: [text], calls, job, creativeUnitsCost }. A 2xx without a
+// prompts array, no answer, or a 5xx reads as "uncertain": nothing to show,
+// and the charge, if any, is the job's on Scenario.
+async function submitPrompt(client, body) {
+  checkBody(body);
+  var res;
+  try {
+    res = await client.request("POST", priceChecks.PROMPT_PATH, { body: body, paid: PAID_REQUEST });
+  } catch (err) {
+    if (err && err.beforeSend) throw err;
+    return classifyError(err);
+  }
+  var b = res ? res.body : null;
+  if (!b || typeof b !== "object" || !Array.isArray(b.prompts)) return { status: "uncertain", reason: "Scenario's answer had no proposals (HTTP " + (res ? res.status : "?") + ").", http: res ? res.status : null };
+  var job = b.job && typeof b.job === "object" ? b.job : null;
+  var billed = job && job.billing && typeof job.billing.cuCost === "number" ? job.billing.cuCost : typeof b.creativeUnitsCost === "number" ? b.creativeUnitsCost : null;
+  return { status: "done", prompts: b.prompts, job_id: job && validJobId(job.jobId || job.id) ? job.jobId || job.id : null, charged: billed, http: res.status };
+}
+
 module.exports = {
+  submitPrompt: submitPrompt,
   PAID_REQUEST: PAID_REQUEST,
   submit: submit,
   classifyAnswer: classifyAnswer,

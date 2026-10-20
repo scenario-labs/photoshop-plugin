@@ -115,15 +115,18 @@ function createCreateView(doc, ctl, o) {
     icons.set(byId("ctx-icon"), c.icon === "selection" ? "selection" : c.icon === "layer" ? "layer" : c.icon === "image" ? "image" : "file");
     var img = byId("ctx-img");
     if (img) {
+      // The thumbnail box is 44 px, 36 px on short panels (styles.css).
+      var tr = rect(thumb);
+      var tb = tr && tr.width > 0 ? Math.round(tr.width) : 44;
       if (c.thumb && c.thumb_size) {
-        var s = Math.max(44 / c.thumb_size.width, 44 / c.thumb_size.height);
+        var s = Math.max(tb / c.thumb_size.width, tb / c.thumb_size.height);
         img.style.width = Math.round(c.thumb_size.width * s) + "px";
         img.style.height = Math.round(c.thumb_size.height * s) + "px";
-        img.style.left = Math.round((44 - c.thumb_size.width * s) / 2) + "px";
-        img.style.top = Math.round((44 - c.thumb_size.height * s) / 2) + "px";
+        img.style.left = Math.round((tb - c.thumb_size.width * s) / 2) + "px";
+        img.style.top = Math.round((tb - c.thumb_size.height * s) / 2) + "px";
       } else {
-        img.style.width = "44px";
-        img.style.height = "44px";
+        img.style.width = tb + "px";
+        img.style.height = tb + "px";
         img.style.left = "0px";
         img.style.top = "0px";
       }
@@ -305,11 +308,14 @@ function createCreateView(doc, ctl, o) {
     box.appendChild(sec);
   }
 
-  function renderRecent(list) {
+  // compact: one row of 28 px thumbnails (fitMid, short panels).
+  function renderRecent(list, compact) {
     var box = byId("recent");
     var row = byId("recent-row");
     show(box, list.length > 0, "block");
+    if (box) box.className = "recent" + (compact ? " compact" : "");
     if (!row) return;
+    var tw = compact ? 26 : 42;
     clear(row);
     for (var i = 0; i < list.length; i++) {
       (function (r) {
@@ -317,7 +323,7 @@ function createCreateView(doc, ctl, o) {
         t.setAttribute("data-recent", r.local_id);
         t.setAttribute("title", r.title);
         t.appendChild(icons.icon(doc, r.lane === "image" ? "image" : r.lane === "edit" ? "edit" : "enhance", "ri", 16));
-        cover(t, r.thumb, 42, 42, r.size ? r.size.width : 0, r.size ? r.size.height : 0);
+        cover(t, r.thumb, tw, tw, r.size ? r.size.width : 0, r.size ? r.size.height : 0);
         onClick(t, function () {
           return ctl.openRecent(r.local_id);
         });
@@ -334,6 +340,7 @@ function createCreateView(doc, ctl, o) {
     b.setAttribute("title", c.title || "");
     if (c.thumb) {
       var tb = el("div", "th");
+      if (c.mono) tb.appendChild(el("span", "tm", c.mono));
       cover(tb, c.thumb, 16, 16, 0, 0);
       b.appendChild(tb);
     } else if (c.mono) b.appendChild(el("span", "mono", c.mono));
@@ -347,12 +354,33 @@ function createCreateView(doc, ctl, o) {
     return b;
   }
 
-  function renderRefs(r) {
+  // The refs row also carries Suggest at its right end: UXP draws the
+  // prompt field above anything placed over it, so the button cannot sit
+  // inside the prompt box as in the prototype.
+  function suggestEl() {
+    var b = el("div", "sug");
+    b.setAttribute("data-pop", "suggest");
+    b.setAttribute("title", "Suggest prompts with Prompt Spark, free");
+    b.appendChild(icons.icon(doc, "wand", null, 12));
+    b.appendChild(el("span", null, "Suggest"));
+    onClick(b, function () {
+      togglePop(b, "suggest");
+    });
+    return b;
+  }
+
+  function renderRefs(r, suggest) {
     var box = byId("refs");
     if (!box) return;
     clear(box);
-    show(box, !!r);
-    if (!r) return;
+    show(box, !!r || !!suggest);
+    if (!r) {
+      if (suggest) {
+        box.appendChild(el("span", "hint", ""));
+        box.appendChild(suggestEl());
+      }
+      return;
+    }
     for (var i = 0; i < r.drefs.length; i++) {
       (function (d) {
         var b = el("div", d.on ? "dref" : "dref off");
@@ -416,7 +444,8 @@ function createCreateView(doc, ctl, o) {
       });
       box.appendChild(add);
     }
-    if (r.hint) box.appendChild(el("span", "hint", r.hint));
+    if (r.hint || suggest) box.appendChild(el("span", "hint", r.hint || ""));
+    if (suggest) box.appendChild(suggestEl());
   }
 
   function renderComposer(c) {
@@ -437,7 +466,7 @@ function createCreateView(doc, ctl, o) {
     var noteOnly = !!c.note;
     show(byId("c-note"), noteOnly);
     setText("c-note-text", c.note || "");
-    renderRefs(noteOnly ? null : c.refs);
+    renderRefs(noteOnly ? null : c.refs, !noteOnly && !!c.suggest);
     show(byId("noprompt"), !noteOnly && !!c.none);
     setText("noprompt-text", c.none || "");
     var pr = byId("prompt");
@@ -495,14 +524,14 @@ function createCreateView(doc, ctl, o) {
     if (p) clear(p);
     show(p, false);
     show(byId("pop-scrim"), false);
-    cover(false);
+    coverPrompt(false);
   }
 
   // UXP draws an sp-textarea above every other element, so an open popover
   // would show the prompt through it (verified live on 27.11). While one is
   // open, the field is hidden and a plain stand-in of the same size shows its
   // text, so the layout does not move.
-  function cover(on) {
+  function coverPrompt(on) {
     var t = byId("prompt");
     var g = byId("prompt-ghost");
     var comp = byId("composer");
@@ -577,9 +606,22 @@ function createCreateView(doc, ctl, o) {
         clear(p);
         fillPop(p, kind, m || {});
         place(p, anchor);
-        cover(true);
+        coverPrompt(true);
         show(byId("pop-scrim"), true, "block");
         show(p, true);
+        // Prices still checking show "…"; the menu is drawn again with them.
+        if (m && m.later && typeof m.later.then === "function") {
+          m.later.then(function () {
+            if (seq !== pop.seq || pop.kind !== kind) return null;
+            return Promise.resolve(ctl.menu(kind)).then(function (m2) {
+              if (seq !== pop.seq || pop.kind !== kind || !m2) return;
+              var keep = p.scrollTop;
+              clear(p);
+              fillPop(p, kind, m2);
+              p.scrollTop = keep;
+            });
+          }).then(null, report);
+        }
       },
       function (e) {
         report(e);
@@ -605,7 +647,10 @@ function createCreateView(doc, ctl, o) {
     if (it.checked) chk.appendChild(icons.icon(doc, "check", null, 14));
     b.appendChild(chk);
     if (it.thumb) {
+      // The model's letters sit under its picture: a model without one, or
+      // a picture that does not load, still shows who it is.
       var tb = el("div", "th");
+      if (it.mono) tb.appendChild(el("span", "tm", it.mono));
       cover(tb, it.thumb, 28, 28, 0, 0);
       b.appendChild(tb);
     } else if (it.mono) b.appendChild(el("span", "mono", it.mono));
@@ -657,6 +702,31 @@ function createCreateView(doc, ctl, o) {
             p.appendChild(row);
           })(m.groups[g].items[i]);
         }
+      }
+      return;
+    }
+    if (kind === "suggest") {
+      h5(p, m.title || "Suggest");
+      if (m.from && (m.items || []).length) p.appendChild(el("div", "ptxt", m.from));
+      if (m.text) p.appendChild(el("div", "ptxt", m.text));
+      for (var si = 0; si < (m.items || []).length; si++) {
+        (function (text, i) {
+          var b = el("div", "mi sp3");
+          b.setAttribute("data-value", String(i));
+          b.setAttribute("data-sug", String(i));
+          b.setAttribute("title", text);
+          var mt = el("div", "mt");
+          mt.appendChild(el("span", "mn", text));
+          b.appendChild(mt);
+          onClick(b, function () {
+            choose("suggest", i);
+          });
+          p.appendChild(b);
+        })(m.items[si], si);
+      }
+      if (m.note) {
+        p.appendChild(el("div", "sep"));
+        p.appendChild(el("div", "ptxt", m.note));
       }
       return;
     }
@@ -766,6 +836,31 @@ function createCreateView(doc, ctl, o) {
     }
   }
 
+  // ---- the middle on short panels ----
+
+  // Recent on this document collapses gracefully (AGENTS.md, Panel UI,
+  // "Short panels"): the middle shows Recent at full size when it fits
+  // under the Takes card, else one row of small thumbnails, else nothing
+  // (the Takes card wins, Recent comes back when there is room). The empty
+  // line goes first: it shows only when it fits whole. Needs layout boxes: skipped where
+  // there are none (tests).
+  var lastRecent = [];
+  function overflows(mid) {
+    return typeof mid.scrollHeight === "number" && typeof mid.clientHeight === "number" && mid.clientHeight > 0 && mid.scrollHeight > mid.clientHeight + 1;
+  }
+  function fitMid() {
+    var mid = byId("mid");
+    var r = rect(mid);
+    if (!r || !(r.height > 0)) return;
+    var empty = byId("mid-empty");
+    if (empty && empty.style && empty.style.display !== "none" && overflows(mid)) show(empty, false);
+    var box = byId("recent");
+    if (lastRecent.length && box && overflows(mid)) {
+      renderRecent(lastRecent, true);
+      if (overflows(mid)) show(box, false);
+    }
+  }
+
   // ---- drawing ----
 
   function render() {
@@ -776,13 +871,15 @@ function createCreateView(doc, ctl, o) {
       renderCtx(m.ctx);
       renderActs(m.chips, m.more);
       renderCard(m.card);
-      renderRecent(m.recent);
+      lastRecent = m.recent || [];
+      renderRecent(lastRecent, false);
       var empty = byId("mid-empty");
       if (empty) {
         empty.textContent = m.empty_mid || "";
         show(empty, !!m.empty_mid, "block");
       }
       renderComposer(m.composer);
+      fitMid();
       // An open chip menu follows its chip (the composer was drawn again).
       if (pop.kind && pop.anchor && !pop.anchor.parentNode) {
         var a = findAnchor(pop.kind);
@@ -871,6 +968,12 @@ function createCreateView(doc, ctl, o) {
     });
 
   ctl.onChange(render);
+  // A resized panel or dock fits the middle again.
+  if (o.global && typeof o.global.addEventListener === "function") {
+    o.global.addEventListener("resize", function () {
+      if (!drawing) render();
+    });
+  }
   closePop();
   render();
 

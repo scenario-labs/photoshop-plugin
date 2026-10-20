@@ -119,7 +119,7 @@ function createFlow(o) {
     if (!o.runner || !o.capture) throw invalid("Generate needs a secure random source; prices still show.");
     var spec = p.view.capture;
     var cap = await o.capture[spec.kind](spec.spec);
-    var out = await o.runner.start({ req: p.req, quote: quote, refs: p.lane === "edit" && a.refs ? a.refs : [], capture: cap, model_name: p.schema.name, document_title: p.context.doc ? p.context.doc.title : null });
+    var out = await o.runner.start({ req: p.req, quote: quote, refs: p.lane === "edit" && a.refs ? a.refs : [], capture: cap, model_name: p.schema.name, document_title: p.context.doc ? p.context.doc.title : null, name: a.name || null });
     out.view = p.view;
     return out;
   }

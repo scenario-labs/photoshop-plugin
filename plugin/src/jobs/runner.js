@@ -258,6 +258,8 @@ function createRunner(o) {
         origin: { kind: "person" },
         project: { name: acc.project_name || null, key_hash: acc.key_hash || null, id_hash: projectHash(acc.project_id) },
         lane: a.req.lane,
+        // The person's short prompt when the sent one is a Suggest proposal.
+        name: typeof a.name === "string" && a.name.trim() ? a.name.trim().slice(0, 80) : null,
         model_id: a.req.model_id,
         model_name: a.model_name || null,
         trained_model_ids: trainedIds(body),

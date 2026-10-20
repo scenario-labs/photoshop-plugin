@@ -162,6 +162,10 @@ test("F3 Create image with no document: Size and Takes chips, the price on the b
   assert.equal(doc.text("ctx-title"), "2 takes · A lighthouse on a rocky coast");
   assert.equal(doc.text("ctx-count"), "2");
   await waitFor(() => tiles(doc).length === 2, { label: "two tiles" });
+  // Each tile draws its picture, and drawing pictures leaves the composer
+  // alone (a second function named cover once hid the prompt instead).
+  for (const tile of tiles(doc)) assert.ok(tile.children.some((c) => c.tagName === "IMG" || (c.children || []).some((k) => k.tagName === "IMG")), "the tile has its picture");
+  assert.equal(doc.byId("composer").className, "composer", "no popover open, the composer is not covered");
   const before = ps.history.length;
   tiles(doc)[1].click();
   await waitFor(() => group.layers[1].visible && !group.layers[0].visible, { label: "take 2 shows" });
@@ -357,7 +361,12 @@ test("the confirm limit: above it the button asks first; Cancel sends nothing; t
 });
 
 test("a reference and a different price after upload: the run waits for approval; Approve sends it at the new price; Decline sends nothing", async (t) => {
-  const { app, doc, ps, mock } = await bootGenerate(t, { docs: [POSTER], active: 7, mockOpts: { answer: (model, body) => (model === FLARE ? cost(body.referenceImages ? 5 : 2) : null) } });
+  // At Medium the reference is priced with a 256 px stand-in (3 CU); the
+  // uploaded picture prices 5, so the run waits for approval.
+  let fx = null;
+  const refPrice = (body) => (!body.referenceImages ? 2 : body.referenceImages.some((id) => (fx.assets.get(id) || {}).width !== 256) ? 5 : 3);
+  const { app, doc, ps, mock } = await bootGenerate(t, { docs: [POSTER], active: 7, mockOpts: { answer: (model, body) => (model === FLARE ? cost(refPrice(body)) : null) } });
+  fx = mock;
   await show(app, ps);
   find(doc, "data-act", "new_layer").click();
   assert.equal(doc.byId("prompt").getAttribute("placeholder"), "Describe the new layer");
@@ -368,20 +377,21 @@ test("a reference and a different price after upload: the run waits for approval
   menuValues(doc).find((e) => e.getAttribute("data-value") === "visible").click();
   await waitFor(() => findAll(doc, "data-ref").length === 1, { label: "reference added" });
   assert.equal(app.controller.state().refs, 1);
-  assert.equal(mock.uploads.length, 0, "nothing uploads before the click");
   doc.type("prompt", "A paper kite");
-  await waitFor(() => app.controller.state().price.state === "ready" && go(doc) === "New layer · 2 CU", { label: `priced (now ${go(doc)})`, timeout: 4000 });
+  await waitFor(() => app.controller.state().price.state === "ready" && go(doc) === "New layer · 3 CU", { label: `priced (now ${go(doc)})`, timeout: 4000 });
+  // Only the blank stand-in that priced the reference is uploaded before the click.
+  assert.deepEqual(mock.uploads.map((u) => [u.width, u.height, /^photoshop-standin-/.test(u.name)]), [[256, 256, true]]);
   doc.byId("go").click();
   await waitFor(() => shownEl(doc, "confirm-card"), { label: "the price-changed card" });
-  assert.match(doc.text("confirm-text"), /^Price changed after upload\. Now 5 CU \(was 2 CU\)\. Nothing was spent\.$/);
+  assert.match(doc.text("confirm-text"), /^Price changed after upload\. Now 5 CU \(was 3 CU\)\. Nothing was spent\.$/);
   assert.equal(doc.text("confirm-ok-label"), "Approve · 5 CU");
   assert.equal(mock.paidCalls.length, 0);
-  assert.equal(mock.uploads.length, 1);
+  assert.equal(mock.uploads.length, 2);
   assert.equal(app.ledger.all()[0].state, "awaiting_approval");
   doc.byId("confirm-ok").click();
   await landed(app);
   assert.equal(mock.paidCalls.length, 1);
-  assert.deepEqual(mock.paidCalls[0].body.referenceImages, [mock.uploads[0].id]);
+  assert.deepEqual(mock.paidCalls[0].body.referenceImages, [mock.uploads[1].id]);
   assert.equal(app.ledger.all()[0].cu_quoted, "5");
   const d = ps.doc(7);
   assert.equal(d.layers[d.layers.length - 1].name, "Background");
@@ -397,7 +407,7 @@ test("a reference and a different price after upload: the run waits for approval
   await ctxTitle(doc, "Background · Layer 1024 × 1024");
   find(doc, "data-act", "new_layer").click();
   doc.type("prompt", "A paper boat");
-  await waitFor(() => app.controller.state().price.state === "ready" && go(doc) === "New layer · 2 CU", { label: "priced again", timeout: 4000 });
+  await waitFor(() => app.controller.state().price.state === "ready" && go(doc) === "New layer · 3 CU", { label: "priced again", timeout: 4000 });
   doc.byId("go").click();
   await waitFor(() => shownEl(doc, "confirm-card"), { label: "the card again" });
   doc.byId("confirm-cancel").click();

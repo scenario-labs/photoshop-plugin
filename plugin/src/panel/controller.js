@@ -27,6 +27,7 @@ var price = require("../forms/price.js");
 var thumbs = require("../ui/thumbs.js");
 var pngMod = require("../util/png.js");
 var errorsMod = require("../scenario/errors.js");
+var sparkMod = require("../scenario/spark.js");
 
 var A = actionsMod.ACTIONS;
 var TAKES_PRICE_MS = 2500;
@@ -119,10 +120,10 @@ function takesOf(meta) {
       return c.fields && c.fields.assetId;
     });
     if (!f.jobId || !gen(f.kind) || !kids.length) return null;
-    return { group_id: meta.id, layer_id: null, job_id: f.jobId, kind: f.kind, name: meta.name, prompt: f.prompt || null, model_name: f.modelName || null, children: kids };
+    return { group_id: meta.id, layer_id: null, job_id: f.jobId, kind: f.kind, name: meta.name, prompt: f.runName || f.prompt || null, model_name: f.modelName || null, children: kids };
   }
   if (meta.parent || !f.assetId || !f.jobId || !gen(f.kind)) return null;
-  return { group_id: null, layer_id: meta.id, job_id: f.jobId, kind: f.kind, name: meta.name, prompt: f.prompt || null, model_name: f.modelName || null, children: [{ id: meta.id, name: meta.name, visible: true, fields: f }] };
+  return { group_id: null, layer_id: meta.id, job_id: f.jobId, kind: f.kind, name: meta.name, prompt: f.runName || f.prompt || null, model_name: f.modelName || null, children: [{ id: meta.id, name: meta.name, visible: true, fields: f }] };
 }
 
 // A layer with transparency (a cut-out subject): a pixel or smart object
@@ -209,7 +210,12 @@ function createController(o) {
     agent: null,
     reading: null,
     again: false,
-    schemaCache: {}
+    schemaCache: {},
+    // Suggest (Prompt Spark): the proposals for one action, model and
+    // prompt; shortName is the person's short prompt while a proposal fills
+    // the prompt box (the run keeps it as its name).
+    spark: null,
+    shortName: null
   };
 
   function emit() {
@@ -257,6 +263,16 @@ function createController(o) {
   // Style chip and takes reference images.
   function matchOn(id) {
     return !!(st.style && st.style.match && st.styleRef && A[id] && (A[id].chips || []).indexOf("style") >= 0 && (A[id].refs || A[id].autoRef));
+  }
+
+  // The Change chip shows on the actions that list it (Make versions) when
+  // the run has a strength control: the trained image + strength route, or
+  // an edit model with a strength input. GPT Image 2.5 has none.
+  function changeOn(id, schema) {
+    var a = A[id];
+    if (!a || a.family !== "edit" || (a.chips || []).indexOf("change") < 0) return false;
+    if (styleApplies(id)) return st.style.route === "image_strength";
+    return !!(schema && commonMod.param(schema, "strength"));
   }
 
   function promptOf(id) {
@@ -390,6 +406,7 @@ function createController(o) {
             st.action = actionsMod.CONTEXTS[got.ctx.kind][0];
             st.startFrom = null;
             st.prompt = "";
+            st.shortName = null;
           }
           st.confirm = st.confirm && st.confirm.kind === "changed" ? st.confirm : null;
         }
@@ -548,6 +565,8 @@ function createController(o) {
       if (id === "more_like" && !ctx.selection) sample = "layer";
       args.options = { prompt: prompt, takes: takesFor(id, n), sample: sample, margin: st.adv.margin || "auto" };
       if (quality && args.tool === "edit") args.options.quality = quality;
+      // The Change chip on a model with a strength input (lanes/edit.js).
+      if (args.tool === "edit" && changeOn(id, schema)) args.options.change = CHANGE[st.change].at;
       if (a.expect) args.options.expect = a.expect;
       if (args.tool === "trained_edit") {
         args.trained = { model_id: st.style.id, kind: st.style.kind, scale: st.style.scale };
@@ -649,17 +668,30 @@ function createController(o) {
     }
   }
 
-  // The price of each choice of a chip menu, Takes (counts) or Upscale
-  // (factors): free price checks, at most TAKES_PRICE_MS; a choice that does
-  // not answer in time shows none.
+  // The price of each choice of a chip menu: Takes (counts), Upscale
+  // (factors) or Model (models). Free price checks, kept for this context
+  // and these settings, so reopening a menu asks nothing again. The menu
+  // waits at most TAKES_PRICE_MS; choices still pricing show "…" and the
+  // returned `later` settles when they have answered (each price check has
+  // its own timeout), so the open menu can be drawn again with them.
+  var optCache = { key: null, prices: {}, pending: {} };
+  function settingsKey(id) {
+    return JSON.stringify([st.key, id, st.prompt, st.takes[id] || null, st.models, st.style ? st.style.id || st.style.name : null, st.styleRef ? st.styleRef.id : null, st.size, st.target, st.factor, st.change, st.adv, refCount(id), st.drefOff]);
+  }
   async function optionPrices(id, values, kind, current) {
     var a = A[id];
-    var out = {};
+    var out = { prices: {}, pending: false, later: null };
     if (!a || !a.family || (a.prompt === "req" && !String(st.prompt).trim())) return out;
     if ((o.account && !o.account()) || (o.quotes.stopped && o.quotes.stopped())) return out;
+    var key = settingsKey(id);
+    if (optCache.key !== key) optCache = { key: key, prices: {}, pending: {} };
+    var cache = optCache;
     var jobs = values.map(function (v) {
-      if (v === current && st.price.state === "ready" && st.price.action === id) {
-        out[v] = st.price.label;
+      var slot = kind + ":" + String(v);
+      if (Object.prototype.hasOwnProperty.call(cache.prices, slot)) return Promise.resolve();
+      if (cache.pending[slot]) return cache.pending[slot];
+      if (v === current && st.price.state === "ready" && st.price.action === id && kind !== "model_trained") {
+        cache.prices[slot] = st.price.label;
         return Promise.resolve();
       }
       var n = kind === "takes" ? v : null;
@@ -668,23 +700,38 @@ function createController(o) {
       var run = a.family === "image" ? priceImage(id, n, m) : flowArgs(id, n, f, m).then(function (args) {
         return o.flow.price(args);
       });
-      return run.then(
+      cache.pending[slot] = run.then(
         function (p) {
-          if (p && p.state === "ready" && p.quote) out[v] = p.quote.label;
+          cache.prices[slot] = p && p.state === "ready" && p.quote ? p.quote.label : "";
+          delete cache.pending[slot];
         },
         function () {
-          // no price for this count
+          cache.prices[slot] = "";
+          delete cache.pending[slot];
         }
       );
+      return cache.pending[slot];
     });
+    var all = Promise.all(jobs);
     var timer = null;
     await Promise.race([
-      Promise.all(jobs),
+      all,
       new Promise(function (resolve) {
         timer = timers.setTimeout(resolve, TAKES_PRICE_MS);
       })
     ]);
     if (timer) timers.clearTimeout(timer);
+    for (var i = 0; i < values.length; i++) {
+      var sl = kind + ":" + String(values[i]);
+      if (Object.prototype.hasOwnProperty.call(cache.prices, sl)) out.prices[values[i]] = cache.prices[sl];
+      else {
+        out.prices[values[i]] = "…";
+        out.pending = true;
+      }
+    }
+    if (out.pending) out.later = all.then(function () {
+      return true;
+    });
     return out;
   }
 
@@ -842,10 +889,11 @@ function createController(o) {
         var v = imageMod.imageView(schema, raw, imageOptions(id, refs.length, null, schema));
         if (v.blocked) throw invalid(v.blocked);
         var req = requests.build(schema, v.request);
-        out = await o.runner.start({ req: req, quote: q, refs: refs, model_name: schema.name, document_title: raw.doc ? raw.doc.title : null, mask: null });
+        out = await o.runner.start({ req: req, quote: q, refs: refs, model_name: schema.name, document_title: raw.doc ? raw.doc.title : null, mask: null, name: st.shortName });
       } else {
         var args = await flowArgs(id);
         args.refs = refs;
+        args.name = st.shortName;
         if (id === "more_like" && args.context.selection) {
           // The capture reads the selection: the run's own, from its mask.
           await o.host.selectionFromMask(d, maskLayerOf(cardRun()), boxOf(cardRun()));
@@ -1011,7 +1059,10 @@ function createController(o) {
     if (id !== st.action) {
       st.action = id;
       st.confirm = st.confirm && st.confirm.kind === "changed" ? st.confirm : null;
-      if (A[id].prompt === "none") st.prompt = "";
+      if (A[id].prompt === "none") {
+        st.prompt = "";
+        st.shortName = null;
+      }
     }
     changed();
   }
@@ -1020,6 +1071,7 @@ function createController(o) {
     var before = String(st.prompt).trim() !== "";
     st.prompt = String(text || "");
     var now = st.prompt.trim() !== "";
+    if (!now) st.shortName = null;
     var a = A[st.action];
     // An empty prompt shows its words at once; typing reprices after 400 ms.
     if (a && a.prompt === "req" && before !== now) changed();
@@ -1052,6 +1104,15 @@ function createController(o) {
     else if (kind === "target") st.target = value;
     else if (kind === "upsize") st.factor = value;
     else if (kind === "change") st.change = Math.max(0, Math.min(CHANGE.length - 1, Number(value) || 0));
+    else if (kind === "suggest") {
+      var items = st.spark && st.spark.state === "ready" ? st.spark.items : [];
+      var pick = items[Number(value)];
+      if (typeof pick !== "string") return;
+      // The run keeps the person's short prompt as its name.
+      if (!st.shortName && String(st.prompt).trim()) st.shortName = String(st.prompt).trim();
+      st.prompt = pick;
+      st.note = "";
+    }
     else if (kind === "adv") {
       st.adv[value.name] = value.value;
     }
@@ -1156,6 +1217,83 @@ function createController(o) {
       st.note = (e && e.message) || String(e);
     }
     changed();
+  }
+
+  // ---- Suggest (Prompt Spark, free) ----
+  // Proposals for the selected action's model from the prompt, or, with an
+  // empty prompt, a description of the active layer (a 512 px capture sent
+  // as a data link, nothing uploaded). Sent only when its price check
+  // answers 0 CU (scenario/spark.js).
+
+  function sparkOk(id) {
+    var a = A[id];
+    return !!(a && a.family && a.prompt !== "none" && o.client && modelFor(id));
+  }
+
+  function sparkKey(id) {
+    return [st.key, id, modelFor(id), String(st.prompt).trim()].join("|");
+  }
+
+  function startSpark(id) {
+    var key = sparkKey(id);
+    var prompt = String(st.prompt).trim();
+    var raw = st.raw || {};
+    var describe = !prompt;
+    var entry = { key: key, state: "working", items: [], reason: null, cu: null, describe: describe, layer: raw.layer ? raw.layer.name : null, model: modelFor(id), promise: null };
+    st.spark = entry;
+    if (describe && !(raw.doc && raw.layer)) {
+      entry.state = "need_prompt";
+      return entry;
+    }
+    if (o.account && !o.account()) {
+      entry.state = "failed";
+      entry.reason = TEXT.not_signed_in;
+      return entry;
+    }
+    entry.promise = (async function () {
+      var image = null;
+      if (describe) {
+        try {
+          image = await o.references.capture("layer", raw.doc.id, entry.model, 512, raw.layer.id);
+        } catch (e) {
+          return { state: "failed", reason: (e && e.message) || String(e) };
+        }
+      }
+      try {
+        return await sparkMod.suggest({ client: o.client, quotes: o.quotes, settings: o.settings }, { model_id: entry.model, prompt: prompt, image: image, n: 3 });
+      } catch (e) {
+        return { state: "failed", reason: (e && e.message) || String(e) };
+      }
+    })().then(function (r) {
+      entry.state = r.state;
+      entry.items = r.items || [];
+      entry.reason = r.reason || null;
+      entry.cu = r.cu === undefined ? null : r.cu;
+      if (r.state === "ready") log("panel: suggest ready" + (r.charged ? ", charged " + r.charged + " CU" : ""));
+      else log("panel: suggest " + r.state);
+      if (r.charged) entry.charged = r.charged;
+      emit();
+      return true;
+    });
+    return entry;
+  }
+
+  function sparkMenu() {
+    var id = st.action;
+    var title = "Suggest · Prompt Spark · Free";
+    if (!sparkOk(id)) return { kind: "suggest", title: title, state: "off", text: "Suggest is not available for this action.", items: [] };
+    var e = st.spark && st.spark.key === sparkKey(id) && st.spark.state !== "failed" ? st.spark : null;
+    if (!e) e = startSpark(id);
+    var row = o.catalog && o.catalog.find ? o.catalog.find(e.model) : null;
+    var mname = row ? row.name : (st.schemaCache[e.model] || {}).name || "this model";
+    var from = e.describe ? "The prompt is empty, so Suggest describes the " + (e.layer || "active") + " layer" : "Proposals for " + mname + " from your prompt";
+    var out = { kind: "suggest", title: title, state: e.state, from: from, items: e.items, text: "", note: "", later: e.state === "working" ? e.promise : null };
+    if (e.state === "working") out.text = "Asking Prompt Spark…";
+    else if (e.state === "need_prompt") out.text = "Type a few words first; Suggest turns them into fuller prompts.";
+    else if (e.state === "priced") out.text = "Prompt Spark quotes " + price.display(price.toThousandths(e.cu)) + " CU here, so nothing was sent: Suggest runs only when it is free.";
+    else if (e.state === "failed") out.text = e.reason || "Prompt Spark did not answer.";
+    else out.note = "Picking one replaces the prompt; the run keeps your short prompt as its name. Size, style and quality stay on the chips." + (e.charged ? " Scenario charged " + e.charged + " CU for these." : "");
+    return out;
   }
 
   // ---- styles (the project's trained models that can edit) ----
@@ -1338,7 +1476,7 @@ function createController(o) {
       return {
         kind: "single",
         local_id: rec.local_id,
-        title: runName(rec.parameters && rec.parameters.prompt, rec.lane),
+        title: runName(rec.name || (rec.parameters && rec.parameters.prompt), rec.lane),
         meta: rec.state === "applied" ? "Placed" : "",
         sub: [rec.model_name, rec.cu_charged || rec.cu_quoted ? (rec.cu_charged || rec.cu_quoted) + " CU" : null].filter(Boolean).join(" · "),
         thumb: first && first.state === "saved" ? thumbs.resultThumb(first.path) : null,
@@ -1407,7 +1545,7 @@ function createController(o) {
       }
       if (!here) continue;
       var first = (r.outputs || [])[0];
-      out.push({ local_id: r.local_id, title: runName(r.parameters && r.parameters.prompt, r.lane), thumb: first && first.state === "saved" ? thumbs.resultThumb(first.path) : null, size: sizeOfOut(first), lane: r.lane });
+      out.push({ local_id: r.local_id, title: runName(r.name || (r.parameters && r.parameters.prompt), r.lane), thumb: first && first.state === "saved" ? thumbs.resultThumb(first.path) : null, size: sizeOfOut(first), lane: r.lane });
     }
     return out;
   }
@@ -1485,7 +1623,7 @@ function createController(o) {
       return { kind: kind, icon: "upscale", value: actionsMod.factorLabel(f), key_text: f.out ? times(f.out.width, f.out.height) : "", title: "Upscale factor" };
     }
     if (kind === "change") {
-      if (!(styleApplies(id) && st.style.route === "image_strength")) return null;
+      if (!changeOn(id, schema)) return null;
       return { kind: kind, icon: "slider", key_text: "Change", value: CHANGE[st.change].label, title: "Change amount", key_first: true };
     }
     return null;
@@ -1541,6 +1679,7 @@ function createController(o) {
     c.refs = refsModel();
     if (a.prompt === "none") c.none = a.none;
     else c.prompt = { placeholder: a.placeholder || "", value: st.prompt };
+    c.suggest = !!c.prompt && sparkOk(st.action);
     var chips = (a.chips || []).map(chipModel).filter(Boolean);
     c.chips = chips;
     c.go = goModel();
@@ -1611,6 +1750,7 @@ function createController(o) {
         schema = null;
       }
     }
+    if (kind === "suggest") return sparkMenu();
     if (kind === "more") {
       var mg = actionsMod.moreFor(st.ctx.kind, st.pins, st.action);
       var ids = [];
@@ -1624,9 +1764,11 @@ function createController(o) {
       var counts = TAKES.filter(function (n) {
         return n <= max;
       });
-      var priced = await optionPrices(id, counts, "takes", takesFor(id));
+      var tp = await optionPrices(id, counts, "takes", takesFor(id));
+      var priced = tp.prices;
       return {
         title: "Takes",
+        later: tp.later,
         items: counts.map(function (n) {
           return { value: n, label: actionsMod.plural(n, "take"), sub: n === 1 ? "One result" : n + " results to compare", right: priced[n] || "", checked: takesFor(id) === n };
         })
@@ -1660,9 +1802,11 @@ function createController(o) {
       }) : ["2x"];
       var curF = (p.view && p.view.controls && p.view.controls.factor) || st.factor || "2x";
       var read = p.view && p.view.sizes ? p.view.sizes.read : null;
-      var fprices = await optionPrices(id, values, "upsize", curF);
+      var fp2 = await optionPrices(id, values, "upsize", curF);
+      var fprices = fp2.prices;
       return {
         title: "Upscale",
+        later: fp2.later,
         items: values.map(function (v) {
           var f = parseFloat(v);
           return { value: v, label: actionsMod.factorLabel({ factor: v }), sub: read ? times(read.width * f, read.height * f) : "", right: fprices[v] || "", checked: v === curF };
@@ -1708,17 +1852,19 @@ function createController(o) {
     if (kind === "model" && styleApplies(id)) {
       var base = st.style.base_model_id;
       var baseRow = o.catalog.find(base);
-      var bp = await optionPrices(id, [null], "model_trained", null);
+      var bp2 = await optionPrices(id, [null], "model_trained", null);
+      var bp = bp2.prices;
       return {
         title: null,
-        groups: [{ title: "Trained style base", items: [{ value: null, label: baseRow ? baseRow.name : schema && schema.model_id === base ? schema.name : base, sub: st.style.name + " is trained on it", thumb: baseRow ? thumbs.modelThumb(baseRow) : null, right: bp[null] || (st.price.state === "ready" && st.price.action === id ? st.price.label : ""), checked: true }] }],
+        later: bp2.later,
+        groups: [{ title: "Trained style base", items: [{ value: null, label: baseRow ? baseRow.name : schema && schema.model_id === base ? schema.name : base, sub: st.style.name + " is trained on it", thumb: baseRow ? thumbs.modelThumb(baseRow) : null, mono: monoOf(baseRow ? baseRow.name : base), right: bp[null] || (st.price.state === "ready" && st.price.action === id ? st.price.label : ""), checked: true }] }],
         note: TEXT.base_note
       };
     }
     if (kind === "model") {
       var rec = defaultModel(lane);
       var recRow = o.catalog.find(rec);
-      var groups = [{ title: "Recommended for " + a.label, items: [{ value: null, label: recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec, thumb: recRow ? thumbs.modelThumb(recRow) : null, tag: "Recommended", checked: !st.models[lane] && !styleApplies(id) }] }];
+      var groups = [{ title: "Recommended for " + a.label, items: [{ value: null, label: recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec, thumb: recRow ? thumbs.modelThumb(recRow) : null, mono: monoOf(recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec), tag: "Recommended", checked: !st.models[lane] && !styleApplies(id) }] }];
       try {
         await o.catalog.ensure();
       } catch (e) {
@@ -1735,15 +1881,16 @@ function createController(o) {
         var lanes = map.lanesOf(row);
         if (lanes.indexOf(tool || lane) < 0) continue;
         if (ids.length && ids.indexOf(row.id) < 0 && cat.length >= ids.length) continue;
-        cat.push({ value: row.id, label: row.name, thumb: thumbs.modelThumb(row), checked: st.models[lane] === row.id });
+        cat.push({ value: row.id, label: row.name, thumb: thumbs.modelThumb(row), mono: monoOf(row.name), checked: st.models[lane] === row.id });
       }
       if (cat.length) groups.push({ title: "Catalog · can " + a.label.toLowerCase(), items: cat });
       // Each model's price for this document and these settings.
       var mvals = [];
       for (var mg2 = 0; mg2 < groups.length; mg2++) for (var mi2 = 0; mi2 < groups[mg2].items.length; mi2++) mvals.push(groups[mg2].items[mi2].value);
-      var mprices = await optionPrices(id, mvals, "model", st.models[lane] || null);
+      var mp2 = await optionPrices(id, mvals, "model", st.models[lane] || null);
+      var mprices = mp2.prices;
       for (var mg3 = 0; mg3 < groups.length; mg3++) for (var mi3 = 0; mi3 < groups[mg3].items.length; mi3++) groups[mg3].items[mi3].right = mprices[groups[mg3].items[mi3].value] || "";
-      return { title: null, groups: groups, all: true, lane: lane, note: "Prices are price checks for this document and these settings." };
+      return { title: null, groups: groups, all: true, lane: lane, later: mp2.later, note: "Prices are price checks for this document and these settings." };
     }
     if (kind === "adv") {
       var nm = schema ? schema.name : "";

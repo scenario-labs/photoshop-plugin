@@ -712,10 +712,13 @@ body {
   background-color: #f2b45a;
 }
 
-/* The main view: context and chips on top, the middle scrolls, the
-   composer is pinned at the bottom. On a short panel (Photoshop docks it
-   at 420 px) the context, the chips and the middle scroll together, so the
-   composer and its button always show. */
+/* The main view (AGENTS.md, Panel UI, "Short panels"): the context card
+   and the action chips on top never scroll, so every chip row shows whole;
+   the composer is pinned at the bottom; only the middle (Takes, Recent)
+   scrolls, with the height left between them (flex basis 0, so it gives
+   up its room first). The top shrinks only when nothing is left for the
+   middle, below about 400 px; then it scrolls instead of the composer
+   being cut. */
 .cp .sc-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -724,21 +727,11 @@ body {
   overflow: hidden;
 }
 
-@media (max-height: 599px) {
-  .cp .sc-body {
-    overflow-y: auto;
-  }
-  .cp .sc-body > .sc-mid {
-    flex: 0 0 auto;
-    min-height: auto;
-    overflow: visible;
-  }
-}
-
 .cp .sc-top {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   padding: 12px 12px 8px 12px;
 }
 
@@ -901,7 +894,7 @@ body {
 
 /* The middle: the Takes card, Recent, the empty line. */
 .cp .sc-mid {
-  flex: 1 1 auto;
+  flex: 1 1 0px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1196,6 +1189,28 @@ body {
   background-color: rgba(0, 0, 0, 0.265);
 }
 
+/* Recent, when its full row does not fit under the Takes card: one row
+   of smaller thumbnails, as many as fit (create-view.js fitMid). */
+.cp .recent.compact {
+  margin-bottom: 4px;
+}
+
+.cp .recent.compact .h4 {
+  margin-bottom: 4px;
+}
+
+.cp .recent.compact .rrow {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+.cp .recent.compact .rthumb {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 0;
+}
+
 .cp .rthumb:hover {
   border-color: rgba(255, 255, 255, 0.11);
 }
@@ -1349,7 +1364,7 @@ body {
 
 .cp .refs .hint {
   display: block;
-  flex: 1 1 auto;
+  flex: 1 1 0px;
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -1357,6 +1372,51 @@ body {
   font-size: 11px;
   color: var(--uxp-host-text-color-secondary);
   opacity: 0.8;
+}
+
+/* Suggest (Prompt Spark), at the right end of the refs row. */
+.cp .sug {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  margin: 0;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.cp .sug:hover {
+  color: var(--uxp-host-text-color);
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .sug .ico {
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+}
+
+.cp .composer.covered .sug span {
+  color: transparent;
+}
+
+/* A proposal: up to three lines, then cut (no line-clamp in UXP). */
+.pop .mi.sp3 {
+  align-items: flex-start;
+  padding: 6px 8px;
+}
+
+.pop .mi.sp3 .mn {
+  white-space: normal;
+  max-height: 48px;
+  overflow: hidden;
+  line-height: 16px;
 }
 
 .cp .prompt {
@@ -1743,6 +1803,26 @@ body {
   background-color: rgba(0, 0, 0, 0.265);
 }
 
+/* A model's letters under its picture (create-view.js mi and chipEl). */
+.pop .mi .th .tm,
+.cp .cc .th .tm {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .cc .th .tm {
+  font-size: 8px;
+}
+
 .pop .mi .mono {
   width: 28px;
   height: 28px;
@@ -1882,4 +1962,90 @@ body {
 
 .pop .mi.attention .ms {
   color: #e68619;
+}
+
+/* Short panels: last in the file so these override the rules above. */
+/* The top's own parts keep their height; the top as a whole gives way
+   only below about 400 px. */
+.cp .sc-top > * {
+  flex-shrink: 0;
+}
+
+/* Short panels (Photoshop docks the panel at 420 px): a tighter context
+   card, two-line prompt and tighter composer, so the three chip rows of a
+   280 px panel and the button fit from about 380 px up. */
+@media (max-height: 599px) {
+  .cp .sc-top {
+    padding: 8px 12px 4px 12px;
+  }
+  .cp .ctx {
+    padding: 6px;
+  }
+  .cp .ctx-thumb {
+    width: 36px;
+    height: 36px;
+  }
+  .cp .acts {
+    margin-top: 6px;
+  }
+  .cp .composer {
+    padding: 6px 12px 8px 12px;
+  }
+  .cp .ccard {
+    padding: 6px;
+  }
+  .cp .ccard > * {
+    margin-bottom: 6px;
+  }
+  .cp .prompt {
+    min-height: 36px;
+    height: 36px;
+  }
+  .cp .prompt-ghost {
+    padding: 4px 8px;
+  }
+}
+
+/* Docked at 420 px or less (Photoshop's default dock): the 22 px chip
+   height and 4 px gaps, so a 280 px panel keeps its three chip rows and
+   the button whole down to about 380 px. */
+@media (max-height: 439px) {
+  .cp .sc-top {
+    padding: 6px 12px 2px 12px;
+  }
+  .cp .ctx-thumb {
+    width: 32px;
+    height: 32px;
+  }
+  .cp .acts {
+    margin-bottom: -4px;
+  }
+  .cp .chip {
+    height: 22px;
+    margin: 0 4px 4px 0;
+  }
+  .cp .sc-mid {
+    padding: 0 12px 0 12px;
+  }
+  .cp .composer {
+    padding: 4px 12px 6px 12px;
+  }
+  .cp .ccard {
+    padding: 4px 6px;
+  }
+  .cp .ccard > * {
+    margin-bottom: 4px;
+  }
+  .cp .cc {
+    height: 22px;
+    margin: 0 4px 4px 0;
+  }
+}
+
+@media (max-height: 399px) {
+  .cp .sc-top {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
 }

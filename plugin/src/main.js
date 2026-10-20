@@ -390,6 +390,7 @@ function boot(env) {
       runner: runner,
       ledger: ledger,
       references: references,
+      client: client,
       account: accounts.current,
       settings: settings,
       jobsModel: jobsModel,
@@ -400,6 +401,7 @@ function boot(env) {
     });
     createView = createViewMod.createCreateView(env.document, controller, {
       log: logger.log,
+      global: env.global,
       openPicker: function (lane) {
         if (picker) picker.open(mapMod.laneTab(lane || "image"), lane);
       },

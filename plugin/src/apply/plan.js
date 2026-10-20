@@ -86,7 +86,10 @@ function build(rec, o) {
     return x.asset_id;
   });
   var prompt = rec.parameters && typeof rec.parameters.prompt === "string" ? rec.parameters.prompt : "";
-  var n = names(kind, prompt, ids, !!o.leave_prompts);
+  // A run started from a Suggest proposal keeps the person's short prompt
+  // as its name (FLOWS v2, changes after review 8).
+  var short = typeof rec.name === "string" && rec.name ? rec.name : null;
+  var n = names(kind, short || prompt, ids, !!o.leave_prompts);
   var params = parametersText(rec.parameters || {}, o.free_text || [], !!o.leave_prompts);
   var box = o.box;
   if (!box) {
@@ -101,6 +104,7 @@ function build(rec, o) {
     modelName: rec.model_name,
     trainedModelIds: (rec.trained_model_ids || []).join(","),
     prompt: o.leave_prompts ? null : prompt || null,
+    runName: o.leave_prompts ? null : short,
     negativePrompt: o.leave_prompts || !rec.parameters ? null : rec.parameters.negativePrompt || null,
     parameters: params,
     inputAssetIds: (rec.inputs && rec.inputs.asset_ids ? rec.inputs.asset_ids : []).join(","),

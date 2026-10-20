@@ -101,7 +101,11 @@ After sign-in the creation panel shows directly (section 2): no banner, no sampl
 
 ## 2. Creation panel
 
-Header, context card and action chips on top; the Takes card and Recent in the middle part, which scrolls; the composer pinned at the bottom (SPEC 3.1). The panel is one flex column whose middle part scrolls: UXP 9.4 has no `position: sticky`, CSS grid or `gap` (measured with the probe plugin). Chips, menus, popovers and the action button are plain elements: `sp-picker` does not show its value and `sp-action-button` with an icon and a label stacks them. Below 600 px of panel height, the top and the middle part scroll as one block above the composer, so the button is always visible; under 300 px of width the Model chip cuts the model name at 100 px with an ellipsis.
+Header, context card and action chips on top; the Takes card and Recent in the middle part, which scrolls; the composer pinned at the bottom (SPEC 3.1). The panel is one flex column whose middle part scrolls: UXP 9.4 has no `position: sticky`, CSS grid or `gap` (measured with the probe plugin). Chips, menus, popovers and the action button are plain elements: `sp-picker` does not show its value and `sp-action-button` with an icon and a label stacks them. The top (context card and action chips) never scrolls, so every chip row shows whole; on short panels it tightens instead (below 600 px of height a smaller context card and a two-line prompt, at the 420 px dock 22 px chips with 4 px gaps), and only below about 400 px does it scroll, never the composer. The middle part gives up its room first: the empty line goes, then Recent drops to one row of small thumbnails, then hides until there is room; the Takes card always wins. Under 300 px of width the Model chip cuts the model name at 100 px with an ellipsis.
+
+**Suggest** sits at the right end of the refs row (nothing can sit inside the prompt box in UXP). Its menu, "Suggest · Prompt Spark · Free", lists three fuller prompts for the action's model from the person's text, or describes the active layer when the prompt is empty; a pick replaces the prompt, and the run keeps the short prompt as its name. It is sent only when its price check answers 0 CU; otherwise the menu says the price and nothing is sent.
+
+**Select…** in the layer context card (select by description) is not shown in this build: it needs the segmentation route (SAM 3.1 Image), which is SPEC v1.1.
 
 The header is one row of 36 px that never wraps: the Scenario mark (monochrome), the project name with `v` (one line, cut with an ellipsis; the full name is its tooltip; it opens the Projects view), then the agent icon with its dot and the first connected client's name (`o` none, `*` connected, `!` needs the person; a click opens the agent popover) and **Jobs** with the number of jobs on this computer (`Jobs 2`; blue while one runs, amber when one waits for the person). Everything else is in Photoshop's panel menu `[=]`.
 
@@ -146,8 +150,7 @@ No document open (F3). Create image is the one action; the result opens as a new
 | ((Create image))                     |
 |                                      |
 +--------------------------------------+
-| [ + Reference ]  Selection, layer or |
-| file                                 |
+| [ + Reference ]  Selectio [Suggest] |
 | Describe the image                   |
 | [v 3:2 1536 x 1024] [v GPT Image 2.5 |
 | Flare] [v 4 takes]                   |
@@ -396,7 +399,7 @@ Empty result:
 
 ## 5. Style chip
 
-**Style** (SPEC 3.4): No style, **Match an image** (a picture as the style reference, any model), then on the edit actions (Replace inside, Make versions) a **Trained styles** group with the current project's trained models that can edit. A trained style switches the Model chip to the model it was trained on; on the image and strength route the **Change** chip shows:
+**Style** (SPEC 3.4): No style, **Match an image** (a picture as the style reference, any model), then on the edit actions (Replace inside, Make versions) a **Trained styles** group with the current project's trained models that can edit. A trained style switches the Model chip to the model it was trained on; on the image and strength route, and on any edit model with a strength setting, the **Change** chip shows (Subtle, Light, Balanced, Strong, Free, mapped onto the model's own range):
 
 ```
 |           +------------------------+ |
