@@ -935,6 +935,15 @@ body {
   margin-right: 6px;
 }
 
+/* The 100% crops are enlarged pictures: their box clips them (without it
+   UXP drew the picture over the whole panel, seen live on 27.11). */
+.cp .cmp .tw {
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
 .cp .cmp-l {
   font-size: 11px;
   margin-top: 2px;

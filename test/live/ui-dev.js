@@ -62,7 +62,12 @@ async function send(cmd, timeoutMs = 8000) {
     } catch (e) {
       continue;
     }
-    const out = JSON.parse(text);
+    let out = null;
+    try {
+      out = JSON.parse(text);
+    } catch (e) {
+      continue; // read while the panel was still writing it
+    }
     if (out.id === id) return out;
   }
   throw new Error("no answer from the panel (is a development build installed and Photoshop running?)");

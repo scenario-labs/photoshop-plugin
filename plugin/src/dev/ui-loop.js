@@ -211,6 +211,8 @@ function start(o) {
       case "click": {
         var el = find(cmd);
         if (!el) throw new Error("no such element shown");
+        // child: a row whose own control is its first child (More rows).
+        if (typeof cmd.child === "number" && el.children && el.children[cmd.child]) el = el.children[cmd.child];
         el.click();
         return { clicked: true };
       }
@@ -219,6 +221,12 @@ function start(o) {
         if (p) p.value = String(cmd.text || "");
         app.controller.setPrompt(String(cmd.text || ""));
         return { prompt: String(cmd.text || "") };
+      }
+      case "selecttext": {
+        var sf = doc.getElementById("ctx-select");
+        if (sf) sf.value = String(cmd.text || "");
+        app.controller.setSelect(String(cmd.text || ""));
+        return { select: String(cmd.text || "") };
       }
       case "pop":
         if (cmd.close) app.createView.closePop();
@@ -245,6 +253,8 @@ function start(o) {
         return await live().inspect(own(cmd.document_id));
       case "composite":
         return { path: await live().composite(own(cmd.document_id), String(cmd.path || "dev-live/panel-composite.png")) };
+      case "front":
+        return { document_id: await live().front(own(cmd.document_id)) };
       case "savedoc": {
         var sname = String(cmd.psd || "panel-check.psd").replace(/[^A-Za-z0-9 ._-]/g, "");
         await live().saveDocument(own(cmd.document_id), "dev-live", sname);

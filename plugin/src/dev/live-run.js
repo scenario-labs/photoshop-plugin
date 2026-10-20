@@ -128,6 +128,16 @@ function start(app, hostRequire, o) {
     });
   }
 
+  // Brings a document it made to the front, as a click on its tab.
+  async function front(docId) {
+    return modal("Scenario dev: front", async function () {
+      var doc = findDoc(docId);
+      if (!doc) throw new Error("document is not open");
+      ps.app.activeDocument = doc;
+      return doc.id;
+    });
+  }
+
   async function openSaved(path) {
     var file = await entryFor(path);
     return modal("Scenario dev: open", async function () {
@@ -574,6 +584,7 @@ function start(app, hostRequire, o) {
     makeDocument: makeDocument,
     saveDocument: saveDocument,
     openSaved: openSaved,
+    front: front,
     closeDocs: closeDocs,
     select: select,
     inspect: inspect,

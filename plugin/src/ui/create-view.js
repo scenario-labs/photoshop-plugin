@@ -712,18 +712,28 @@ function createCreateView(doc, ctl, o) {
     openPop(anchor, kind);
   }
 
-  function place(p, anchor) {
+  // A chip's own menu (takes, size, factor...) is narrow, as the prototype
+  // draws it; More, Jobs, the agent and the reference sources take 280.
+  var WIDE = { more: 1, jobs: 1, agent: 1, addref: 1, model: 1, style: 1, stylesrc: 1, suggest: 1, adv: 1 };
+
+  function place(p, anchor, kind) {
     var app = rect(byId("app"));
-    var r = rect(anchor);
+    // A composer chip read as an empty box on 27.11 while its row had one:
+    // the row then stands in for it.
+    var r = rect(anchor) || rect(anchor && anchor.parentNode);
     var W = app ? app.width : 320;
-    var width = Math.max(180, Math.min(280, W - 16));
+    var width = Math.max(180, Math.min(WIDE[kind] ? 280 : 220, W - 16));
+    p.style.height = "";
     p.style.width = width + "px";
     if (!app || !r) {
       p.style.left = "8px";
       p.style.top = "48px";
       return;
     }
+    // A narrow menu ends at its chip's right edge when it does not fit
+    // from its left edge.
     var left = Math.min(Math.max(8, r.left - app.left), W - width - 8);
+    if (!WIDE[kind] && r.right - app.left - width >= 8 && r.left - app.left + width > W - 8) left = r.right - app.left - width;
     p.style.left = Math.max(8, Math.round(left)) + "px";
     // A popover opening upward stops under the header: header text was seen
     // drawn through it on 27.11.
@@ -731,7 +741,9 @@ function createCreateView(doc, ctl, o) {
     var floor = hdr ? hdr.bottom : app.top;
     var above = r.top - floor;
     var below = app.bottom - r.bottom;
+    pop.upAt = null;
     if (above > below) {
+      pop.upAt = r.top - app.top - 6;
       p.style.top = "auto";
       p.style.bottom = Math.round(app.bottom - r.top + 6) + "px";
       p.style.maxHeight = Math.max(120, Math.round(above - 14)) + "px";
@@ -753,10 +765,15 @@ function createCreateView(doc, ctl, o) {
         if (!p) return;
         clear(p);
         fillPop(p, kind, m || {});
-        place(p, anchor);
+        // The clicked chip may have been drawn again meanwhile, leaving the
+        // old one without a box (seen live on 27.11): anchor on the new one.
+        if (!rect(anchor)) anchor = findAnchor(kind) || anchor;
+        pop.anchor = anchor;
+        place(p, anchor, kind);
         coverPrompt(true);
         show(byId("pop-scrim"), true, "block");
         show(p, true);
+        fitPop(p);
         // Prices still checking show "…"; the menu is drawn again with them.
         if (m && m.later && typeof m.later.then === "function") {
           m.later.then(function () {
@@ -766,6 +783,7 @@ function createCreateView(doc, ctl, o) {
               var keep = p.scrollTop;
               clear(p);
               fillPop(p, kind, m2);
+              fitPop(p);
               p.scrollTop = keep;
             });
           }).then(null, report);
@@ -776,6 +794,42 @@ function createCreateView(doc, ctl, o) {
         closePop();
       }
     );
+  }
+
+  // UXP stretched a popover anchored by its bottom up to its max height
+  // (seen live on 27.11): give it the height of its rows when they need less.
+  // Measured once UXP has laid the rows out (right after display they
+  // still read the stretched box).
+  function fitPop(p) {
+    var seq = pop.seq;
+    var tries = 0;
+    function again() {
+      if (seq !== pop.seq || !pop.kind) return;
+      if (!rect(pop.anchor)) {
+        var a = findAnchor(pop.kind);
+        if (a) pop.anchor = a;
+      }
+      if (!rect(pop.anchor) && ++tries < 12) {
+        setTimeout(again, 50);
+        return;
+      }
+      if (rect(pop.anchor)) place(p, pop.anchor, pop.kind);
+      fitNow(p);
+    }
+    setTimeout(again, 30);
+  }
+
+  function fitNow(p) {
+    var need = Math.ceil((p.scrollHeight || 0) + 8);
+    var max = parseFloat(p.style.maxHeight) || 0;
+    if (!(need > 20 && (!max || need < max))) return;
+    p.style.height = need + "px";
+    // Its bottom was ignored once the height was set (seen live on 27.11):
+    // an upward menu is placed by its top, just above its chip.
+    if (pop.upAt !== null && pop.upAt !== undefined) {
+      p.style.top = Math.round(pop.upAt - need) + "px";
+      p.style.bottom = "";
+    }
   }
 
   function localMenu(kind) {
@@ -1063,7 +1117,14 @@ function createCreateView(doc, ctl, o) {
         if (a) {
           pop.anchor = a;
           var p = byId("pop");
-          if (p) place(p, a);
+          // The new chip has no box until UXP lays it out (it read as none
+          // and the menu jumped under the header, seen live on 27.11).
+          if (p)
+            setTimeout(function () {
+              if (pop.anchor !== a || !pop.kind) return;
+              place(p, a, pop.kind);
+              fitNow(p);
+            }, 30);
         } else closePop();
       }
     } catch (e) {
