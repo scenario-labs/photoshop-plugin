@@ -1003,7 +1003,12 @@ function createHost(hostRequire, g) {
     // Remove BG puts the cutout's alpha on the source layer or on a copy of
     // its pixels. plan.reads asks for small reads used by the checks: the
     // composite before any change, each take before its mask, the composite
-    // after. opts.decide(reads) may answer { mask: false } to land unmasked.
+    // after. opts.decide(reads) may answer { mask: false } to land unmasked,
+    // or { masks: [one per take], xmp: [packets or null], note } to land each
+    // take with its own mask (Replace inside, Bolder: the mask grown over what
+    // the model drew past the selection); the masks then go on the take
+    // layers, not on the group, and the selection loaded back is still the
+    // person's own (plan.mask).
     // Anything failing rolls the History state back, so the document is as it
     // was. opts.auto: Place when ready (waits at most 1 s for the modal
     // state, restores the person's active layers).
@@ -1085,11 +1090,16 @@ function createHost(hostRequire, g) {
                 for (var r = 0; r < placed.length; r++) reads.takes.push(await readArea(doc, placed[r].id, R.takes.bounds, R.takes.width, R.takes.height));
               }
               var useMask = !!plan.mask;
+              var perTake = null;
               if (useMask && typeof opts.decide === "function") {
                 var d = opts.decide(reads);
                 if (d && d.mask === false) {
                   useMask = false;
                   if (d.note) notes.push(d.note);
+                } else if (d && Array.isArray(d.masks) && d.masks.length === placed.length) {
+                  perTake = d.masks;
+                  if (d.note) notes.push(d.note);
+                  for (var xi = 0; Array.isArray(d.xmp) && xi < placed.length; xi++) if (d.xmp[xi]) await setXmp(doc, placed[xi].id, d.xmp[xi]);
                 }
               }
               var maskTarget = placed.length === 1 ? placed[0] : null;
@@ -1103,7 +1113,24 @@ function createHost(hostRequire, g) {
                 for (var v = 1; v < placed.length; v++) placed[v].visible = false;
                 maskTarget = group;
               }
-              if (useMask && maskTarget) {
+              if (useMask && perTake) {
+                try {
+                  // The person's selection first, read back from take 1
+                  // with the selection's mask, then each take's own mask.
+                  if (hadSelection) {
+                    await putMask(doc, placed[0].id, plan.mask);
+                    try {
+                      await maskToSelection(placed[0].id, plan.mask);
+                    } catch (e) {
+                      // the selection stays dropped; the masks hold it
+                    }
+                  }
+                  for (var pt = 0; pt < placed.length; pt++) await putMask(doc, placed[pt].id, perTake[pt] || plan.mask);
+                  masked = true;
+                } catch (e) {
+                  notes.push("Placed unmasked: the mask could not be applied.");
+                }
+              } else if (useMask && maskTarget) {
                 try {
                   await putMask(doc, maskTarget.id, plan.mask);
                   masked = true;

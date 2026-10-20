@@ -287,6 +287,13 @@ function createCreateView(doc, ctl, o) {
           return ctl.moreLike();
         }, "more_like")
       );
+      (card.actions || []).forEach(function (ca) {
+        row.appendChild(
+          btn(ca.label, null, function () {
+            return ctl.cardAction(ca.id);
+          }, ca.id)
+        );
+      });
       sec.appendChild(row);
     } else {
       var one = el("div", "single");

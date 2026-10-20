@@ -145,7 +145,10 @@ function normalize(record) {
     price_affecting: priceAffecting,
     variable_charge: variableCharge(id),
     takes_loras: takesLoras,
-    size_inputs: sizeInputs(inputs, record.uiConfig),
+    // size_route follows_input (catalog-map facts): no size is sent, the
+    // capture goes at its own size; masked_params go with a mask.
+    size_inputs: facts.size_route === "follows_input" ? sizeInputs([], null) : sizeInputs(inputs, record.uiConfig),
+    masked_params: facts.masked_params && typeof facts.masked_params === "object" ? copyOf(facts.masked_params) : null,
     capture_input: captureInput,
     capture_input_name: captureName,
     expand_route: expandRoute,
@@ -155,6 +158,12 @@ function normalize(record) {
     no_refund: record.disableRefund === true,
     output_max_px: num(facts.output_max_px)
   };
+}
+
+function copyOf(obj) {
+  var out = {};
+  for (var k in obj) if (Object.prototype.hasOwnProperty.call(obj, k)) out[k] = obj[k];
+  return out;
 }
 
 // SPEC 6.1 item 6: models whose charge can exceed the quote, as data.

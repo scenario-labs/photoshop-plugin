@@ -11,6 +11,11 @@
 //   sample: "visible" (default) | "layer",
 //   quality: "low" | "medium" | "high" (models with a quality input),
 //   expect: "cleared" (Remove: the checks look for parts left unchanged),
+//   edit_mode: "inside" | "bolder" (Replace inside's Edit chip; Bolder
+//            grows the placed mask over what the model drew past the
+//            selection, apply/grow.js),
+//   model_lane: the catalog-map defaults entry whose preset and takes apply
+//            ("replace", "remove"; "edit" when left out),
 //   feather: px of the placed mask's edge (default 2),
 //   mask_layer: true: no selection needed, the active layer's outline is
 //            the mask (Relight to scene),
@@ -167,7 +172,8 @@ function editView(schema, ctx, o) {
   var pad = shaped.pad;
   if (pad.left || pad.top || pad.right || pad.bottom) view.notes.push(TEXT.pad_note);
 
-  var params = common.presetFor("edit", schema.model_id);
+  var lane = o.model_lane || "edit";
+  var params = common.presetFor(lane, schema.model_id);
   for (var k in shaped.params) params[k] = shaped.params[k];
   if (schema.prompt_input && o.prompt) params[schema.prompt_input] = o.prompt;
   // Quality (Advanced): Low, Medium or High, for models that have the input.
@@ -191,11 +197,14 @@ function editView(schema, ctx, o) {
     params.strength = amount0;
     view.controls.change_amount = { value: amount0, min: sp0.min, max: sp0.max, default: sp0.default, note: TEXT.change_amount };
   }
-  var takes = common.takesFor(schema, "edit", o.takes);
+  var takes = common.takesFor(schema, lane, o.takes);
   view.controls.takes = takes;
 
   var mask = common.maskInput(schema);
   view.mask = !!(sel && mask);
+  // A model that takes a mask only with some settings (Ideogram 4.5:
+  // aspectRatio auto) gets them when the mask goes.
+  if (view.mask && schema.masked_params) for (var mp in schema.masked_params) params[mp] = schema.masked_params[mp];
   var target = {
     kind: kind === "layer" ? "canvas" : kind,
     document_id: doc.id,
@@ -211,6 +220,7 @@ function editView(schema, ctx, o) {
   if (maskLayer) target.mask_layer_id = maskLayer;
   // Remove: the check also looks for parts of the selection left as they were.
   if (o.expect === "cleared" && sel) target.expect = "cleared";
+  if ((o.edit_mode === "bolder" || o.edit_mode === "inside") && sel && !maskLayer) target.edit_mode = o.edit_mode;
   view.request = {
     lane: "edit",
     model_id: schema.model_id,

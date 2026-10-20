@@ -14,11 +14,14 @@
 //            segment, reframe, video, frames); host-more.js lands it
 // model: the action's own recommended model (else the lane's default);
 // alts: the other models its Model menu offers (actions with their own
-// model list only those). quality: the Quality level it starts at.
+// model list only those). model_lane: the catalog-map defaults entry that
+// names its recommended model and keeps the person's model choice apart
+// (Replace inside and Remove, mask strategy test of 2026-10-20). quality: the Quality level it starts at.
 // prompt: "req" (needed), "opt" (may stay empty: the built-in prompt is
 // sent), "none" (the action takes no prompt; the note says so).
-// chips: the composer chips, in order (style, model, takes, size, target,
-// upsize, change, angle, format, duration). refs: the refs row shows (when
+// chips: the composer chips, in order (edit, style, model, takes, size,
+// target, upsize, change, angle, format, duration). edit: Inside selection
+// or Bolder, the two ways a masked Replace inside lands. refs: the refs row shows (when
 // the model takes images).
 
 // Models of the later flows (recommend with quality priority plus the
@@ -53,6 +56,17 @@ function plural(n, one) {
   return n + " " + one + (n === 1 ? "" : "s");
 }
 
+// The Edit chip of Replace inside (mask strategy test of 2026-10-20):
+// Inside selection runs the action's recommended model, which keeps the
+// pixels outside the selection; Bolder runs GPT Image 2.5 Flare, whose
+// change is stronger and may reach past the selection, and the placed mask
+// grows to keep the new subject whole (apply/grow.js). A model picked in
+// the Model menu sets the chip: one with mask growth reads Bolder.
+var EDIT_MODES = {
+  inside: { label: "Inside selection", sub: "Changes only what is inside the selection. Everything outside stays as it is." },
+  bolder: { label: "Bolder", sub: "A stronger change. The new subject may reach past the selection; the mask grows to keep it whole.", model: "model_openai-gpt-image-2-5-flare" }
+};
+
 var ACTIONS = {
   // ---- Selection (F1) ----
   replace: {
@@ -60,8 +74,9 @@ var ACTIONS = {
     family: "edit",
     prompt: "req",
     placeholder: "Describe what goes inside the selection",
+    model_lane: "replace",
     takes: 2,
-    chips: ["style", "model", "takes"],
+    chips: ["edit", "style", "model", "takes"],
     refs: true,
     button: function () {
       return "Replace inside";
@@ -78,6 +93,7 @@ var ACTIONS = {
     builtin: BUILTIN.remove,
     // The checks flag a Remove that left part of the selection as it was.
     expect: "cleared",
+    model_lane: "remove",
     takes: 2,
     chips: ["model", "takes"],
     button: function () {
@@ -634,6 +650,7 @@ function promptFor(id, text) {
 
 module.exports = {
   ACTIONS: ACTIONS,
+  EDIT_MODES: EDIT_MODES,
   MODELS: MODELS,
   ANGLES: ANGLES,
   CONTEXTS: CONTEXTS,

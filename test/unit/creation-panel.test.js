@@ -101,9 +101,13 @@ test("no document: Create image leads, Open from Library beside it; an empty pro
 
 // A price for any Flare request: 1 CU plus 1 per take (the measured table
 // answers only some sizes).
+// Replace inside and Remove default to Ideogram 4.5 Precise Edit and
+// Ideogram 4.5 (mask strategy test of 2026-10-20): priced here like Flare.
+const PRECISE = "model_ideogram-v4-5-precise-edit";
+const IDEOGRAM = "model_ideogram-v4-5";
 function flarePrice(extra) {
   return (model, body) => {
-    if (model !== FLARE) return null;
+    if (model !== FLARE && model !== PRECISE && model !== IDEOGRAM) return null;
     const n = 1 + (Number(body.numOutputs) || 1) + (extra ? extra(body) : 0);
     return { status: 269, body: { creativeUnitsCost: n, creativeUnitsDiscount: 0, costDetails: { "custom-generation": n } } };
   };
@@ -200,6 +204,7 @@ test("F1 a selection: Replace inside lands masked as a group above the layer; Re
   doc.byId("go").click();
   await landed(app);
   assert.equal(mock.paidCalls.length, 1);
+  assert.equal(mock.paidCalls[0].model, PRECISE, "Replace inside runs Precise Edit");
   assert.equal(mock.paidCalls[0].body.prompt, "A red kite");
   assert.equal(mock.paidCalls[0].body.numOutputs, 2);
   assert.ok(mock.paidCalls[0].body.mask, "a masked edit");
@@ -577,6 +582,53 @@ test("an open popover hides the prompt field behind a stand-in of the same text 
   doc.byId("pop-scrim").click();
   await waitFor(() => doc.byId("prompt").style.display === "block", { label: "the field is back" });
   assert.equal(doc.byId("prompt-ghost").style.display, "none");
+});
+
+test("Replace inside: the Edit chip reads Inside selection on Precise Edit; Bolder switches to Flare and its price, the Model menu sets the chip, the choice stays with Replace inside", async (t) => {
+  const sel = { left: 100, top: 200, width: 512, height: 512 };
+  const answer = (model, body) => {
+    const n = Number(body.numOutputs) || 1;
+    if (model === PRECISE) return cost(4 * n);
+    if (model === FLARE) return cost(1 + n);
+    if (model === IDEOGRAM) return cost(5 * n);
+    return null;
+  };
+  const { app, doc, ps } = await bootGenerate(t, { docs: [{ ...POSTER, selection: sel }], active: 7, mockOpts: { answer } });
+  await show(app, ps);
+  await ctxTitle(doc, "Selection 512 × 512 on Background");
+  doc.type("prompt", "A red kite");
+  await button(doc, "Replace inside · 8 CU");
+  const chipText = () => find(doc, "data-pop", "edit").textContent;
+  assert.match(chipText(), /Edit\s*Inside selection/);
+  const pop = await popOpen(doc, "edit");
+  await waitFor(() => /3 CU/.test(pop.textContent) && /8 CU/.test(pop.textContent), { label: `each choice priced (now ${pop.textContent})` });
+  assert.match(pop.textContent, /Everything outside stays as it is/);
+  assert.match(pop.textContent, /may reach past the selection/);
+  assert.ok(!/\u2014/.test(pop.textContent), "no em dash");
+  const bolder = menuValues(doc).find((e) => e.getAttribute("data-value") === "bolder");
+  bolder.click();
+  await button(doc, "Replace inside · 3 CU");
+  assert.match(chipText(), /Bolder/);
+  assert.equal(app.controller.state().models.replace, FLARE);
+  // Remove keeps its own model: Ideogram 4.5.
+  find(doc, "data-act", "remove").click();
+  await button(doc, "Remove · 10 CU");
+  assert.equal(findAll(doc, "data-pop", "edit").length, 0, "Remove has no Edit chip");
+  find(doc, "data-act", "replace").click();
+  doc.type("prompt", "A red kite");
+  await button(doc, "Replace inside · 3 CU");
+  assert.match(chipText(), /Bolder/, "the choice is kept for Replace inside");
+  // A model without mask growth picked in the Model menu reads Inside selection.
+  app.controller.choose("model", IDEOGRAM);
+  await button(doc, "Replace inside · 10 CU");
+  assert.match(chipText(), /Inside selection/);
+  app.controller.choose("edit", "inside");
+  await button(doc, "Replace inside · 10 CU");
+  app.controller.choose("edit", "bolder");
+  await button(doc, "Replace inside · 3 CU");
+  app.controller.choose("edit", "inside");
+  await button(doc, "Replace inside · 8 CU");
+  assert.equal(app.controller.state().models.replace, undefined, "back on the recommended model");
 });
 
 test("Remove on a selection: the job records that the selection should be cleared, so the checks measure how much of it came back unchanged", async (t) => {

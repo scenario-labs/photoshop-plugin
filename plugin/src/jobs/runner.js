@@ -54,6 +54,7 @@ var price = require("../forms/price.js");
 var charges = require("./charges.js");
 var planMod = require("../apply/plan.js");
 var checksMod = require("../apply/checks.js");
+var growMod = require("../apply/grow.js");
 var pixelsMod = require("../capture/pixels.js");
 var shapeMod = require("../capture/shape.js");
 var slugMod = require("../util/slug.js");
@@ -797,7 +798,10 @@ function createRunner(o) {
       }
       var check = sameCanvas ? memo.check : null;
       var R = check ? { bounds: check.region, width: check.width, height: check.height } : null;
-      return { document: doc, box: box, fit: "box", mask: m, insert: t.sample === "layer" && t.layer_id ? { layer_id: t.layer_id } : null, reads: R ? { before: R, takes: R, after: R } : null, notes: notes };
+      var edited = { document: doc, box: box, fit: "box", mask: m, insert: t.sample === "layer" && t.layer_id ? { layer_id: t.layer_id } : null, reads: R ? { before: R, takes: R, after: R } : null, notes: notes };
+      memo.grown = null;
+      if (m && check && t.edit_mode === "bolder") edited.decide = growDecide(rec, memo, check, m, edited);
+      return edited;
     }
     if (t.kind === "expand") {
       if (!sameCanvas) throw canvasChanged();
@@ -848,6 +852,47 @@ function createRunner(o) {
     return { document: doc, box: box, fit: "box", mask: null, notes: notes };
   }
 
+  // Replace inside, Bolder (mask strategy test of 2026-10-20): each take's
+  // mask grows over what the model drew past the selection, on the reads
+  // taken before the masks go on (apply/grow.js). where.plan is the plan
+  // being placed, for the takes' metadata.
+  function growDecide(rec, memo, check, base, where) {
+    var t = rec.target || {};
+    var s = t.selection || [0, 0, 0, 0];
+    var feather = typeof t.feather === "number" ? t.feather : 0;
+    return function (reads) {
+      if (!reads.takes || !reads.takes.length) return null;
+      var context = reads.before || check.context;
+      var out = [];
+      var masks = [];
+      var packets = [];
+      var any = false;
+      for (var i = 0; i < reads.takes.length; i++) {
+        var g;
+        try {
+          g = growMod.growMask(context, rgbOf(reads.takes[i]), check.mask, { scale: check.scale, margin: t.margin || 0, sel_long: Math.max(s[2], s[3]) });
+        } catch (e) {
+          log("jobs: the mask did not grow (" + ((e && e.message) || e) + ")");
+          g = null;
+        }
+        out.push(g ? { grown_pct: g.applied ? g.grown_pct : 0, capped: g.capped, mask: g.applied ? g.mask : null } : { grown_pct: 0, capped: false, mask: null });
+        masks.push(g && g.applied ? growMod.placementOf(g.mask, base, feather) : base);
+        if (g && g.applied) any = true;
+        var take = where.plan && where.plan.takes ? where.plan.takes[i] : null;
+        var fields = take ? xmpMod.parse(take.xmp) : null;
+        if (fields && g && g.applied) {
+          fields.maskGrownPct = String(g.grown_pct);
+          packets.push(xmpMod.build(fields));
+        } else packets.push(null);
+      }
+      memo.grown = out;
+      if (!any) return null;
+      var most = 0;
+      for (var k = 0; k < out.length; k++) most = Math.max(most, out[k].grown_pct);
+      return { masks: masks, xmp: packets, note: "Kept the new subject whole: the mask grew by " + most + "% past the selection." };
+    };
+  }
+
   function rgbOf(img) {
     return img && img.components === 4 ? { width: img.width, height: img.height, components: 3, data: dropAlpha(img) } : img;
   }
@@ -870,20 +915,23 @@ function createRunner(o) {
     });
     if (rec.lane === "edit" && memo.check && reads.takes && reads.takes.length) {
       var ck = memo.check;
+      var grown = memo.grown || [];
       for (var i = 0; i < reads.takes.length; i++) {
         var c = checksMod.check({
           context: ck.context,
           result: rgbOf(reads.takes[i]),
-          mask: ck.mask,
+          mask: grown[i] && grown[i].mask ? grown[i].mask : ck.mask,
           scale: ck.scale,
           shaped: t.upload ? { width: t.upload[0], height: t.upload[1] } : null,
           result_size: outputs[i] ? { width: outputs[i].width, height: outputs[i].height } : null,
           masked: !!where.mask && result.masked,
           cleared: t.expect === "cleared"
         });
-        out.checks.push(summary(c));
+        var sc = summary(c);
+        if (grown[i]) sc.mask_grown_pct = grown[i].grown_pct;
+        out.checks.push(sc);
       }
-      if (reads.before && reads.after && where.mask && result.masked) out.verify = checksMod.verify({ before: reads.before, after: reads.after, mask: ck.mask, feather: t.feather || 0, scale: ck.scale });
+      if (reads.before && reads.after && where.mask && result.masked) out.verify = checksMod.verify({ before: reads.before, after: reads.after, mask: grown[0] && grown[0].mask ? grown[0].mask : ck.mask, feather: t.feather || 0, scale: ck.scale });
     } else if (t.kind === "expand" && memo.expand && reads.takes && reads.takes.length && reads.before) {
       for (var j = 0; j < reads.takes.length; j++) {
         var b = checksMod.bandCheck({ context: reads.before, result: rgbOf(reads.takes[j]), band: memo.expand.band, scale: memo.expand.scale });
@@ -895,6 +943,7 @@ function createRunner(o) {
       var badges = checksMod.badges(out.checks[k] || null, k === 0 ? out.verify : null, { masked: !!where.mask && result.masked });
       var small = smallResult(rec, outputs[k]);
       if (small) badges.push(small);
+      if (memo.grown && memo.grown[k] && memo.grown[k].capped) badges.push("The result spills past the selection");
       out.badges.push(badges);
     }
     return out;
@@ -917,7 +966,8 @@ function createRunner(o) {
       outside_mean: c.outside ? c.outside.mean : null,
       seam: c.seam ? { bias: c.seam.bias, residual: c.seam.residual } : null,
       seam_ok: c.seam_ok,
-      kept_share: c.kept_share === undefined ? null : c.kept_share
+      kept_share: c.kept_share === undefined ? null : c.kept_share,
+      shift_px: typeof c.shift_px === "number" ? c.shift_px : null
     };
   }
 
@@ -1021,6 +1071,7 @@ function createRunner(o) {
       throw e;
     }
     var p = planMod.build(rec, { version: o.version, document: where.document, box: where.box, mask: where.mask, restore_active: !!opts.auto, fit: where.fit, insert: where.insert, canvas: where.canvas, duplicate: where.duplicate, reads: where.reads, cutout: where.cutout });
+    where.plan = p;
     var before = rec.state;
     await update(id, { state: "applying", placement_checked: true });
     await hooks.at("place", { local_id: id, document_id: where.document ? where.document.id : null });

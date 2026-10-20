@@ -12,6 +12,15 @@
 //   ring, and the context, both blurred: bias is the worst channel's mean
 //   tone shift, residual the mean difference once that shift is removed
 //   (misalignment, wrong scale). seam_ok: bias < 12 and residual < 6.
+// - shift_px: how far the result moved against the context, in document
+//   px: the median shift of textured 32 px blocks (check scale, luminance
+//   standard deviation at least 6) lying more than 20 document px outside
+//   the mask, each found by block matching on zero-mean luminance with a
+//   parabola for the sub-pixel part (the mask strategy test of 2026-10-20
+//   used phase correlation for the same measure). GPT Image 2.5 re-renders
+//   the whole picture: its ring residual is high at shifts of 0.01 to 0.25
+//   px, so a high residual alone is "Re-rendered around the edit"; "May be
+//   misaligned" needs a shift of 1 document px or more, or a wrong aspect.
 // - aspect_ok: the result's aspect within 1% of the shaped capture.
 // - kept_share (Remove only, o.cleared): the share of the masked area whose
 //   16 px cells look as before (both blurred, the inside's tone shift
@@ -27,7 +36,7 @@
 
 var pixels = require("../capture/pixels.js");
 
-var LIMITS = { seam_bias: 12, seam_residual: 6, edited_mean: 3, untouched_max: 2, aspect: 0.01, ring: 12, gap: 2, blur: 4, cell: 16, kept_share: 0.3 };
+var LIMITS = { seam_bias: 12, seam_residual: 6, edited_mean: 3, untouched_max: 2, aspect: 0.01, ring: 12, gap: 2, blur: 4, cell: 16, kept_share: 0.3, shift_px: 1, shift_block: 32, shift_texture: 6, shift_away: 20, shift_search: 4, shift_blocks: 48 };
 
 // Chamfer distance (in pixels) from each pixel to the nearest pixel where
 // inside(i) is true; 0 on those pixels.
@@ -187,6 +196,116 @@ function keptShare(context, result, mask, scale) {
   return Math.round((kept / n) * 100) / 100;
 }
 
+function luma(img) {
+  var n = img.width * img.height;
+  var out = new Float32Array(n);
+  var k = img.components;
+  for (var i = 0; i < n; i++) {
+    if (k < 3) out[i] = img.data[i * k];
+    else out[i] = 0.299 * img.data[i * k] + 0.587 * img.data[i * k + 1] + 0.114 * img.data[i * k + 2];
+  }
+  return out;
+}
+
+function median(list) {
+  var s = list.slice().sort(function (a, b) {
+    return a - b;
+  });
+  var m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// The parabola's minimum through three costs around the best one.
+function subPixel(l, c, r) {
+  var den = l - 2 * c + r;
+  if (!(den > 0)) return 0;
+  return Math.max(-0.5, Math.min(0.5, (l - r) / (2 * den)));
+}
+
+// One block's shift [dx, dy] in check px, or null when the match says
+// nothing: best on the search edge, or not clearly better than the rest (a
+// flat or repeating block).
+function blockShift(a, b, w, x0, y0, mean, B, R) {
+  var size = 2 * R + 1;
+  var cost = new Float64Array(size * size);
+  var best = -1;
+  var total = 0;
+  for (var dy = -R; dy <= R; dy++) {
+    for (var dx = -R; dx <= R; dx++) {
+      var mb = 0;
+      for (var by = y0; by < y0 + B; by++) for (var bx = x0; bx < x0 + B; bx++) mb += b[(by + dy) * w + bx + dx];
+      mb /= B * B;
+      var ssd = 0;
+      for (var cy = y0; cy < y0 + B; cy++) {
+        for (var cx = x0; cx < x0 + B; cx++) {
+          var d = b[(cy + dy) * w + cx + dx] - mb - (a[cy * w + cx] - mean);
+          ssd += d * d;
+        }
+      }
+      var k = (dy + R) * size + dx + R;
+      cost[k] = ssd;
+      total += ssd;
+      if (best < 0 || ssd < cost[best]) best = k;
+    }
+  }
+  var bxk = (best % size) - R;
+  var byk = Math.floor(best / size) - R;
+  if (Math.abs(bxk) === R || Math.abs(byk) === R) return null;
+  if (cost[best] > 0.5 * (total / cost.length)) return null;
+  return [bxk + subPixel(cost[best - 1], cost[best], cost[best + 1]), byk + subPixel(cost[best - size], cost[best], cost[best + size])];
+}
+
+// shift_px of the header, or null when no block qualifies.
+function shiftOf(context, result, mask, scale) {
+  var w = context.width;
+  var h = context.height;
+  var B = LIMITS.shift_block;
+  var R = LIMITS.shift_search;
+  if (w < B + 2 * R || h < B + 2 * R) return null;
+  var a = luma(context);
+  var b = luma(result);
+  var dist = distanceTo(w, h, function (i) {
+    return mask.data[i] >= 128;
+  });
+  var away = LIMITS.shift_away * (scale || 1);
+  var blocks = [];
+  for (var y0 = R; y0 + B + R <= h; y0 += B / 2) {
+    for (var x0 = R; x0 + B + R <= w; x0 += B / 2) {
+      var far = true;
+      var mean = 0;
+      for (var y = y0; y < y0 + B && far; y++) {
+        for (var x = x0; x < x0 + B; x++) {
+          if (dist[y * w + x] <= away) {
+            far = false;
+            break;
+          }
+          mean += a[y * w + x];
+        }
+      }
+      if (!far) continue;
+      mean /= B * B;
+      var sd = 0;
+      for (var yy = y0; yy < y0 + B; yy++) for (var xx = x0; xx < x0 + B; xx++) sd += Math.pow(a[yy * w + xx] - mean, 2);
+      if (Math.sqrt(sd / (B * B)) >= LIMITS.shift_texture) blocks.push([x0, y0, mean]);
+    }
+  }
+  // At most 48 blocks, spread over the picture, keep the check quick.
+  var step = Math.max(1, blocks.length / LIMITS.shift_blocks);
+  var dxs = [];
+  var dys = [];
+  for (var f = 0; f < blocks.length; f += step) {
+    var bk = blocks[Math.floor(f)];
+    var m = blockShift(a, b, w, bk[0], bk[1], bk[2], B, R);
+    if (m) {
+      dxs.push(m[0]);
+      dys.push(m[1]);
+    }
+  }
+  if (!dxs.length) return null;
+  var sh = Math.sqrt(Math.pow(median(dxs), 2) + Math.pow(median(dys), 2)) / (scale || 1);
+  return Math.round(sh * 100) / 100;
+}
+
 // The seam ring: outside the mask, between gap and gap + ring pixels.
 function seam(context, result, mask, o) {
   var gap = o.gap;
@@ -243,6 +362,7 @@ function check(o) {
   out.polarity_suspect = !!(r.inside && r.outside && r.outside.mean > r.inside.mean && r.outside.mean >= LIMITS.edited_mean);
   out.seam = o.masked === false ? null : seam(o.context, o.result, o.mask, { gap: gap, ring: scaled(LIMITS.ring, o.scale), blur: scaled(LIMITS.blur, o.scale) });
   out.seam_ok = !out.seam || out.seam.residual === null || (out.seam.bias < LIMITS.seam_bias && out.seam.residual < LIMITS.seam_residual);
+  out.shift_px = o.masked === false ? null : shiftOf(o.context, o.result, o.mask, o.scale);
   out.kept_share = o.cleared ? keptShare(o.context, o.result, o.mask, o.scale) : null;
   return out;
 }
@@ -283,7 +403,13 @@ function badges(c, v, o) {
       if (c.seam_ok) out.push("Seam ok");
       if (c.seam.bias >= LIMITS.seam_bias) out.push("Edge tone differs");
     }
-    if (o.masked && ((c.seam && c.seam.residual !== null && c.seam.residual >= LIMITS.seam_residual) || c.aspect_ok === false)) out.push("May be misaligned");
+    // A high ring residual is a misalignment only when the blocks away from
+    // the edit moved (shift_px); measured without a shift, it is a re-render.
+    var rough = !!(c.seam && c.seam.residual !== null && c.seam.residual >= LIMITS.seam_residual);
+    var hasShift = typeof c.shift_px === "number";
+    var moved = hasShift ? c.shift_px >= LIMITS.shift_px : rough;
+    if (o.masked && (moved || c.aspect_ok === false)) out.push("May be misaligned");
+    else if (o.masked && rough && hasShift) out.push("Re-rendered around the edit");
     // c is a check result or the runner's summary of one (inside_mean).
     var measured = !!c.inside || (c.inside_mean !== null && c.inside_mean !== undefined);
     if (o.masked && measured && !c.edited) out.push(c.polarity_suspect ? "Unchanged inside: the model may have read the mask inverted" : "Unchanged inside");
@@ -293,4 +419,4 @@ function badges(c, v, o) {
   return out;
 }
 
-module.exports = { LIMITS: LIMITS, distanceTo: distanceTo, diffStats: diffStats, seam: seam, keptShare: keptShare, check: check, bandCheck: bandCheck, verify: verify, badges: badges, toneAndResidual: toneAndResidual };
+module.exports = { LIMITS: LIMITS, distanceTo: distanceTo, diffStats: diffStats, seam: seam, keptShare: keptShare, shiftOf: shiftOf, check: check, bandCheck: bandCheck, verify: verify, badges: badges, toneAndResidual: toneAndResidual };

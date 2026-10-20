@@ -22,6 +22,7 @@ var FIELDS = [
   "inputAssetIds",
   "cuQuoted",
   "cuCharged",
+  "maskGrownPct",
   "createdAt",
   "kind",
   "take",

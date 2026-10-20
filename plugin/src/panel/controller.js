@@ -24,6 +24,7 @@ var map = require("../catalog/map.js");
 var trainedMod = require("../catalog/trained.js");
 var trainedPanel = require("./trained.js");
 var requests = require("../forms/requests.js");
+var schemaMod = require("../forms/schema.js");
 var price = require("../forms/price.js");
 var thumbs = require("../ui/thumbs.js");
 var pngMod = require("../util/png.js");
@@ -170,6 +171,7 @@ function badgeOf(list) {
   list = list || [];
   for (var i = 0; i < list.length; i++) if (/misaligned|Changed outside|Unchanged inside/.test(list[i])) return { tone: "warn", text: "May not line up" };
   for (var j = 0; j < list.length; j++) if (/may be unchanged/.test(list[j])) return { tone: "warn", text: "Part unchanged" };
+  for (var s = 0; s < list.length; s++) if (/spills past/.test(list[s])) return { tone: "warn", text: "Spills past" };
   for (var k = 0; k < list.length; k++) if (/Seam ok/.test(list[k])) return { tone: "ok", text: "Edges ok" };
   return null;
 }
@@ -283,14 +285,39 @@ function createController(o) {
     return d ? d.model_id : null;
   }
 
-  // An action with its own model keeps the person's choice for itself; the
-  // others share their lane's.
+  // The defaults entry of an action: its model_lane (Replace inside,
+  // Remove), else its lane.
+  function modelLane(id) {
+    return (A[id] && A[id].model_lane) || laneOf(id);
+  }
+
+  // An action with its own model or its own defaults entry keeps the
+  // person's choice for itself; the others share their lane's.
   function modelKey(id) {
-    return A[id] && A[id].model ? "a:" + id : laneOf(id);
+    return A[id] && A[id].model ? "a:" + id : modelLane(id);
   }
 
   function defaultFor(id) {
-    return A[id] && A[id].model ? A[id].model : defaultModel(laneOf(id));
+    return A[id] && A[id].model ? A[id].model : defaultModel(modelLane(id));
+  }
+
+  // The Edit chip (Replace inside): Bolder when the model grows its mask.
+  function editOn(id) {
+    return !!(A[id] && (A[id].chips || []).indexOf("edit") >= 0 && !trainedRun(id));
+  }
+
+  function editMode(id) {
+    var m = modelFor(id);
+    return m && schemaMod.modelFacts(m).mask_growth ? "bolder" : "inside";
+  }
+
+  // Sets the Edit chip: Bolder runs its model, Inside selection the
+  // action's recommended one; a model already of that kind is kept.
+  function setEditMode(id, mode) {
+    if (!editOn(id) || editMode(id) === mode) return;
+    if (mode === "bolder") st.models[modelKey(id)] = actionsMod.EDIT_MODES.bolder.model;
+    else delete st.models[modelKey(id)];
+    st.runWith = null;
   }
 
   // over: { runWith } prices another Run with choice than the current one
@@ -633,6 +660,9 @@ function createController(o) {
       // The Change chip on a model with a strength input (lanes/edit.js).
       if (args.tool === "edit" && changeOn(id, schema)) args.options.change = CHANGE[st.change].at;
       if (a.expect) args.options.expect = a.expect;
+      if (a.model_lane) args.options.model_lane = a.model_lane;
+      // Replace inside records how it lands: Bolder grows the mask.
+      if (args.tool === "edit" && editOn(id)) args.options.edit_mode = model && schemaMod.modelFacts(model).mask_growth ? "bolder" : "inside";
       // Relight to scene: the layer's outline is the mask, the model sees
       // the scene (FLOWS v2, F13).
       if (a.mask_layer && !ctx.selection) {
@@ -1195,10 +1225,31 @@ function createController(o) {
   }
 
   // A single-result card's own buttons (cardActions).
+  // The Edit choice a Replace inside run did not use, or null. Offered
+  // while a selection is there to run it in (placing loads it back).
+  function tryEditOf(rec) {
+    if (!st.ctx || st.ctx.kind !== "selection") return null;
+    var m = rec && rec.lane === "edit" && rec.target ? rec.target.edit_mode : null;
+    if (m !== "bolder" && m !== "inside") return null;
+    return m === "bolder" ? "inside" : "bolder";
+  }
+
   async function cardAction(name) {
     var c = st.card || cardRun();
     var rec = c && c.local_id && o.ledger ? o.ledger.get(c.local_id) : null;
     if (!rec) return;
+    // Try the other Edit choice: Replace inside with the same prompt and
+    // the other chip value, priced in the composer before anything runs.
+    if (name === "try_edit") {
+      var other = tryEditOf(rec);
+      if (!other) return;
+      var prompt = rec.name || (rec.parameters && rec.parameters.prompt) || "";
+      if (st.action !== "replace") selectAction("replace");
+      if (prompt && !String(st.prompt).trim()) st.prompt = prompt;
+      setEditMode("replace", other);
+      changed();
+      return;
+    }
     if (name === "frame") {
       var out = (rec.outputs || []).filter(function (x) {
         return x.state === "saved";
@@ -1283,6 +1334,7 @@ function createController(o) {
     else if (kind === "target") st.target = value;
     else if (kind === "upsize") st.factor = value;
     else if (kind === "change") st.change = Math.max(0, Math.min(CHANGE.length - 1, Number(value) || 0));
+    else if (kind === "edit") setEditMode(id, value === "bolder" ? "bolder" : "inside");
     else if (kind === "angle") st.angle = value;
     else if (kind === "format") st.format = value;
     else if (kind === "duration") st.duration = Number(value) || 5;
@@ -1906,6 +1958,7 @@ function createController(o) {
       takes: takes,
       keep: !kept && takes.length > 1 && run.group_id ? "Keep take " + (sh ? takes[sh.i].n : 1) : null,
       clickable: !!run.group_id && takes.length > 1,
+      actions: rec ? cardActions(rec) : [],
       by: rec && rec.origin && rec.origin.kind === "agent" ? String(rec.origin.client_name || "Agent") : null,
       done: st.ctx.kind !== "takes"
     };
@@ -1957,6 +2010,9 @@ function createController(o) {
       out.push({ id: "frame", label: "Frame to layer" });
       if (rec.state === "applied") out.push({ id: "open_clip", label: "Open clip" });
     }
+    // Replace inside: the other Edit choice, as a variant of the run.
+    var other = tryEditOf(rec);
+    if (other) out.push({ id: "try_edit", label: "Try " + actionsMod.EDIT_MODES[other].label });
     return out;
   }
 
@@ -2079,6 +2135,11 @@ function createController(o) {
     if (kind === "upsize") {
       var f = viewFacts(p.view);
       return { kind: kind, icon: "upscale", value: actionsMod.factorLabel(f), key_text: f.out ? times(f.out.width, f.out.height) : "", title: "Upscale factor" };
+    }
+    if (kind === "edit") {
+      if (!editOn(id)) return null;
+      var em = actionsMod.EDIT_MODES[editMode(id)];
+      return { kind: kind, icon: "selection", key_text: "Edit", value: em.label, title: "Edit: " + em.label, key_first: true };
     }
     if (kind === "change") {
       if (!changeOn(id, schema)) return null;
@@ -2312,6 +2373,20 @@ function createController(o) {
         })
       };
     }
+    if (kind === "edit") {
+      var cur = editMode(id);
+      var bm = actionsMod.EDIT_MODES.bolder.model;
+      var ins = cur === "inside" ? st.models[modelKey(id)] || null : null;
+      var ep = await optionPrices(id, [ins, bm], "model", st.models[modelKey(id)] || null);
+      return {
+        title: "Edit",
+        later: ep.later,
+        items: ["inside", "bolder"].map(function (k) {
+          var m = actionsMod.EDIT_MODES[k];
+          return { value: k, label: m.label, sub: m.sub, right: ep.prices[k === "inside" ? ins : bm] || "", checked: cur === k };
+        })
+      };
+    }
     if (kind === "change") {
       return {
         title: "Change amount",
@@ -2423,9 +2498,10 @@ function createController(o) {
       };
     }
     if (kind === "model") {
-      var rec = defaultModel(lane);
+      var rec = defaultFor(id);
+      var mkey = modelKey(id);
       var recRow = o.catalog.find(rec);
-      var groups = [{ title: "Recommended for " + a.label, items: [{ value: null, label: recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec, thumb: recRow ? thumbs.modelThumb(recRow) : null, mono: monoOf(recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec), tag: "Recommended", checked: !st.models[lane] && !trainedRun(id) }] }];
+      var groups = [{ title: "Recommended for " + a.label, items: [{ value: null, label: recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec, thumb: recRow ? thumbs.modelThumb(recRow) : null, mono: monoOf(recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec), tag: "Recommended", checked: !st.models[mkey] && !trainedRun(id) }] }];
       try {
         await o.catalog.ensure();
       } catch (e) {
@@ -2457,13 +2533,13 @@ function createController(o) {
         var lanes = map.lanesOf(row);
         if (lanes.indexOf(tool || lane) < 0) continue;
         if (ids.length && ids.indexOf(row.id) < 0 && cat.length >= ids.length) continue;
-        cat.push({ value: row.id, label: row.name, thumb: thumbs.modelThumb(row), mono: monoOf(row.name), checked: !rwOn && st.models[lane] === row.id });
+        cat.push({ value: row.id, label: row.name, thumb: thumbs.modelThumb(row), mono: monoOf(row.name), checked: !rwOn && st.models[mkey] === row.id });
       }
       if (cat.length) groups.push({ title: "Catalog · can " + a.label.toLowerCase(), items: cat });
       // Each model's price for this document and these settings.
       var mvals = [];
       for (var mg2 = 0; mg2 < groups.length; mg2++) for (var mi2 = 0; mi2 < groups[mg2].items.length; mi2++) mvals.push(groups[mg2].items[mi2].value);
-      var mp2 = await optionPrices(id, mvals, "model", rwOn ? "t:" + rwOn.id : st.models[lane] || null);
+      var mp2 = await optionPrices(id, mvals, "model", rwOn ? "t:" + rwOn.id : st.models[mkey] || null);
       var mprices = mp2.prices;
       for (var mg3 = 0; mg3 < groups.length; mg3++) for (var mi3 = 0; mi3 < groups[mg3].items.length; mi3++) groups[mg3].items[mi3].right = mprices[groups[mg3].items[mi3].value] || "";
       return { title: null, groups: groups, all: true, lane: lane, later: mp2.later, note: "Prices are price checks for this document and these settings." };
@@ -2640,7 +2716,7 @@ function createController(o) {
       return true;
     },
     state: function () {
-      return { action: st.action, kind: st.ctx.kind, prompt: st.prompt, select: st.selectText, price: st.price, sending: st.sending, confirm: st.confirm, note: st.note, latest: st.latest, active: st.active, key: st.key, pins: st.pins, refs: st.refs.length, drefs: st.drefs.slice(), style: st.style ? (st.style.match ? "match" : st.style.id) : null, runWith: st.runWith ? st.runWith.id : null };
+      return { action: st.action, kind: st.ctx.kind, prompt: st.prompt, select: st.selectText, price: st.price, sending: st.sending, confirm: st.confirm, note: st.note, latest: st.latest, active: st.active, key: st.key, pins: st.pins, refs: st.refs.length, drefs: st.drefs.slice(), style: st.style ? (st.style.match ? "match" : st.style.id) : null, runWith: st.runWith ? st.runWith.id : null, models: JSON.parse(JSON.stringify(st.models)) };
     },
     TEXT: TEXT
   };
