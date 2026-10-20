@@ -161,6 +161,9 @@ function createCapture(o) {
     var longRead = Math.max(1, Math.round(Math.max(clip.width, clip.height) * scale));
     var got = await read(c.document_id, c.layer_id, clip, longRead);
     var context = fromRead(got, clip, c.box, c.upload.width, c.upload.height, "clamp");
+    // A model that ignores transparency sees a transparent layer's empty
+    // parts as black: those go on a flat gray instead (c.matte).
+    if (typeof c.matte === "number") context = pixels.toRgb(context, c.matte);
     var sel = null;
     if (c.selection && c.mask_layer_id) {
       sel = await layerOutline(c.document_id, c.mask_layer_id, clip);

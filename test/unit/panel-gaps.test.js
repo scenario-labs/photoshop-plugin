@@ -87,6 +87,7 @@ test("Suggest with a price is not sent: the menu says the price; an empty prompt
   await openPop(doc, "suggest");
   await waitFor(() => texts(doc).includes("nothing was sent"), { label: "priced", timeout: 5000 });
   assert.ok(texts(doc).includes("3 CU"));
+  assert.ok(!texts(doc).includes("Prompt Spark · Free"), "the title does not say free at a price");
   assert.equal(mock.sparkCalls.length, 0, "nothing sent at a price");
   doc.byId("pop-scrim").click();
 

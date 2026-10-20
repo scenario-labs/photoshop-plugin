@@ -43,6 +43,9 @@ var ELEMENT_READ = 192;
 // Split text: a pixel whose color differs from the clean base by more than
 // this (mean of the channels, 0 to 255) was text.
 var TEXT_DIFF = 32;
+// Split text keeps a difference region only with this many solid pixels
+// (keepCored).
+var TEXT_CORE = 24;
 
 function saved(rec) {
   return (rec.outputs || []).filter(function (x) {
@@ -215,6 +218,59 @@ function readSize(box, long) {
   return { width: Math.max(1, Math.round(box.width * k)), height: Math.max(1, Math.round(box.height * k)) };
 }
 
+// The clean base is redrawn, so fine detail (edges, small lights) differs
+// from the source in specks all over the picture (live 2026-10-20: 10% of
+// the key art). Letters differ in solid strokes. Keeps each touching region
+// of the difference (spread by one pixel) that holds at least `core` pixels
+// still on after a one-pixel opening; the rest is dropped.
+function keepCored(raw, w, h, core) {
+  var n = w * h;
+  function erode(m) {
+    var o = new Uint8Array(n);
+    for (var y = 1; y < h - 1; y++) for (var x = 1; x < w - 1; x++) {
+      var k = y * w + x;
+      if (m[k] && m[k - 1] && m[k + 1] && m[k - w] && m[k + w]) o[k] = 255;
+    }
+    return o;
+  }
+  function dilate(m) {
+    var o = new Uint8Array(n);
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      var k = y * w + x;
+      if (m[k] || (x > 0 && m[k - 1]) || (x < w - 1 && m[k + 1]) || (y > 0 && m[k - w]) || (y < h - 1 && m[k + w])) o[k] = 255;
+    }
+    return o;
+  }
+  var opened = dilate(erode(raw));
+  var spread = dilate(raw);
+  var seen = new Uint8Array(n);
+  var out = new Uint8Array(n);
+  var stack = [];
+  for (var s = 0; s < n; s++) {
+    if (!spread[s] || seen[s]) continue;
+    var px = [];
+    var cored = 0;
+    seen[s] = 1;
+    stack.push(s);
+    while (stack.length) {
+      var k = stack.pop();
+      px.push(k);
+      if (opened[k]) cored++;
+      var x = k % w;
+      var nb = [x > 0 ? k - 1 : -1, x < w - 1 ? k + 1 : -1, k >= w ? k - w : -1, k < n - w ? k + w : -1];
+      for (var j = 0; j < 4; j++) {
+        var q = nb[j];
+        if (q >= 0 && spread[q] && !seen[q]) {
+          seen[q] = 1;
+          stack.push(q);
+        }
+      }
+    }
+    if (cored >= core) for (var t = 0; t < px.length; t++) if (raw[px[t]]) out[px[t]] = 255;
+  }
+  return out;
+}
+
 // Split text: where the source differs from the clean base, as a gray mask
 // (255: text), spread by `grow` pixels so the letters' edges stay.
 function textMask(source, base, threshold, grow) {
@@ -229,7 +285,7 @@ function textMask(source, base, threshold, grow) {
     var d = (Math.abs(source.data[a] - base.data[b]) + Math.abs(source.data[a + 1] - base.data[b + 1]) + Math.abs(source.data[a + 2] - base.data[b + 2])) / 3;
     if (d > threshold) raw[i] = 255;
   }
-  var out = raw;
+  var out = keepCored(raw, w, h, TEXT_CORE);
   for (var g = 0; g < (grow || 0); g++) {
     var next = new Uint8Array(w * h);
     for (var y = 0; y < h; y++) {

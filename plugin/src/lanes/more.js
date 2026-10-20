@@ -145,8 +145,8 @@ function toolView(tool, schema, ctx, o) {
     if (prompt && schema.prompt_input) params[schema.prompt_input] = prompt;
     var td = common.param(schema, "textDensity");
     if (td && td.enum && td.enum.indexOf("SPARSE") >= 0) params.textDensity = "SPARSE";
-    var tl = common.param(schema, "thinkingLevel");
-    if (tl && tl.enum && tl.enum.indexOf("MINIMAL") >= 0) params.thinkingLevel = "MINIMAL";
+    // thinkingLevel stays at the model's default: MINIMAL is listed but
+    // the job fails with it (live 2026-10-20, 0 CU charged).
     target.format = key;
     target.output = [f.width, f.height];
     target.lands = "artboard";

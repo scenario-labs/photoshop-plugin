@@ -67,12 +67,12 @@ test("Select by description sends the words, cut to the model's limit, and lands
   assert.equal(v.request.target.source, "visible", "what the person sees");
 });
 
-test("Formats: the placement's pixels, sparse text and minimal thinking, lands as an artboard", () => {
+test("Formats: the placement's pixels, sparse text and the default thinking level, lands as an artboard", () => {
   const v = moreLanes.toolView("reframe", schemaOf("reframe"), CTX, { format: "4:5" });
   assert.equal(v.request.parameters.width, 1080);
   assert.equal(v.request.parameters.height, 1350);
   assert.equal(v.request.parameters.textDensity, "SPARSE");
-  assert.equal(v.request.parameters.thinkingLevel, "MINIMAL");
+  assert.equal(v.request.parameters.thinkingLevel, undefined);
   assert.equal(v.request.target.lands, "artboard");
   assert.equal(moreLanes.toolView("reframe", schemaOf("reframe"), CTX, {}).request.target.format, "9:16", "9:16 by default");
 });
@@ -106,6 +106,17 @@ test("New angle sends the preset's turn, tilt and zoom to the model's own inputs
   assert.equal(v.request.parameters.notAnInput, undefined, "names the schema lacks are left out");
   assert.equal(v.request.parameters.prompt, undefined);
   assert.equal(v.capture.spec.capture_input, "images");
+  assert.equal(v.capture.spec.matte, undefined, "an opaque layer goes as it is");
+});
+
+test("New angle on a cut-out or a split element: the transparent parts go to the model as gray, with a note", () => {
+  const v = editMod.editView(schemaOf("angle"), CTX, { sample: "layer", takes: 2, matte: true, extra: { horizontalAngle: 45 } });
+  assert.equal(v.capture.spec.matte, 128);
+  assert.ok(v.notes.some((n) => /as gray/.test(n)));
+  const pixels = require("../../plugin/src/capture/pixels.js");
+  const img = { width: 2, height: 1, components: 4, data: new Uint8Array([10, 20, 30, 255, 200, 200, 200, 0]) };
+  assert.deepEqual(Array.from(pixels.toRgb(img, 128).data), [10, 20, 30, 128, 128, 128]);
+  assert.deepEqual(Array.from(pixels.toRgb(img).data), [10, 20, 30, 255, 255, 255], "white without a matte, as before");
 });
 
 // A textured background, the element pasted at a known place; the rebuilt
@@ -207,16 +218,23 @@ test("the split plan: a group named after the layer, the background at the sourc
   assert.equal(controller.takesOf({ id: 1, group: true, name: "g", fields: xmp.parse(p.group.xmp), children: [{ id: 2, fields: xmp.parse(p.elements[0].xmp) }] }), null, "not a takes group");
 });
 
-test("Split text: the text is where the source differs from the clean base, grown by two pixels; masks union into one selection", () => {
-  const w = 20;
-  const h = 10;
+test("Split text: the text is where the source differs from the clean base in solid strokes, grown by two pixels; specks are dropped; masks union into one selection", () => {
+  const w = 40;
+  const h = 20;
   const src = { width: w, height: h, components: 3, data: new Uint8Array(w * h * 3).fill(100) };
   const base = { width: w, height: h, components: 3, data: new Uint8Array(w * h * 3).fill(100) };
-  for (let c = 0; c < 3; c++) src.data[(5 * w + 10) * 3 + c] = 250;
+  const on = (x, y) => {
+    for (let c = 0; c < 3; c++) src.data[(y * w + x) * 3 + c] = 250;
+  };
+  // A letter stroke 4 x 8 at (10, 6); a lone speck at (30, 10), as the
+  // redrawn base leaves on fine detail.
+  for (let y = 6; y < 14; y++) for (let x = 10; x < 14; x++) on(x, y);
+  on(30, 10);
   const m = morePlan.textMask(src, base, 32, 2);
-  assert.equal(m.data[5 * w + 10], 255);
-  assert.equal(m.data[5 * w + 12], 255, "grown");
-  assert.equal(m.data[5 * w + 14], 0);
+  assert.equal(m.data[8 * w + 10], 255);
+  assert.equal(m.data[8 * w + 15], 255, "grown");
+  assert.equal(m.data[8 * w + 17], 0);
+  assert.equal(m.data[10 * w + 30], 0, "the speck is dropped");
   const a = { width: 4, height: 1, components: 1, data: Uint8Array.from([255, 0, 0, 0]) };
   const b = { width: 4, height: 1, components: 1, data: Uint8Array.from([0, 0, 0, 255]) };
   const none = { width: 4, height: 1, components: 1, data: new Uint8Array(4) };

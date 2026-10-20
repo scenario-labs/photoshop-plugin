@@ -218,5 +218,5 @@ test("model pictures: the thumbnail of a trained model, else the first example i
   assert.equal(thumbs.modelThumb(trained), "https://cdn.cloud.scenario.com/thumbnails/asset_T1");
   assert.equal(thumbs.modelThumb({ thumb: "javascript:alert(1)" }), null);
   assert.equal(thumbs.resultThumb("Scenario/image/20261019/a-take1.png"), "plugin-data:/Scenario/image/20261019/a-take1.png");
-  for (const bad of ["/etc/passwd", "../x.png", "file:///x.png", "", null]) assert.equal(thumbs.resultThumb(bad), null);
+  for (const bad of ["/etc/passwd", "../x.png", "file:///x.png", "", null, "Scenario/video/20261020/a-clip.mp4"]) assert.equal(thumbs.resultThumb(bad), null);
 });

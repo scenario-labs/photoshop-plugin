@@ -227,7 +227,16 @@ function createLibrary(o) {
 
   // Saves one asset in the data folder. Resolves { path, ext, mime,
   // width, height }.
-  function fetch(assetId) {
+  // The folder is made first: the download writes into it and failed
+  // three times on a data folder without it (live 2026-10-20).
+  async function fetch(assetId) {
+    if (o.host && typeof o.host.ensureDataDir === "function") {
+      try {
+        await o.host.ensureDataDir(FOLDER);
+      } catch (e) {
+        // the download reports it
+      }
+    }
     return o.downloader.download(assetId, FOLDER + "/" + assetId, null, null);
   }
 

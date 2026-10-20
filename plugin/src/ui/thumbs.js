@@ -23,8 +23,12 @@ function modelThumb(row) {
 }
 
 // path: a result's path inside the data folder, as the ledger keeps it.
+// Only pictures: an MP4 (an Animate clip) or any other file given to an
+// <img> stopped the panel painting what follows it (live 2026-10-20).
+var PICTURE = /\.(png|jpe?g|webp|gif)$/i;
 function resultThumb(path) {
   if (typeof path !== "string" || !path || path.charAt(0) === "/" || path.indexOf("..") >= 0 || path.indexOf(":") >= 0) return null;
+  if (!PICTURE.test(path)) return null;
   return "plugin-data:/" + path;
 }
 

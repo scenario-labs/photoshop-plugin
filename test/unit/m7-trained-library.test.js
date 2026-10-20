@@ -405,3 +405,16 @@ test("Place from Library: More > Layers, a click places the image as a new layer
   assert.equal(ctl.state().refs, 1);
   assert.equal(ps.doc(7).layers.length, layersBefore + 1, "a reference places nothing");
 });
+
+test("a Library file is saved in a folder made first (live: the download failed three times without it)", async () => {
+  const calls = [];
+  const lib = libraryMod.createLibrary({
+    client: {},
+    host: { ensureDataDir: async (p) => calls.push("dir " + p) },
+    downloader: { download: async (id, base) => (calls.push("download " + base), { path: base + ".png", width: 4, height: 4 }) },
+    log: () => {}
+  });
+  const got = await lib.fetch("asset_x");
+  assert.deepEqual(calls, ["dir Scenario/library", "download Scenario/library/asset_x"]);
+  assert.equal(got.path, "Scenario/library/asset_x.png");
+});

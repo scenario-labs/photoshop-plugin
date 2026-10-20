@@ -640,6 +640,9 @@ function createController(o) {
         args.options.sample = "visible";
       }
       if (id === "angle") args.options.extra = angleOf().extra;
+      // A cut-out or a split element is mostly transparent: New angle's
+      // model gets it on gray (lanes/edit.js).
+      if (id === "angle" && st.ctx && (st.ctx.kind === "cutout" || st.ctx.kind === "element")) args.options.matte = true;
       if (args.tool === "trained_edit") args.trained = trainedPanel.argOf(tr, st.adv, CHANGE[st.change].at);
     } else if (a.family === "expand") {
       args.tool = "expand";
@@ -1167,6 +1170,8 @@ function createController(o) {
     }
     if (id !== st.action) {
       st.action = id;
+      // + Reference > Library belongs to the action it was opened for.
+      st.libPick = false;
       st.confirm = st.confirm && st.confirm.kind === "changed" ? st.confirm : null;
       if (A[id].prompt === "none" || A[id].prompt === "field") {
         st.prompt = "";
@@ -1645,7 +1650,11 @@ function createController(o) {
     var out = { kind: "suggest", title: title, state: e.state, from: from, items: e.items, text: "", note: "", later: e.state === "working" ? e.promise : null };
     if (e.state === "working") out.text = "Asking Prompt Spark…";
     else if (e.state === "need_prompt") out.text = "Type a few words first; Suggest turns them into fuller prompts.";
-    else if (e.state === "priced") out.text = "Prompt Spark quotes " + price.display(price.toThousandths(e.cu)) + " CU here, so nothing was sent: Suggest runs only when it is free.";
+    else if (e.state === "priced") {
+      // Not free here: the title stops saying it is.
+      out.title = "Suggest · Prompt Spark";
+      out.text = "Prompt Spark quotes " + price.display(price.toThousandths(e.cu)) + " CU here, so nothing was sent: Suggest runs only when it is free.";
+    }
     else if (e.state === "failed") out.text = e.reason || "Prompt Spark did not answer.";
     else out.note = "Picking one replaces the prompt; the run keeps your short prompt as its name. Size, style and quality stay on the chips." + (e.charged ? " Scenario charged " + e.charged + " CU for these." : "");
     return out;
@@ -1862,14 +1871,14 @@ function createController(o) {
       if (RUNNING.indexOf(rec.state) >= 0) return null;
       var words = { ready: "Ready to place", awaiting_approval: "Waiting for your approval", applied: "Placed" };
       var line = words[rec.state] || (FAILED.indexOf(rec.state) >= 0 ? rec.error || "Did not finish" : "");
-      var first = (rec.outputs || [])[0];
+      var first = shownOutput(rec);
       return {
         kind: "single",
         local_id: rec.local_id,
         title: rec.lane === "upscale" && rec.target && rec.target.document_title ? "New document from " + rec.target.document_title : runName(rec.name || (rec.parameters && rec.parameters.prompt), rec.lane),
         meta: rec.state === "applied" ? "Placed" : "",
         sub: [rec.model_name, rec.cu_charged || rec.cu_quoted ? (rec.cu_charged || rec.cu_quoted) + " CU" : null].filter(Boolean).join(" · "),
-        thumb: first && first.state === "saved" ? thumbs.resultThumb(first.path) : null,
+        thumb: first && first.state === "saved" ? thumbs.resultThumb(first.path) || posterOf(rec) : null,
         thumb_size: sizeOfOut(first),
         line: rec.placement && rec.placement.notes && rec.placement.notes.length ? rec.placement.notes.join(" ") : line,
         tone: FAILED.indexOf(rec.state) >= 0 ? "warn" : "ok",
@@ -1924,6 +1933,20 @@ function createController(o) {
     };
   }
 
+  // The output a single-result card shows: the frame that landed for Frame
+  // to layer (the last one), else the first.
+  function shownOutput(rec) {
+    var outs = rec.outputs || [];
+    var landed = (rec.placement && rec.placement.landed) || {};
+    return landed.kind === "frames" && outs.length ? outs[outs.length - 1] : outs[0];
+  }
+
+  // A clip's card shows the picture it started from (its capture).
+  function posterOf(rec) {
+    var cap = rec && rec.inputs && rec.inputs.capture;
+    return cap && cap.source_path ? thumbs.resultThumb(cap.source_path) : null;
+  }
+
   // The buttons of a single-result card: an Animate clip offers Frame to
   // layer and Open clip again (FLOWS v2, F9).
   function cardActions(rec) {
@@ -1965,6 +1988,10 @@ function createController(o) {
     for (var i = 0; i < all.length && out.length < 8; i++) {
       var r = all[i];
       if (r.state !== "applied" || !r.placement || r.local_id === currentId) continue;
+      // A run that opened its own document (a clip, a formats document)
+      // shows in that document only: its layer is there.
+      var lk = r.placement.landed || {};
+      if ((lk.kind === "video" || lk.new_document) && r.placement.document_id !== d) continue;
       var here = r.placement.document_id === d && r.session === o.session;
       if (!here && o.runner && typeof o.runner.whereFor === "function") {
         var w = o.runner.whereFor(r);

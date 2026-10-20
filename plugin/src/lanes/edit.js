@@ -36,6 +36,7 @@ var trainedMod = require("../catalog/trained.js");
 var common = require("./common.js");
 
 var TEXT = common.TEXT;
+var MATTE = 128;
 
 function blockedView(base, text) {
   base.blocked = text;
@@ -240,6 +241,13 @@ function editView(schema, ctx, o) {
       follows_input: shaped.kind === "none"
     }
   };
+  // New angle on a cut-out or a split element: the model takes no
+  // transparency, so the empty parts go to it as gray and the takes land on
+  // gray (live 2026-10-20: sent transparent, they came back on black).
+  if (o.matte && sample === "layer") {
+    view.capture.spec.matte = MATTE;
+    view.notes.push(TEXT.matte_note);
+  }
   return view;
 }
 
