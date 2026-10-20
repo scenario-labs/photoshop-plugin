@@ -42,7 +42,7 @@ test("allow-list: every listed event passes in a plain shape; dialogs are forced
   for (const ev of allow.ALLOW.events) {
     const d = { _obj: ev, _target: ev === "get" ? [{ _property: "name" }, layer[0]] : ["expand", "contract", "feather", "smoothness", "inverse", "intersectWith", "addTo", "subtractFrom"].includes(ev) ? sel : layer };
     const out = ok([d], ev);
-    assert.deepEqual(out[0]._options, { dialogOptions: "dontDisplay" }, ev);
+    assert.deepEqual(out[0]._options, { dialogOptions: "silent" }, ev);
   }
   assert.ok(allow.ALLOW.events.length >= 45);
   // No "$" code anywhere in the list.

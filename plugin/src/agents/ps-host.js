@@ -40,6 +40,20 @@ function baseName(p) {
 // host: the object host.js made. Returns the agent Photoshop functions.
 function createPsHost(host) {
   var I = host.internals();
+
+  // Every agent descriptor runs with dialogOptions silent: with Photoshop's
+  // default (dontDisplay) an error still opens a modal alert (SPEC 6.6 rule 5).
+  function silentPlay(descs) {
+    return I.play(
+      descs.map(function (d) {
+        if (d._options) return d;
+        var c = {};
+        for (var k in d) c[k] = d[k];
+        c._options = { dialogOptions: "silent" };
+        return c;
+      })
+    );
+  }
   var ps = I.ps;
 
   function doc(id) {
@@ -194,7 +208,7 @@ function createPsHost(host) {
     row.scenario_metadata = meta && Object.keys(meta).length ? meta : null;
     if (row.kind === "smart_object") {
       try {
-        var r = await I.play([{ _obj: "get", _target: [{ _ref: "layer", _id: l.id }, { _ref: "document", _id: d.id }] }]);
+        var r = await silentPlay([{ _obj: "get", _target: [{ _ref: "layer", _id: l.id }, { _ref: "document", _id: d.id }] }]);
         var so = r && r[0] ? r[0].smartObjectMore || null : null;
         var linked = r && r[0] && r[0].smartObject ? !!r[0].smartObject.linked : null;
         row.smart_object = so ? { embedded: linked === null ? null : !linked, content_size: so.size ? [num(so.size.width), num(so.size.height)] : null, transform: Array.isArray(so.transform) ? so.transform.map(num) : null } : { embedded: linked === null ? null : !linked };
@@ -300,7 +314,7 @@ function createPsHost(host) {
       for (var j = 0; j < ids.length; j++) {
         var desc = { _obj: "select", _target: [{ _ref: "layer", _id: ids[j] }], makeVisible: false };
         if (j > 0 || mode === "add") desc.selectionModifier = { _enum: "selectionModifierType", _value: "addToSelection" };
-        await I.play([desc]);
+        await silentPlay([desc]);
       }
       return (t.activeLayers || []).map(function (l) {
         return l.id;
@@ -351,7 +365,7 @@ function createPsHost(host) {
 
   // batchPlay reports a failed descriptor as a result, not a throw.
   async function playChecked(descs) {
-    var r = await I.play(descs);
+    var r = await silentPlay(descs);
     for (var i = 0; r && i < r.length; i++) {
       if (r[i] && r[i]._obj === "error") {
         var e = new Error((r[i].message || "Photoshop refused the command") + " (descriptor " + i + ")");

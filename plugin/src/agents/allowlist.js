@@ -183,7 +183,7 @@ function check(descriptors, ctx) {
         if (!isPlain(opt)) throw refused(i, "_options must be an object");
         for (var ok in opt) {
           if (ok !== "dialogOptions") throw refused(i, "_options accepts only dialogOptions");
-          if (!has(DIALOG_OK, opt[ok])) throw refused(i, "dialogs are refused: dialogOptions must be dontDisplay");
+          if (!has(DIALOG_OK, opt[ok])) throw refused(i, "dialogs are refused: dialogOptions must be silent or dontDisplay");
         }
         continue;
       }
@@ -200,7 +200,10 @@ function check(descriptors, ctx) {
     if (ev === "make" && body["new"] && isPlain(body["new"]) && (body["new"]._obj === "document" || body["new"]._class === "document")) throw refused(i, "a command that creates a document is refused");
     var outD = { _obj: ev };
     for (var bk in body) outD[bk] = body[bk];
-    outD._options = { dialogOptions: "dontDisplay" };
+    // silent, not dontDisplay: with dontDisplay Photoshop 27.11 still shows
+    // its error alerts (measured live in M6: a transform of an empty layer
+    // left a modal "the selected area is empty" alert that blocked Photoshop).
+    outD._options = { dialogOptions: "silent" };
     out.push(outD);
   }
   return out;
