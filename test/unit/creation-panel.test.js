@@ -340,6 +340,41 @@ test("F2 a layer: Make versions with the built-in prompt when empty, a group abo
   assert.equal(ps.history.filter((h) => h.document_id === 7).length, 1, "selecting the group adds no History state");
 });
 
+test("Recent comes back after the panel reloads while Photoshop runs: runs in a document that was never saved are found again from their layers' metadata", async (t) => {
+  const { app, doc, ps } = await bootGenerate(t, { docs: [POSTER], active: 7, mockOpts: { answer: flarePrice() } });
+  await show(app, ps);
+  await ctxTitle(doc, "Background · Layer 1024 × 1024");
+  await pick(doc, "takes", 1);
+  await button(doc, "Make versions · 2 CU");
+  doc.byId("go").click();
+  await landed(app);
+  const d = ps.doc(7);
+  // Back on the Background: the run is in Recent of this panel session.
+  await waitFor(() => app.controller.state().kind === "takes", { label: "the result selected", timeout: 4000 });
+  d.activeLayers = [d.layers[d.layers.length - 1]];
+  await app.controller.refresh();
+  app.controller.closeCard();
+  await app.controller.refresh();
+  const rec = app.ledger.all()[0];
+  assert.equal(rec.state, "applied");
+  assert.deepEqual(app.controller.model().recent.map((r) => r.local_id), [rec.local_id], "Recent lists the run");
+  // A reloaded panel has a new session marker, its runner too; the
+  // document was never saved, so no file matches it.
+  const opts = { host: app.host, catalog: app.catalog, quotes: app.quotes, flow: app.flow, runner: null, ledger: app.ledger, references: app.references, settings: app.settings };
+  const reloaded = ctlMod.createController({ ...opts, session: "reloaded" });
+  await reloaded.activate();
+  assert.deepEqual(reloaded.model().recent.map((r) => r.local_id), [rec.local_id], "Recent comes back after the reload");
+  // A layer that no longer carries the run's metadata is not claimed.
+  const layer = d.layers[0];
+  const saved = layer.xmp;
+  layer.xmp = "";
+  for (const k of layer.layers || []) k.xmp = "";
+  const other = ctlMod.createController({ ...opts, session: "another" });
+  await other.activate();
+  assert.deepEqual(other.model().recent, [], "no Recent row without the run's layer");
+  layer.xmp = saved;
+});
+
 test("F4 one-click actions: Upscale opens a new document at the shown size; Remove background lands as a mask on the layer; no prompt field for either", async (t) => {
   const { app, doc, ps, mock } = await bootGenerate(t, { docs: [POSTER], active: 7, psOpts: { scene: true }, mockOpts: { answer: (model) => (model === "model_851-labs-background-remover" ? { status: 269, body: { creativeUnitsCost: 1, creativeUnitsDiscount: 0, costDetails: {} } } : null) } });
   await show(app, ps);

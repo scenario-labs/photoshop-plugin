@@ -221,6 +221,9 @@ function createController(o) {
     note: "",
     latest: {},
     done: {},
+    // Runs an earlier panel session placed in a document, found again by
+    // their layers' metadata: { <document id>: { <local id>: true|false } }.
+    placedSeen: {},
     card: null,
     startFrom: null,
     pins: {},
@@ -434,8 +437,49 @@ function createController(o) {
 
   // ---- reading Photoshop ----
 
+  // A run is in the document when the layer its placement names carries its
+  // job id or one of its result asset ids.
+  function layerOfRun(meta, rec) {
+    if (!meta || !rec) return false;
+    var assets = (rec.outputs || []).map(function (x) {
+      return x && x.asset_id;
+    });
+    var f = meta.fields || {};
+    if (rec.job_id && f.jobId === rec.job_id) return true;
+    if (f.assetId && assets.indexOf(f.assetId) >= 0) return true;
+    var kids = meta.children || [];
+    for (var i = 0; i < kids.length; i++) if (kids[i].fields && kids[i].fields.assetId && assets.indexOf(kids[i].fields.assetId) >= 0) return true;
+    return false;
+  }
+
+  // Recent after the panel reloads while Photoshop keeps running (a plugin
+  // reload, the development loop): the session marker is new, and a
+  // document that was never saved has no file to match, so the runs placed
+  // in it are found again from their layers, once per document and run.
+  async function findEarlierRuns(docId) {
+    if (!o.ledger || typeof o.host.scenarioLayer !== "function") return;
+    var seen = st.placedSeen[docId] || (st.placedSeen[docId] = {});
+    var all = o.ledger.all();
+    var reads = 0;
+    for (var i = 0; i < all.length && reads < 12; i++) {
+      var r = all[i];
+      if (r.state !== "applied" || !r.placement || r.session === o.session || r.placement.document_id !== docId) continue;
+      if (Object.prototype.hasOwnProperty.call(seen, r.local_id)) continue;
+      var at = r.placement.group_id || (r.placement.layer_ids || [])[0];
+      reads++;
+      var m = null;
+      try {
+        m = at ? await o.host.scenarioLayer(docId, at) : null;
+      } catch (e) {
+        m = null;
+      }
+      seen[r.local_id] = layerOfRun(m, r);
+    }
+  }
+
   async function readContext() {
     var raw = await contextMod.read(o.host);
+    if (raw.doc) await findEarlierRuns(raw.doc.id);
     var meta = null;
     if (raw.doc && raw.layer && typeof o.host.scenarioLayer === "function") meta = await o.host.scenarioLayer(raw.doc.id, raw.layer.id);
     var ctx = classify(raw, meta);
@@ -2052,7 +2096,7 @@ function createController(o) {
       // shows in that document only: its layer is there.
       var lk = r.placement.landed || {};
       if ((lk.kind === "video" || lk.new_document) && r.placement.document_id !== d) continue;
-      var here = r.placement.document_id === d && r.session === o.session;
+      var here = r.placement.document_id === d && (r.session === o.session || !!(st.placedSeen[d] && st.placedSeen[d][r.local_id]));
       if (!here && o.runner && typeof o.runner.whereFor === "function") {
         var w = o.runner.whereFor(r);
         here = w.kind === "active" && w.document_id === d;
