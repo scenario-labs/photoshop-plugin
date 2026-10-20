@@ -563,17 +563,24 @@ function createCreateView(doc, ctl, o) {
     var msg = c.message && !declined ? c.message : "";
     setText("c-message-text", msg);
     show(byId("c-message"), !!msg);
+    fitLibrary();
   }
 
-  // The Library grid: three columns of square tiles, the name in the
-  // tooltip; a click opens the image or adds it as a reference.
+  // The Library grid: a search field, the filters, three columns of square
+  // tiles (the name and size in the tooltip), Show more; a click opens the
+  // image, places it as a layer or adds it as a reference.
   function renderLibrary(m) {
     var box = byId("lib");
     if (!box) return;
-    clear(box);
     show(box, !!m, "flex");
-    if (!m) return;
-    if (m.title) {
+    var top = byId("lib-top");
+    var body = byId("lib-body");
+    var fl = byId("lib-filters");
+    if (top) clear(top);
+    if (body) clear(body);
+    if (fl) clear(fl);
+    if (!m || !body) return;
+    if (m.title && top) {
       var head = el("div", "lib-head");
       head.appendChild(el("span", "lib-t", m.title));
       var x = el("span", "lib-x", "Cancel");
@@ -581,18 +588,39 @@ function createCreateView(doc, ctl, o) {
         ctl.libraryCancel();
       });
       head.appendChild(x);
-      box.appendChild(head);
+      top.appendChild(head);
     }
-    if (m.state === "loading" && !m.items.length) box.appendChild(el("div", "lib-note", "Loading the project's images…"));
-    if (m.error) box.appendChild(el("div", "lib-note warn", m.error));
-    if (m.empty) box.appendChild(el("div", "lib-note", m.empty));
-    var w = Math.max(60, Math.floor((panelWidth() - 24 - 16 - 8) / 3));
+    var sf = byId("lib-search");
+    if (sf && !libFocused && sf.value !== (m.query || "")) sf.value = m.query || "";
+    if (sf && !pop.covered) sf.style.display = "block";
+    if (fl)
+      (m.filters || []).forEach(function (f) {
+        var c = el("div", f.on ? "lib-f on" : "lib-f", f.label);
+        c.setAttribute("data-lib-filter", f.key);
+        onClick(c, function () {
+          return ctl.libraryFilter(f.key);
+        });
+        fl.appendChild(c);
+      });
+    if (m.state === "loading" && !m.items.length) body.appendChild(el("div", "lib-note", "Loading the project's images…"));
+    if (m.error) body.appendChild(el("div", "lib-note warn", m.error));
+    if (m.empty) body.appendChild(el("div", "lib-note", m.empty));
+    // Three columns from the grid's own width (each tile keeps a 4 px
+    // margin on its right); the grid scrolls inside the composer so the
+    // panel keeps its header and context card (M7 layout check: 12 tiles
+    // made the composer taller than a 420 px panel).
+    var bw = rect(body);
+    var inner = bw && bw.width > 0 ? bw.width - 8 : panelWidth() - 24 - 16 - 8;
+    var w = Math.max(60, Math.floor(inner / 3) - 4);
+    var ar = rect(byId("app"));
+    libTile = w;
+    body.style.maxHeight = Math.max(w + 8, Math.round((ar && ar.height ? ar.height : 600) * (m.mode === "ref" ? 0.3 : 0.45))) + "px";
     var row = el("div", "lib-grid");
     m.items.forEach(function (it) {
       var t = el("div", "tw lib-tile");
       t.style.width = w + "px";
       t.style.height = w + "px";
-      t.setAttribute("title", it.name);
+      t.setAttribute("title", it.title || it.name);
       t.setAttribute("data-lib", it.asset_id);
       if (it.thumb) cover(t, it.thumb, w, w, it.size ? it.size.width : 0, it.size ? it.size.height : 0);
       onClick(t, function () {
@@ -600,7 +628,32 @@ function createCreateView(doc, ctl, o) {
       });
       row.appendChild(t);
     });
-    box.appendChild(row);
+    body.appendChild(row);
+    if (m.more) {
+      var mo = el("div", "lib-more", m.state === "loading" ? "Loading…" : "Show more");
+      mo.setAttribute("data-lib-more", "1");
+      onClick(mo, function () {
+        return ctl.libraryMore();
+      });
+      body.appendChild(mo);
+    }
+  }
+
+  // The grid gives way when the composer would cover the context chips:
+  // its height shrinks by the overlap, down to one row of tiles.
+  var libTile = 0;
+  function fitLibrary() {
+    var lib = byId("lib");
+    var body = byId("lib-body");
+    var acts = byId("acts");
+    var comp = byId("composer");
+    if (!lib || !body || !acts || !comp || lib.style.display === "none" || !libTile) return;
+    var last = acts.children && acts.children.length ? rect(acts.children[acts.children.length - 1]) : rect(acts);
+    var c = rect(comp);
+    var b = rect(body);
+    if (!last || !c || !b) return;
+    var over = Math.ceil(last.bottom + 8 - c.top);
+    if (over > 0) body.style.maxHeight = Math.max(Math.round(libTile * 0.6), Math.floor(b.height - over)) + "px";
   }
 
   // ---- popovers ----
@@ -625,6 +678,8 @@ function createCreateView(doc, ctl, o) {
     // open (its row keeps its height, so nothing moves).
     var sf = byId("ctx-select");
     if (sf) sf.style.display = on ? "none" : "block";
+    var lf = byId("lib-search");
+    if (lf) lf.style.display = on ? "none" : "block";
     var t = byId("prompt");
     var g = byId("prompt-ghost");
     var comp = byId("composer");
@@ -736,6 +791,7 @@ function createCreateView(doc, ctl, o) {
   function mi(it, fn) {
     var b = el("div", "mi");
     if (it.disabled) b.setAttribute("aria-disabled", "true");
+    if (it.title) b.setAttribute("title", it.title);
     var chk = el("span", "chkm");
     if (it.checked) chk.appendChild(icons.icon(doc, "check", null, 14));
     b.appendChild(chk);
@@ -1042,6 +1098,19 @@ function createCreateView(doc, ctl, o) {
     });
     pr0.addEventListener("blur", function () {
       promptFocused = false;
+    });
+  }
+  var libFocused = false;
+  var lib0 = byId("lib-search");
+  if (lib0) {
+    lib0.addEventListener("input", function () {
+      ctl.librarySearch(lib0.value);
+    });
+    lib0.addEventListener("focus", function () {
+      libFocused = true;
+    });
+    lib0.addEventListener("blur", function () {
+      libFocused = false;
     });
   }
   var selectFocused = false;

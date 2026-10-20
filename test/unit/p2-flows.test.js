@@ -269,7 +269,7 @@ test("contexts: a split element has its own actions; a lone Background is a flat
 test("the actions table: every More entry and chip is an action that runs; tools name a lane and a model", () => {
   for (const kind of Object.keys(actions.CONTEXTS)) {
     for (const id of actions.CONTEXTS[kind]) assert.ok(actions.ACTIONS[id], `${kind}: ${id}`);
-    for (const g of actions.MORE[kind] || []) for (const id of g[1]) assert.ok(actions.ACTIONS[id] && actions.ACTIONS[id].family, `${kind} More: ${id} runs`);
+    for (const g of actions.MORE[kind] || []) for (const id of g[1]) assert.ok(actions.ACTIONS[id] && (actions.ACTIONS[id].family || actions.ACTIONS[id].grid), `${kind} More: ${id} runs`);
   }
   for (const id of Object.keys(actions.ACTIONS)) {
     const a = actions.ACTIONS[id];
@@ -306,10 +306,11 @@ test("the Library grid: images only, never the plugin's own uploads or hidden as
     },
     downloader: { download: async (id, folder) => ({ path: folder + "/f.png" }) }
   });
-  assert.equal((await lib.list()).length, libraryMod.SHOWN);
-  await lib.list();
+  // M7: one list per asset type of the filter, the grid shows SHOWN tiles.
+  assert.equal((await lib.list(false, "generated")).rows.length, 20);
+  await lib.list(false, "generated");
   assert.equal(calls, 1, "a second open within a minute reuses the list");
-  await lib.list(true);
+  await lib.list(true, "generated");
   assert.equal(calls, 2);
   assert.equal((await lib.fetch("x1")).path, "Scenario/library/x1/f.png");
 });

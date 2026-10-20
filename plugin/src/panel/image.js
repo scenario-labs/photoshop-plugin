@@ -9,11 +9,14 @@
 // out {width, height}, request, refs_max }. o: { action, size (a preset
 // key such as "3:2"), prompt (as sent), takes, references (how many),
 // insert: "above" | "below", quality: "low" | "medium" | "high" for models
-// with a quality input }.
+// with a quality input, trained: null | the trained models it runs, as
+// lanes/edit.js loraParams takes them (Make new with a trained model, SPEC
+// 3.4; the schema is then the base's) }.
 
 var map = require("../catalog/map.js");
 var requests = require("../forms/requests.js");
 var commonMod = require("../lanes/common.js");
+var editMod = require("../lanes/edit.js");
 
 var ORDER = ["1:1", "3:2", "16:9", "9:16", "2:3", "4:3", "3:4", "4:5", "5:4", "21:9", "9:21"];
 var TAKES = [1, 2, 3, 4];
@@ -82,7 +85,8 @@ function imageView(schema, ctx, o) {
   if (d && d.model_id === schema.model_id) for (var k in d.preset) params[k] = d.preset[k];
   if (schema.prompt_input && o.prompt) params[schema.prompt_input] = o.prompt;
   var qp = commonMod.param(schema, "quality");
-  if (o.quality && qp && qp.enum && qp.enum.indexOf(o.quality) >= 0) params.quality = o.quality;
+  if (o.quality && !o.trained && qp && qp.enum && qp.enum.indexOf(o.quality) >= 0) params.quality = o.quality;
+  if (o.trained) editMod.loraParams(params, o.trained);
   var si = schema.size_inputs || {};
   var target;
   var pick = null;
@@ -113,7 +117,7 @@ function imageView(schema, ctx, o) {
     v.blocked = "This model takes no reference images.";
     return v;
   }
-  v.request = { lane: "image", model_id: schema.model_id, parameters: params, takes: takesFor(schema, o.takes), target: target, source_size: null, references: o.references || 0 };
+  v.request = { lane: "image", model_id: schema.model_id, parameters: params, takes: takesFor(schema, o.takes), target: target, source_size: null, references: o.references || 0, trained: !!o.trained };
   return v;
 }
 

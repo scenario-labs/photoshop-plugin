@@ -277,6 +277,10 @@ async function startFixtureScenario(opts = {}) {
       job.polls++;
       return { status: 200, body: out };
     }
+    // M7: the Library's list, GET /v1/assets?type=…, answered by
+    // opts.assetsList(request) (no recorded answer: the row shape follows
+    // what hosted Scenario MCP showed on 2026-10-20).
+    if (r.method === "GET" && r.path === "/v1/assets" && opts.assetsList) return opts.assetsList(r);
     const am = /^\/v1\/assets\/([^/]+)$/.exec(r.path);
     if (r.method === "GET" && am) {
       const id = decodeURIComponent(am[1]);

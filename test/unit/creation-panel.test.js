@@ -249,7 +249,7 @@ test("F2 a layer: Make versions with the built-in prompt when empty, a group abo
   // More: grouped, pin one to the chips (kept on disk), then unpin.
   await popOpen(doc, "more");
   const pinOf = (id) => find(doc, "data-pin", id);
-  assert.deepEqual(findAll(doc, "data-pick").map((e) => e.getAttribute("data-pick")), ["remove_text", "formats", "upscale_layer", "cutout_layer", "split", "split_text", "sketch", "angle", "relight", "animate"]);
+  assert.deepEqual(findAll(doc, "data-pick").map((e) => e.getAttribute("data-pick")), ["remove_text", "formats", "upscale_layer", "cutout_layer", "split", "split_text", "library_place", "sketch", "angle", "relight", "animate"]);
   // Each entry shows its own price (free price checks with its default model).
   const rightOf = (id) => (find(doc, "data-pick", id).children[0].children.find((c) => c.className === "r") || { textContent: "" }).textContent;
   assert.deepEqual([rightOf("upscale_layer"), rightOf("cutout_layer")], ["10 CU", "1 CU"]);
@@ -679,7 +679,7 @@ test("view-model helpers: classify, takesOf, isCutout, badgeOf, needsConfirm; th
     const list = actions.chipsFor(kind, {});
     assert.ok(list.length <= actions.MAX_CHIPS);
     for (const id of list) assert.ok(actions.ACTIONS[id], `${kind}: ${id} exists`);
-    for (const g of actions.moreFor(kind, {}, null)) for (const it of g.items) assert.ok(actions.ACTIONS[it.id].family, `More lists only actions that run: ${it.id}`);
+    for (const g of actions.moreFor(kind, {}, null)) for (const it of g.items) assert.ok(actions.ACTIONS[it.id].family || actions.ACTIONS[it.id].grid, `More lists only actions that run: ${it.id}`);
   }
   let pins = actions.togglePin({}, "layer", "upscale_layer");
   assert.deepEqual(pins.layer, ["upscale_layer"]);

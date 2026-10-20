@@ -172,7 +172,7 @@ test("catalog cache: the project's models then public ones, paged, kept 24 h in 
   assert.ok(listing.every((r) => r.query.pageSize === "500"));
   const file = JSON.parse(host.files.get(catalogMod.FILE));
   assert.equal(file.rows.length, got.length);
-  assert.deepEqual(Object.keys(file.rows[0]).sort(), ["capabilities", "compliant", "concepts", "created_at", "description", "id", "name", "no_refund", "privacy", "project", "tags", "thumb", "type"]);
+  assert.deepEqual(Object.keys(file.rows[0]).sort(), ["capabilities", "compliant", "concepts", "created_at", "description", "id", "images", "name", "no_refund", "privacy", "project", "tags", "thumb", "trigger", "type"]);
   assert.ok(!JSON.stringify(file).includes("inputs"), "no schemas in the cache");
   mock.requests.length = 0;
   await app.catalog.ensure();

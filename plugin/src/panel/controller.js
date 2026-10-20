@@ -22,6 +22,7 @@ var commonMod = require("../lanes/common.js");
 var enhanceMod = require("../lanes/enhance.js");
 var map = require("../catalog/map.js");
 var trainedMod = require("../catalog/trained.js");
+var trainedPanel = require("./trained.js");
 var requests = require("../forms/requests.js");
 var price = require("../forms/price.js");
 var thumbs = require("../ui/thumbs.js");
@@ -29,6 +30,7 @@ var pngMod = require("../util/png.js");
 var errorsMod = require("../scenario/errors.js");
 var sparkMod = require("../scenario/spark.js");
 var moreLanes = require("../lanes/more.js");
+var libraryMod = require("./library.js");
 
 var A = actionsMod.ACTIONS;
 var TAKES_PRICE_MS = 2500;
@@ -217,6 +219,11 @@ function createController(o) {
     startFrom: null,
     pins: {},
     styles: null,
+    // M7: the trained model picked in the Model menu (Run with), stacked
+    // with a trained style on one base when both fit (panel/trained.js);
+    // the schemas of the bases trained models run on.
+    runWith: null,
+    bases: null,
     agent: null,
     reading: null,
     again: false,
@@ -235,8 +242,13 @@ function createController(o) {
     selectText: "",
     clip: null,
     // Open from Library and + Reference > Library: the project's images.
-    lib: { state: "idle", rows: [], error: null },
+    // M7: the search text, the filter (library.js FILTERS), how many tiles
+    // show.
+    lib: { state: "idle", rows: [], more: false, error: null },
     libPick: false,
+    libQuery: "",
+    libFilter: "all",
+    libShown: libraryMod.SHOWN,
     // F14: an agent's multi-step plan, shown only while one waits.
     plan: null
   };
@@ -281,15 +293,29 @@ function createController(o) {
     return A[id] && A[id].model ? A[id].model : defaultModel(laneOf(id));
   }
 
-  function modelFor(id) {
+  // over: { runWith } prices another Run with choice than the current one
+  // (the Model menu's trained rows); left out, the current choices.
+  function modelFor(id, over) {
     var lane = laneOf(id);
     if (!lane) return null;
-    if (st.style && st.style.lane_ok && A[id].family === "edit" && A[id].chips.indexOf("style") >= 0) return st.style.base_model_id;
+    var tr = trainedRun(id, over);
+    if (tr) return tr.base_model_id;
     return st.models[modelKey(id)] || defaultFor(id);
   }
 
   function styleApplies(id) {
-    return !!(st.style && !st.style.match && A[id] && A[id].family === "edit" && A[id].chips.indexOf("style") >= 0);
+    return !!(st.style && !st.style.match && trainedPanel.fits(A[id], st.style));
+  }
+
+  function runWithOf(over) {
+    return over && Object.prototype.hasOwnProperty.call(over, "runWith") ? over.runWith : st.runWith;
+  }
+
+  // The trained models this run applies and the base that runs them, or
+  // null (panel/trained.js). over false: none (a model picked by id).
+  function trainedRun(id, over) {
+    if (over === false) return null;
+    return trainedPanel.resolve(A[id], st.style, runWithOf(over), st.bases || []);
   }
 
   // Match an image: the style picture goes with every action that has the
@@ -304,15 +330,17 @@ function createController(o) {
   function changeOn(id, schema) {
     var a = A[id];
     if (!a || a.family !== "edit" || (a.chips || []).indexOf("change") < 0) return false;
-    if (styleApplies(id)) return st.style.route === "image_strength";
+    var tr = trainedRun(id);
+    if (tr) return tr.route === "image_strength";
     return !!(schema && commonMod.param(schema, "strength"));
   }
 
-  function promptOf(id) {
+  function promptOf(id, over) {
     if (A[id] && A[id].prompt === "field") return String(st.selectText || "").trim() || null;
     var t = actionsMod.promptFor(id, st.prompt);
     if (t && matchOn(id)) t = t + " " + STYLE_SENTENCE;
-    return t;
+    // Trained models: their trigger words go in front (Advanced turns it off).
+    return trainedPanel.withTriggers(t, trainedRun(id, over), st.adv);
   }
 
   // GPT Image 2.5 and other models with a Low / Medium / High quality
@@ -578,12 +606,14 @@ function createController(o) {
     return opts;
   }
 
-  async function flowArgs(id, n, factor, modelId) {
+  async function flowArgs(id, n, factor, modelId, over) {
     var a = A[id];
     var lane = laneOf(id);
-    var model = modelId || modelFor(id);
+    var model = modelId || modelFor(id, over);
     var ctx = await contextFor(id);
-    var prompt = promptOf(id);
+    // A model picked by id (a Model menu price) runs without trained models.
+    var tr = trainedRun(id, modelId ? false : over);
+    var prompt = promptOf(id, modelId ? false : over);
     var args = { model_id: model, context: ctx, references: refCount(id), options: {} };
     var schema = st.schemaCache[model] || null;
     if (!schema && model) {
@@ -595,7 +625,7 @@ function createController(o) {
     }
     var quality = qualityOf(schema, id);
     if (a.family === "edit") {
-      args.tool = styleApplies(id) && !modelId ? "trained_edit" : "edit";
+      args.tool = tr ? "trained_edit" : "edit";
       var sample = a.sample === "layer" ? "layer" : st.adv.sample === "layer" ? "layer" : "visible";
       if (id === "more_like" && !ctx.selection) sample = "layer";
       args.options = { prompt: prompt, takes: takesFor(id, n), sample: sample, margin: st.adv.margin || "auto" };
@@ -610,10 +640,7 @@ function createController(o) {
         args.options.sample = "visible";
       }
       if (id === "angle") args.options.extra = angleOf().extra;
-      if (args.tool === "trained_edit") {
-        args.trained = { model_id: st.style.id, kind: st.style.kind, scale: st.style.scale };
-        if (st.style.route === "image_strength") args.trained.strength = CHANGE[st.change].at;
-      }
+      if (args.tool === "trained_edit") args.trained = trainedPanel.argOf(tr, st.adv, CHANGE[st.change].at);
     } else if (a.family === "expand") {
       args.tool = "expand";
       args.options = expandOptions(ctx);
@@ -638,9 +665,10 @@ function createController(o) {
     return args;
   }
 
-  function imageOptions(id, refs, n, schema) {
+  function imageOptions(id, refs, n, schema, over, modelId) {
     var a = A[id];
-    return { action: id, size: st.size, prompt: promptOf(id), takes: takesFor(id, n), references: refs, insert: a.insert || null, quality: qualityOf(schema, id) };
+    var tr = trainedRun(id, modelId ? false : over);
+    return { action: id, size: st.size, prompt: promptOf(id, modelId ? false : over), takes: takesFor(id, n), references: refs, insert: a.insert || null, quality: tr ? null : qualityOf(schema, id), trained: trainedPanel.argOf(tr, st.adv) };
   }
 
   // Short words for a blocked view, from the prototype where it has them.
@@ -690,6 +718,12 @@ function createController(o) {
       setPrice({ state: "unavailable", reason: TEXT.alarm });
       return;
     }
+    // Two trained models that share no base: nothing to price.
+    var trc = trainedRun(id);
+    if (trc && !trc.base_model_id) {
+      setPrice({ state: "blocked", action: id, reason: trc.reason });
+      return;
+    }
     setPrice({ state: "checking", action: id });
     var out;
     try {
@@ -711,9 +745,9 @@ function createController(o) {
     else setPrice({ state: "unavailable", action: id, reason: out.reason || "Price unavailable", view: out.view, schema: out.schema });
   }
 
-  async function priceImage(id, n, modelId) {
-    var schema = await schemaFor(modelId || modelFor(id));
-    var v = imageMod.imageView(schema, st.raw, imageOptions(id, refCount(id), n, schema));
+  async function priceImage(id, n, modelId, over) {
+    var schema = await schemaFor(modelId || modelFor(id, over));
+    var v = imageMod.imageView(schema, st.raw, imageOptions(id, refCount(id), n, schema, over, modelId));
     if (v.blocked) return { state: "blocked", reason: v.blocked, view: v, schema: schema };
     var req;
     try {
@@ -739,7 +773,7 @@ function createController(o) {
   // its own timeout), so the open menu can be drawn again with them.
   var optCache = { key: null, prices: {}, pending: {} };
   function settingsKey(id) {
-    return JSON.stringify([st.key, id, st.prompt, st.takes[id] || null, st.models, st.style ? st.style.id || st.style.name : null, st.styleRef ? st.styleRef.id : null, st.size, st.target, st.factor, st.change, st.adv, refCount(id), st.drefOff, st.angle, st.format, st.duration, st.selectText]);
+    return JSON.stringify([st.key, id, st.prompt, st.takes[id] || null, st.models, st.style ? st.style.id || st.style.name : null, st.runWith ? st.runWith.id : null, st.styleRef ? st.styleRef.id : null, st.size, st.target, st.factor, st.change, st.adv, refCount(id), st.drefOff, st.angle, st.format, st.duration, st.selectText]);
   }
   async function optionPrices(id, values, kind, current) {
     var a = A[id];
@@ -760,7 +794,13 @@ function createController(o) {
       var n = kind === "takes" ? v : null;
       var f = kind === "upsize" ? v : null;
       var m = kind === "model" ? v || defaultFor(id) : null;
-      var run = a.family === "image" ? priceImage(id, n, m) : flowArgs(id, n, f, m).then(function (args) {
+      // A trained row of the Model menu ("t:<id>"): Run with that model.
+      var over;
+      if ((kind === "model" || kind === "model_trained") && typeof v === "string" && v.indexOf("t:") === 0) {
+        over = { runWith: trainedById(v.slice(2)) };
+        m = null;
+      }
+      var run = a.family === "image" ? priceImage(id, n, m, over) : flowArgs(id, n, f, m, over).then(function (args) {
         if (kind === "duration") args.options.duration = v;
         return o.flow.price(args);
       });
@@ -1198,11 +1238,38 @@ function createController(o) {
         if (value) st.models[modelKey(id)] = value;
         else delete st.models[modelKey(id)];
       }
-      if (A[id].family === "edit" && st.style && !st.style.match) st.style = null;
+      if (typeof value === "string" && value.indexOf("t:") === 0) {
+        // Run with a trained model: it runs on its base, with the trained
+        // style when both fit one base, else it replaces the style.
+        delete st.models[modelKey(id)];
+        var tw = trainedById(value.slice(2));
+        // "t:-": the trained style's base alone.
+        if (!tw) {
+          st.runWith = null;
+          changed();
+          return;
+        }
+        var why = trainedPanel.clash(A[id], st.style, tw, st.bases || []);
+        if (why) {
+          st.note = trainedPanel.TEXT.replaced(st.style.name, tw.name, why);
+          st.style = null;
+        }
+        st.runWith = tw;
+      } else {
+        st.runWith = null;
+        if (trainedPanel.familyOf(A[id]) && st.style && !st.style.match) st.style = null;
+      }
     } else if (kind === "style") {
       // Match an image: the picture comes next (menu "stylesrc"); until
       // then nothing changes.
       if (value === "match") return;
+      if (value && !value.match && st.runWith) {
+        var why2 = trainedPanel.clash(A[id], value, st.runWith, st.bases || []);
+        if (why2) {
+          st.note = trainedPanel.TEXT.replaced(st.runWith.name, value.name, why2);
+          st.runWith = null;
+        }
+      }
       st.style = value || null;
       dropStyleRef();
     } else if (kind === "stylesrc") {
@@ -1245,59 +1312,100 @@ function createController(o) {
 
   async function loadLibrary(force) {
     if (!o.library) {
-      st.lib = { state: "error", rows: [], error: "The Library needs a signed-in project." };
+      st.lib = { state: "error", rows: [], more: false, error: "The Library needs a signed-in project." };
       emit();
       return;
     }
     if (st.lib.state === "loading") return;
-    st.lib = { state: "loading", rows: st.lib.rows, error: null };
+    var f = st.libFilter;
+    st.lib = { state: "loading", rows: st.lib.rows, more: st.lib.more, error: null };
     emit();
     try {
-      st.lib = { state: "ready", rows: await o.library.list(!!force), error: null };
+      var got = await o.library.list(!!force, f);
+      if (f !== st.libFilter) {
+        st.lib.state = "idle";
+        return loadLibrary(false);
+      }
+      st.lib = { state: "ready", rows: got.rows, more: !!got.more, error: null };
     } catch (e) {
-      st.lib = { state: "error", rows: [], error: (e && e.message) || String(e) };
+      st.lib = { state: "error", rows: [], more: false, error: (e && e.message) || String(e) };
     }
     emit();
   }
 
+  // The grid's mode: "ref" (+ Reference > Library), "place" (Place from
+  // Library: a document is open) or "open" (Open from Library).
+  function libraryMode() {
+    if (st.libPick) return "ref";
+    var a = A[st.action];
+    return a && a.grid ? a.grid : null;
+  }
+
   function libraryModel() {
-    var pick = st.libPick;
-    if (!pick && !(A[st.action] && A[st.action].grid)) return null;
+    var mode = libraryMode();
+    if (!mode) return null;
     if (st.lib.state === "idle") loadLibrary();
+    var found = libraryMod.search(st.lib.rows, st.libQuery);
+    var shown = found.slice(0, st.libShown);
+    var q = String(st.libQuery || "").trim();
+    var empty = null;
+    if (st.lib.state === "ready" && !found.length) {
+      if (q) empty = 'No image matches "' + q + '" in the ' + st.lib.rows.length + " newest" + (st.lib.more ? " (Show more reads further)" : "") + ".";
+      else empty = st.libFilter === "all" ? "No images in this project yet." : "No " + libraryMod.FILTERS.filter(function (x) {
+        return x.key === st.libFilter;
+      })[0].label.toLowerCase() + " images in this project yet.";
+    }
+    var verb = mode === "ref" ? "Add " : mode === "place" ? "Place " : "Open ";
     return {
-      mode: pick ? "ref" : "open",
-      title: pick ? "Add a Library image as a reference" : null,
+      mode: mode,
+      title: mode === "ref" ? "Add a Library image as a reference" : null,
       state: st.lib.state,
       error: st.lib.error,
-      items: st.lib.rows.map(function (r) {
-        return { asset_id: r.asset_id, name: r.name, thumb: r.thumb, size: r.width && r.height ? { width: r.width, height: r.height } : null };
+      query: st.libQuery,
+      filters: libraryMod.FILTERS.map(function (x) {
+        return { key: x.key, label: x.label, on: x.key === st.libFilter };
       }),
-      empty: st.lib.state === "ready" && !st.lib.rows.length ? "No images in this project yet." : null
+      items: shown.map(function (r) {
+        var size = r.width && r.height ? { width: r.width, height: r.height } : null;
+        var bits = [r.title];
+        if (size) bits.push(size.width + " × " + size.height);
+        return { asset_id: r.asset_id, name: verb + r.name, title: verb + bits.join(", "), thumb: r.thumb, size: size, source: r.source };
+      }),
+      more: found.length > shown.length || (st.lib.more && st.lib.state !== "loading"),
+      count: found.length,
+      empty: empty
     };
   }
 
-  // A click in the grid: opens the image as a new document, or adds it to
-  // the refs row.
+  // A click in the grid: opens the image as a new document, places it in
+  // the document as a layer, or adds it to the refs row.
   async function libraryPick(assetId) {
     var row = st.lib.rows.filter(function (r) {
       return r.asset_id === assetId;
     })[0];
     if (!row || !o.library) return;
-    var asRef = st.libPick;
+    var mode = libraryMode();
     st.note = "";
     st.sending = true;
     emit();
     try {
-      var got = await o.library.fetch(assetId);
-      if (asRef) {
-        var bytes = await o.host.readDataBinary(got.path);
-        var r = o.references.fromBytes(bytes, row.name, modelFor(st.action), "library");
-        r.url = urls.fromBytes(r.bytes, r.mime);
-        st.refs.push(r);
-        st.libPick = false;
+      if (mode === "place") {
+        var raw = st.raw || {};
+        if (!raw.doc) throw invalid("Open a document to place a Library image in it.");
+        await o.library.place(row, { id: raw.doc.id, width: raw.doc.width, height: raw.doc.height }, { layer_id: raw.layer ? raw.layer.id : null, leave_prompts: !!o.leavePrompts });
+        st.note = row.name + " is placed as a new layer.";
       } else {
-        if (!o.openFile) throw invalid("This Photoshop cannot open files from the plugin.");
-        await o.openFile(got.path);
+        var got = await o.library.fetch(assetId);
+        if (mode === "ref") {
+          var bytes = await o.host.readDataBinary(got.path);
+          var r = o.references.fromBytes(bytes, row.name, modelFor(st.action), "library");
+          r.url = urls.fromBytes(r.bytes, r.mime);
+          st.refs.push(r);
+          st.libPick = false;
+        } else {
+          if (!o.openFile) throw invalid("This Photoshop cannot open files from the plugin.");
+          await o.openFile(got.path);
+        }
       }
     } catch (e) {
       st.note = (e && e.message) || String(e);
@@ -1306,6 +1414,42 @@ function createController(o) {
     }
     changed();
     refresh();
+  }
+
+  // The search field: filters the rows read so far, at once.
+  function librarySearch(text) {
+    st.libQuery = String(text || "");
+    st.libShown = libraryMod.SHOWN;
+    emit();
+  }
+
+  function libraryFilter(key) {
+    if (key === st.libFilter) return;
+    st.libFilter = key;
+    st.libShown = libraryMod.SHOWN;
+    st.lib = { state: "idle", rows: [], more: false, error: null };
+    loadLibrary();
+  }
+
+  // Show more: the next tiles, reading the next page when the rows read so
+  // far are all shown.
+  async function libraryMore() {
+    st.libShown += libraryMod.SHOWN;
+    var found = libraryMod.search(st.lib.rows, st.libQuery);
+    if (found.length >= st.libShown || !st.lib.more || !o.library || st.lib.state === "loading") {
+      emit();
+      return;
+    }
+    var f = st.libFilter;
+    st.lib.state = "loading";
+    emit();
+    try {
+      var got = await o.library.more(f);
+      if (f === st.libFilter) st.lib = { state: "ready", rows: got.rows, more: !!got.more, error: null };
+    } catch (e) {
+      st.lib = { state: "ready", rows: st.lib.rows, more: st.lib.more, error: (e && e.message) || String(e) };
+    }
+    emit();
   }
 
   function libraryCancel() {
@@ -1509,29 +1653,62 @@ function createController(o) {
 
   // ---- styles (the project's trained models that can edit) ----
 
-  async function loadStyles() {
-    if (st.styles) return st.styles;
-    st.styles = [];
-    try {
-      await o.catalog.ensure();
-      var rows = o.catalog.rows().filter(function (r) {
-        return !map.isBase(r) && !map.hidden(r) && r.project;
-      });
-      if (rows.length) {
-        var bases = await o.catalog.baseSchemas();
-        for (var i = 0; i < rows.length; i++) {
-          var dv = trainedMod.derive(rows[i], bases);
-          if (!dv.supported || !dv.edit_route) continue;
-          var base = null;
-          for (var b = 0; b < bases.length; b++) if (bases[b].model_id === dv.base_model_ids[0]) base = bases[b];
-          st.styles.push({ id: rows[i].id, name: rows[i].name, thumb: thumbs.modelThumb(rows[i]), kind: dv.trained_kind, scale: dv.default_scale, base_model_id: dv.base_model_ids[0], route: dv.edit_route, lane_ok: true });
-        }
+  // The project's trained models (styles and characters) with the bases
+  // they run on: the Style chip's trained styles and the Model menu's
+  // trained rows (panel/trained.js). Read once per project.
+  var trainedLoad = null;
+  function loadStyles() {
+    var acc = o.account ? o.account() : null;
+    var key = acc ? acc.id : "-";
+    if (trainedLoad && trainedLoad.key === key) return trainedLoad.promise;
+    var entry = { key: key, promise: null };
+    trainedLoad = entry;
+    entry.promise = (async function () {
+      var list = [];
+      try {
+        await o.catalog.ensure();
+        var rows = o.catalog.rows();
+        var any = rows.some(function (r) {
+          return r.project && !map.isBase(r);
+        });
+        var bases = any || st.runWith ? await o.catalog.baseSchemas() : st.bases || [];
+        st.bases = bases;
+        list = trainedPanel.projectEntries(rows, bases);
+      } catch (e) {
+        log("panel: trained models unavailable (" + ((e && e.message) || e) + ")");
       }
-    } catch (e) {
-      log("panel: styles unavailable (" + ((e && e.message) || e) + ")");
+      if (trainedLoad === entry) st.styles = list;
+      emit();
+      return list;
+    })();
+    return entry.promise;
+  }
+
+  function trainedById(id) {
+    var all = (st.styles || []).concat(st.runWith ? [st.runWith] : []);
+    for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
+    return null;
+  }
+
+  // Run with a trained model from All models… (the picker's Trained tab,
+  // public models too): it becomes the Model menu's trained pick.
+  async function runWithRow(row) {
+    await loadStyles();
+    if (!st.bases || !st.bases.length) st.bases = await o.catalog.baseSchemas();
+    var e = trainedPanel.entryOf(row, st.bases);
+    if (!e) {
+      st.note = "This trained model's type has no base model in this version of the plugin.";
+      emit();
+      return false;
     }
-    emit();
-    return st.styles;
+    if (!trainedPanel.fits(A[st.action], e)) {
+      st.note = e.name + " cannot run with " + (A[st.action] ? A[st.action].label : "this action") + ".";
+      emit();
+      return false;
+    }
+    if (!trainedById(e.id)) st.styles = (st.styles || []).concat([e]);
+    choose("model", "t:" + e.id);
+    return true;
   }
 
   // ---- the render model ----
@@ -1845,9 +2022,13 @@ function createController(o) {
     if (kind === "style") {
       if (st.style && st.style.match) return { kind: kind, thumb: st.styleRef ? st.styleRef.url : null, icon: "style", value: "Match an image", title: "Style: Match an image" + (st.styleRef ? ", " + st.styleRef.label : "") };
       if (!styleApplies(id) && st.style) return { kind: kind, icon: "style", value: "No style", title: "Style" };
-      return st.style ? { kind: kind, thumb: st.style.thumb, icon: "style", value: st.style.name, title: "Style: " + st.style.name } : { kind: kind, icon: "style", value: "No style", title: "Style" };
+      return st.style ? { kind: kind, thumb: st.style.thumb, icon: "style", value: st.style.name, title: "Style: " + st.style.name + (st.style.trigger ? ". Trigger: " + st.style.trigger : "") } : { kind: kind, icon: "style", value: "No style", title: "Style" };
     }
     if (kind === "model") {
+      // Run with a trained model: the chip shows it; the base runs it.
+      var rw = runWithOf();
+      var trm = trainedRun(id);
+      if (rw && trm && trm.list.indexOf(rw) >= 0) return { kind: kind, thumb: rw.thumb, mono: monoOf(rw.name), value: rw.name, title: "Model: " + rw.name + " on " + (trm.base_name || "its base") + (rw.trigger ? ". Trigger: " + rw.trigger : "") };
       var row = schema ? schema.row : null;
       var name = schema ? schema.name : o.catalog && o.catalog.find(modelFor(id)) ? o.catalog.find(modelFor(id)).name : "Model";
       return { kind: kind, thumb: row ? thumbs.modelThumb(row) : null, mono: monoOf(name), value: name, title: "Model: " + name };
@@ -2011,7 +2192,10 @@ function createController(o) {
     var a = A[id];
     if (!a || !a.family) return [];
     var rows = [];
-    var q = qualityOf(schema) && !styleApplies(id) ? [{ name: "quality", label: "Quality", value: qualityOf(schema), options: QUALITY }] : [];
+    var trA = trainedRun(id);
+    var q = qualityOf(schema) && !trA ? [{ name: "quality", label: "Quality", value: qualityOf(schema), options: QUALITY }] : [];
+    // Trained models: a weight per LoRA and the trigger words (M7).
+    q = q.concat(trainedPanel.advancedRows(trA, st.adv));
     if (a.family === "edit")
       rows = q.concat([
         { name: "margin", label: "Context margin", value: st.adv.margin || "auto", options: [["auto", "Auto"], ["64", "64 px"], ["none", "None"]] },
@@ -2120,14 +2304,16 @@ function createController(o) {
           ]
         }
       ];
-      // Trained styles run on edit actions, on the base they were trained on.
-      if (a.family === "edit") {
-        var styles = await loadStyles();
-        var titems = [];
-        for (var s = 0; s < styles.length; s++) titems.push({ value: styles[s], label: styles[s].name, sub: "Trained style", thumb: styles[s].thumb, checked: !!on && on.id === styles[s].id });
-        if (titems.length) sgroups.push({ title: "Trained styles", items: titems });
+      // Trained styles run on the base they were trained on: edits (the
+      // Edit lane on the base) and new images (Make new on the base, M7).
+      var styles = trainedPanel.familyOf(a) ? await loadStyles() : [];
+      var titems = [];
+      for (var s = 0; s < styles.length; s++) {
+        if (styles[s].role !== "style" || !trainedPanel.fits(a, styles[s])) continue;
+        titems.push({ value: styles[s], label: styles[s].name, sub: trainedPanel.subOf(styles[s]), title: trainedPanel.titleOf(styles[s]), thumb: styles[s].thumb, mono: monoOf(styles[s].name), checked: !!on && on.id === styles[s].id });
       }
-      return { title: null, groups: sgroups, note: a.family === "edit" ? TEXT.styles_note : TEXT.styles_note_image };
+      if (titems.length) sgroups.push({ title: "Trained styles", items: titems });
+      return { title: null, groups: sgroups, note: titems.length ? TEXT.styles_note : TEXT.styles_note_image };
     }
     if (kind === "stylesrc") {
       var sraw = st.raw || {};
@@ -2138,16 +2324,31 @@ function createController(o) {
       return { title: "Match an image", items: src, note: TEXT.match_note };
     }
     if (kind === "model" && styleApplies(id)) {
-      var base = st.style.base_model_id;
+      var trS = trainedRun(id, { runWith: null });
+      var base = trS && trS.base_model_id ? trS.base_model_id : st.style.bases[0];
       var baseRow = o.catalog.find(base);
-      var bp2 = await optionPrices(id, [null], "model_trained", null);
+      var bname = baseRow ? baseRow.name : trS && trS.base_name ? trS.base_name : base;
+      // Trained models that run together with the style, on its base.
+      var withItems = [];
+      var all2 = await loadStyles();
+      for (var w2 = 0; w2 < all2.length; w2++) {
+        var cand = all2[w2];
+        if (cand.id === st.style.id || !trainedPanel.fits(a, cand)) continue;
+        var both = trainedPanel.resolve(a, st.style, cand, st.bases || []);
+        if (!both || !both.base_model_id) continue;
+        withItems.push({ value: "t:" + cand.id, label: cand.name, sub: trainedPanel.subOf(cand), title: trainedPanel.titleOf(cand), thumb: cand.thumb, mono: monoOf(cand.name), checked: !!st.runWith && st.runWith.id === cand.id });
+      }
+      var vals2 = ["t:-"].concat(
+        withItems.map(function (x) {
+          return x.value;
+        })
+      );
+      var bp2 = await optionPrices(id, vals2, "model_trained", null);
       var bp = bp2.prices;
-      return {
-        title: null,
-        later: bp2.later,
-        groups: [{ title: "Trained style base", items: [{ value: null, label: baseRow ? baseRow.name : schema && schema.model_id === base ? schema.name : base, sub: st.style.name + " is trained on it", thumb: baseRow ? thumbs.modelThumb(baseRow) : null, mono: monoOf(baseRow ? baseRow.name : base), right: bp[null] || (st.price.state === "ready" && st.price.action === id ? st.price.label : ""), checked: true }] }],
-        note: TEXT.base_note
-      };
+      var g2 = [{ title: "Trained style base", items: [{ value: "t:-", label: bname, sub: st.style.name + " is trained on it", thumb: baseRow ? thumbs.modelThumb(baseRow) : null, mono: monoOf(bname), right: bp["t:-"] || "", checked: !st.runWith }] }];
+      for (var w3 = 0; w3 < withItems.length; w3++) withItems[w3].right = bp[withItems[w3].value] || "";
+      if (withItems.length) g2.push({ title: "Run with " + st.style.name, items: withItems });
+      return { title: null, later: bp2.later, groups: g2, note: TEXT.base_note };
     }
     if (kind === "model" && a.model) {
       var own = [a.model].concat(a.alts || []);
@@ -2197,11 +2398,26 @@ function createController(o) {
     if (kind === "model") {
       var rec = defaultModel(lane);
       var recRow = o.catalog.find(rec);
-      var groups = [{ title: "Recommended for " + a.label, items: [{ value: null, label: recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec, thumb: recRow ? thumbs.modelThumb(recRow) : null, mono: monoOf(recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec), tag: "Recommended", checked: !st.models[lane] && !styleApplies(id) }] }];
+      var groups = [{ title: "Recommended for " + a.label, items: [{ value: null, label: recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec, thumb: recRow ? thumbs.modelThumb(recRow) : null, mono: monoOf(recRow ? recRow.name : schema && schema.model_id === rec ? schema.name : rec), tag: "Recommended", checked: !st.models[lane] && !trainedRun(id) }] }];
       try {
         await o.catalog.ensure();
       } catch (e) {
         // the catalog list is optional here
+      }
+      // Your trained models (M7, Run with): the project's trained models that
+      // can do this action, characters first; each runs on its base.
+      var rwOn = st.runWith && trainedRun(id) && trainedRun(id).list.indexOf(st.runWith) >= 0 ? st.runWith : null;
+      if (trainedPanel.familyOf(a)) {
+        var mine = await loadStyles();
+        var titems2 = [];
+        for (var t2 = 0; t2 < mine.length; t2++) {
+          if (!trainedPanel.fits(a, mine[t2])) continue;
+          titems2.push({ value: "t:" + mine[t2].id, label: mine[t2].name, sub: trainedPanel.subOf(mine[t2]), title: trainedPanel.titleOf(mine[t2]), thumb: mine[t2].thumb, mono: monoOf(mine[t2].name), checked: !!rwOn && rwOn.id === mine[t2].id });
+        }
+        if (rwOn && !titems2.some(function (x) {
+          return x.value === "t:" + rwOn.id;
+        })) titems2.push({ value: "t:" + rwOn.id, label: rwOn.name, sub: trainedPanel.subOf(rwOn) + (rwOn.public ? " · Public" : ""), title: trainedPanel.titleOf(rwOn), thumb: rwOn.thumb, mono: monoOf(rwOn.name), checked: true });
+        if (titems2.length) groups.push({ title: "Your trained models", items: titems2 });
       }
       var rows = o.catalog.rows();
       var tool = lane === "image" || lane === "edit" ? null : lane;
@@ -2214,13 +2430,13 @@ function createController(o) {
         var lanes = map.lanesOf(row);
         if (lanes.indexOf(tool || lane) < 0) continue;
         if (ids.length && ids.indexOf(row.id) < 0 && cat.length >= ids.length) continue;
-        cat.push({ value: row.id, label: row.name, thumb: thumbs.modelThumb(row), mono: monoOf(row.name), checked: st.models[lane] === row.id });
+        cat.push({ value: row.id, label: row.name, thumb: thumbs.modelThumb(row), mono: monoOf(row.name), checked: !rwOn && st.models[lane] === row.id });
       }
       if (cat.length) groups.push({ title: "Catalog · can " + a.label.toLowerCase(), items: cat });
       // Each model's price for this document and these settings.
       var mvals = [];
       for (var mg2 = 0; mg2 < groups.length; mg2++) for (var mi2 = 0; mi2 < groups[mg2].items.length; mi2++) mvals.push(groups[mg2].items[mi2].value);
-      var mp2 = await optionPrices(id, mvals, "model", st.models[lane] || null);
+      var mp2 = await optionPrices(id, mvals, "model", rwOn ? "t:" + rwOn.id : st.models[lane] || null);
       var mprices = mp2.prices;
       for (var mg3 = 0; mg3 < groups.length; mg3++) for (var mi3 = 0; mi3 < groups[mg3].items.length; mi3++) groups[mg3].items[mi3].right = mprices[groups[mg3].items[mi3].value] || "";
       return { title: null, groups: groups, all: true, lane: lane, later: mp2.later, note: "Prices are price checks for this document and these settings." };
@@ -2333,6 +2549,9 @@ function createController(o) {
     setSelect: setSelect,
     libraryPick: libraryPick,
     libraryCancel: libraryCancel,
+    librarySearch: librarySearch,
+    libraryFilter: libraryFilter,
+    libraryMore: libraryMore,
     libraryReload: function () {
       return loadLibrary(true);
     },
@@ -2385,13 +2604,16 @@ function createController(o) {
       emit();
     },
     // The model chosen in the full model list (ui/picker.js).
+    // All models…: a base model sets the Model chip; a trained row runs
+    // with that trained model on its base (Run with, M7).
     chooseModel: function (row) {
       if (!row || !row.id) return false;
+      if (row.type && row.type !== "custom") return runWithRow(row);
       choose("model", row.id);
       return true;
     },
     state: function () {
-      return { action: st.action, kind: st.ctx.kind, prompt: st.prompt, select: st.selectText, price: st.price, sending: st.sending, confirm: st.confirm, note: st.note, latest: st.latest, active: st.active, key: st.key, pins: st.pins, refs: st.refs.length, drefs: st.drefs.slice() };
+      return { action: st.action, kind: st.ctx.kind, prompt: st.prompt, select: st.selectText, price: st.price, sending: st.sending, confirm: st.confirm, note: st.note, latest: st.latest, active: st.active, key: st.key, pins: st.pins, refs: st.refs.length, drefs: st.drefs.slice(), style: st.style ? (st.style.match ? "match" : st.style.id) : null, runWith: st.runWith ? st.runWith.id : null };
     },
     TEXT: TEXT
   };

@@ -64,6 +64,33 @@ function strengthAt(p, at) {
   return Math.round(v * 100) / 100;
 }
 
+// The trained models of a run as the base's inputs (SPEC 3.4): a
+// composition as modelId, LoRAs as loras with their weights in lorasScale.
+// trained: { model_id, kind, scale } for one model, or { loras: [{ model_id,
+// scale }] } for several stacked on one base (a trained style and a
+// trained model picked in the Model menu).
+function loraParams(params, trained) {
+  if (!trained) return params;
+  if (Array.isArray(trained.loras) && trained.loras.length) {
+    params.loras = trained.loras.map(function (l) {
+      return l.model_id;
+    });
+    var scales = trained.loras.map(function (l) {
+      return typeof l.scale === "number" ? l.scale : null;
+    });
+    if (scales.every(function (x) {
+      return x !== null;
+    })) params.lorasScale = scales;
+    return params;
+  }
+  if (trained.kind === "composition") params.modelId = trained.model_id;
+  else {
+    params.loras = [trained.model_id];
+    if (typeof trained.scale === "number") params.lorasScale = [trained.scale];
+  }
+  return params;
+}
+
 function editView(schema, ctx, o) {
   o = o || {};
   var trained = o.trained || null;
@@ -146,13 +173,8 @@ function editView(schema, ctx, o) {
   if (o.quality && !trained && qualityOk(schema, o.quality)) params.quality = o.quality;
   if (o.extra) for (var xk in o.extra) if (common.param(schema, xk) && o.extra[xk] !== undefined && o.extra[xk] !== null) params[xk] = o.extra[xk];
   if (trained) {
-    if (trained.kind === "composition") params.modelId = trained.model_id;
-    else {
-      var scale = typeof trained.scale === "number" ? trained.scale : null;
-      params.loras = [trained.model_id];
-      if (scale !== null) params.lorasScale = [scale];
-      view.controls.style_strength = scale;
-    }
+    loraParams(params, trained);
+    view.controls.style_strength = typeof params.lorasScale === "object" && params.lorasScale ? params.lorasScale[0] : null;
     if (view.route === "image_strength") {
       var sp = common.param(schema, "strength");
       var amount = typeof trained.strength === "number" ? trained.strength : sp && typeof sp.default === "number" ? sp.default : null;
@@ -230,4 +252,4 @@ function trainedView(baseSchema, ctx, trained, o) {
   return editView(baseSchema, ctx, opts);
 }
 
-module.exports = { editView: editView, trainedView: trainedView, strengthAt: strengthAt, TEXT: TEXT };
+module.exports = { editView: editView, trainedView: trainedView, strengthAt: strengthAt, loraParams: loraParams, TEXT: TEXT };

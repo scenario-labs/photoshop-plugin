@@ -11,10 +11,12 @@ var MAP = require("../../../shared/catalog-map.json");
 var errorsMod = require("../scenario/errors.js");
 var schemaMod = require("../forms/schema.js");
 var priceChecks = require("../scenario/dry-run.js");
+var trainedMod = require("./trained.js");
 
 var FILE = "model-catalog.json";
-// 2: rows carry `thumb`, so an older cache is read again.
-var CACHE_VERSION = 2;
+// 2: rows carry `thumb`; 3: trained rows carry `trigger` and `images`, so
+// an older cache is read again.
+var CACHE_VERSION = 3;
 var ASSET_ID = /^asset_[A-Za-z0-9_-]{1,128}$/;
 
 function str(v) {
@@ -54,6 +56,10 @@ function displayRow(m, fromProject) {
     compliant: strings(m.compliantModelIds),
     concepts: concepts,
     no_refund: m.disableRefund === true,
+    // Trained models (SPEC 3.4): the trigger words their training used and
+    // how many images it had, for the Style and Model menus.
+    trigger: str(m.type) && m.type !== "custom" ? trainedMod.triggerOf(m) : null,
+    images: typeof m.trainingImagesNumber === "number" ? m.trainingImagesNumber : null,
     // The asset shown as the model's picture: its thumbnail (trained
     // models) or its first example image (ui/thumbs.js).
     thumb: thumbAsset(m)

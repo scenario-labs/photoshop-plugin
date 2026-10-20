@@ -19,7 +19,9 @@ var TEXT = {
   failed: "Models could not load.",
   empty: "No models in this lane match these filters.",
   trained_none: "No trained models in this project yet. Scenario's public trained models are listed below; models trained in other projects appear when you switch project.",
-  trained_later: "Generating with trained models is not in this version yet.",
+  trained_later: "This trained model's type has no base model in this version of the plugin.",
+  trained_loading: "Reading the base models of trained models…",
+  run_with: "Run with",
   all_tags: "All tags",
   use: "Use this model"
 };
@@ -81,6 +83,7 @@ function createPicker(doc, o) {
     if (d) {
       out.push(trainedMod.kindLabel(d));
       if (!row.project) out.push("Public");
+      if (row.trigger) out.push("Trigger " + row.trigger);
       if (d.edit_route) out.push("Edit: Experimental");
       return out;
     }
@@ -97,9 +100,12 @@ function createPicker(doc, o) {
   function renderRow(list, row) {
     var d = derived(row);
     var trained = row.type !== "custom";
-    var box = el("div", null, trained ? "model-row off" : "model-row");
+    // A trained row runs with its base (Run with, M7) once its bases are
+    // known and one of them takes it; an unknown type stays grayed.
+    var usable = !trained || !!(d && d.supported && d.lanes.length);
+    var box = el("div", null, usable ? "model-row" : "model-row off");
     box.setAttribute("data-model", row.id);
-    box.setAttribute("title", trained ? TEXT.trained_later : TEXT.use + ": " + row.name);
+    box.setAttribute("title", !usable ? (d ? TEXT.trained_later : TEXT.trained_loading) : trained ? TEXT.run_with + ": " + row.name + " (" + trainedMod.kindLabel(d) + (row.trigger ? ", trigger " + row.trigger : "") + ")" : TEXT.use + ": " + row.name);
     var th = el("div", null, "model-thumb");
     th.appendChild(icons.icon(doc, trained ? "trained" : "image"));
     var img = el("img", null, "thumb-img");
@@ -136,7 +142,7 @@ function createPicker(doc, o) {
     var b = badges(row, d);
     if (b.length) main.appendChild(el("div", b.join(" · "), "note one-line badges"));
     box.appendChild(main);
-    if (!trained) {
+    if (usable) {
       box.addEventListener("click", function () {
         close();
         o.onChoose(row);

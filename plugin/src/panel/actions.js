@@ -445,10 +445,23 @@ var ACTIONS = {
     family: null,
     grid: "open",
     note: function () {
-      return "The project's latest images. Click one to open it as a new document.";
+      return "Click an image to open it as a new document.";
     },
     land: function () {
       return "Opens as a new document";
+    }
+  },
+  // M7: a project image placed in the open document as a layer, with its
+  // Scenario metadata (library.js placePlan). Free: nothing is generated.
+  library_place: {
+    label: "Place from Library",
+    family: null,
+    grid: "place",
+    note: function () {
+      return "Click an image to place it as a new layer.";
+    },
+    land: function () {
+      return "Lands as a new layer";
     }
   },
 
@@ -530,25 +543,26 @@ var MORE = {
   layer: [
     ["Finish", ["remove_text", "formats", "upscale_layer"]],
     ["Select and cut", ["cutout_layer"]],
-    ["Layers", ["split", "split_text"]],
+    ["Layers", ["split", "split_text", "library_place"]],
     ["Make variants", ["sketch", "angle", "relight"]],
     ["Animate", ["animate"]]
   ],
   cutout: [
     ["Finish", ["upscale_layer"]],
     ["Select and cut", ["remove_bg"]],
-    ["Layers", ["new_layer"]],
+    ["Layers", ["new_layer", "library_place"]],
     ["Make variants", ["angle", "sketch"]],
     ["Animate", ["animate"]]
   ],
   element: [
     ["Finish", ["extend", "remove_text"]],
+    ["Layers", ["library_place"]],
     ["Animate", ["animate"]]
   ],
   flat: [
     ["Finish", ["extend", "remove_text"]],
     ["Select and cut", ["remove_bg"]],
-    ["Layers", ["split_text"]],
+    ["Layers", ["split_text", "library_place"]],
     ["Make variants", ["sketch", "angle", "relight"]],
     ["Animate", ["animate"]]
   ],

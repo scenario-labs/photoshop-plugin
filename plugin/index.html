@@ -143,7 +143,13 @@
           <div class="ccard" id="ccard">
             <div class="cnote" id="c-note"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="c-note-text"></span></div>
             <!-- Open from Library and + Reference > Library: the project's images. -->
-            <div class="lib" id="lib"></div>
+            <div class="lib" id="lib">
+              <div class="lib-top" id="lib-top"></div>
+              <!-- M7: search and filters; the field is static so typing keeps its focus. -->
+              <div class="lib-search" id="lib-search-row"><sp-textfield size="s" class="lib-field" id="lib-search" placeholder="Search this project"></sp-textfield></div>
+              <div class="lib-filters" id="lib-filters"></div>
+              <div class="lib-body" id="lib-body"></div>
+            </div>
             <div class="refs" id="refs"></div>
             <div class="noprompt" id="noprompt"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="noprompt-text"></span></div>
             <!-- The prompt box: the field, then Suggest at its bottom right. -->

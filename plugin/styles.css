@@ -865,8 +865,60 @@ body {
 }
 
 .cp .lib-tile {
+  position: relative;
+  overflow: hidden;
   margin: 0 4px 4px 0;
   border-radius: 3px;
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+/* M7: the Library's search field, filters and Show more. */
+.cp .lib-search {
+  display: flex;
+  flex-direction: row;
+  margin-bottom: 4px;
+}
+
+.cp .lib-search .lib-field {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.cp .lib-filters {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.cp .lib-f {
+  font-size: 11px;
+  line-height: 18px;
+  height: 20px;
+  padding: 0 7px;
+  margin: 0 4px 4px 0;
+  border-radius: 10px;
+  border: 1px solid var(--uxp-host-border-color, #4a4a4a);
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .lib-f.on {
+  color: var(--uxp-host-text-color);
+  border-color: var(--uxp-host-link-text-color, #4b9cf5);
+}
+
+.cp .lib-body {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+}
+
+.cp .lib-more {
+  font-size: 11px;
+  margin-bottom: 4px;
+  color: var(--uxp-host-link-text-color, #4b9cf5);
 }
 
 /* Upscale's 100% compare: two tiles side by side, a label under each. */
