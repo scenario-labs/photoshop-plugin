@@ -125,8 +125,17 @@ test("short panels: the chip rows stay whole and the button visible from about 3
   assert.ok(short, "a compact rule set below 600 px (Photoshop docks the panel at 420 px)");
   for (const sel of Object.keys(short)) assert.ok(!/overflow/.test(JSON.stringify(short[sel])), `${sel}: nothing starts to scroll at 599 px, the top stays whole`);
   assert.equal(short[".cp .ctx-thumb"]["width"], "36px");
-  assert.ok(!short[".cp .prompt"], "the prompt keeps its height in short panels: a fixed sp-textarea height drew it over the Suggest footer on 27.11");
-  assert.equal(R[".cp .prompt"]["min-height"], "46px");
+  assert.ok(!short[".cp .prompt"] && !short[".cp .pfield .prompt"], "the prompt keeps its height in short panels");
+  // The prompt box draws the field; the quiet field sits in a wrapper that
+  // clips its underline, and is taller than it so the underline is cut
+  // (a field drawn taller than its box went over the Suggest footer on
+  // 27.11 without the clip).
+  assert.equal(R[".cp .pfield"]["overflow"], "hidden");
+  assert.ok(parseInt(R[".cp .pfield .prompt"]["height"], 10) > parseInt(R[".cp .pfield"]["height"], 10), "the field runs under the wrapper's edge");
+  assert.equal(R[".cp .pbox"]["overflow"], "hidden");
+  assert.equal(R[".cp .sug"]["height"], R[".cp .cc"]["height"], "Suggest is as tall as the composer chips");
+  assert.equal(R[".cp .sug"]["font-size"], R[".cp .cc"]["font-size"]);
+  assert.equal(M["(max-height: 439px)"][".cp .sug"]["height"], M["(max-height: 439px)"][".cp .cc"]["height"], "and in short docks");
   assert.equal(M["(max-height: 399px)"][".cp .sc-top"]["overflow-y"], "auto", "only below about 400 px does the top scroll, never the composer");
   assert.equal(M["(max-height: 399px)"][".cp .sc-top"]["flex"], "0 1 auto");
   assert.equal(R[".cp .recent.compact .rthumb"]["width"], "28px", "Recent collapses to one row of small thumbnails");
@@ -137,7 +146,8 @@ test("the creation panel's controls are plain elements: no sp-picker or sp-actio
   const main = section("view-main");
   const own = main.slice(0, main.indexOf('id="view-picker"'));
   assert.ok(!/<sp-picker|<sp-action-button|<sp-button|<sp-menu/.test(own), "chips, menus and the button are divs (sp-picker shows no value, sp-action-button stacks icon and label)");
-  assert.ok(/<sp-textarea class="prompt" id="prompt"/.test(own), "the prompt stays a Spectrum text area");
+  assert.ok(/<div class="pfield"><sp-textarea quiet class="prompt" id="prompt"/.test(own), "the prompt stays a Spectrum text area, quiet, inside the box that draws the field");
+  assert.ok(own.indexOf('id="prompt-ghost"') > own.indexOf('id="prompt"') && own.indexOf('id="prompt-ghost"') < own.indexOf('id="pfoot"'), "the stand-in takes the field's place, above Suggest");
   assert.equal(R[".cp .acts"]["flex-wrap"], "wrap", "action chips wrap to a second row at narrow widths");
   assert.equal(R[".cp .chip"]["height"], "24px");
   assert.equal(R[".cp .chip"]["white-space"], "nowrap");

@@ -386,11 +386,11 @@ function createCreateView(doc, ctl, o) {
 
   // Suggest sits in the prompt box's own footer, under the field: UXP draws
   // the field above anything placed over it, so the button cannot overlap
-  // the text area itself.
+  // the text area itself. No native tooltip: Photoshop draws it below the
+  // pointer, over the chips (the menu's own title says what it does).
   function suggestEl() {
     var b = el("div", "sug");
     b.setAttribute("data-pop", "suggest");
-    b.setAttribute("title", "Suggest prompts with Prompt Spark, free");
     b.appendChild(icons.icon(doc, "wand", null, 12));
     b.appendChild(el("span", null, "Suggest"));
     onClick(b, function () {
@@ -407,17 +407,33 @@ function createCreateView(doc, ctl, o) {
     if (on) foot.appendChild(suggestEl());
   }
 
+  // The refs row sits right above the prompt: a native tooltip there
+  // covered the prompt's placeholder (Photoshop draws it below the
+  // pointer). What a tooltip said shows in the row's own hint text while
+  // the pointer is on the item.
+  function hoverHint(item, hint, text, rest) {
+    if (!item || typeof item.addEventListener !== "function" || !text) return;
+    item.addEventListener("mouseenter", function () {
+      hint.textContent = text;
+    });
+    item.addEventListener("mouseleave", function () {
+      hint.textContent = rest;
+    });
+  }
+
   function renderRefs(r) {
     var box = byId("refs");
     if (!box) return;
     clear(box);
     show(box, !!r);
     if (!r) return;
+    var rest = r.hint || "";
+    var hint = el("span", "hint", rest);
     for (var i = 0; i < r.drefs.length; i++) {
       (function (d) {
         var b = el("div", d.on ? "dref" : "dref off");
         b.setAttribute("data-dref", String(d.layer_id));
-        b.setAttribute("title", d.title);
+        hoverHint(b, hint, d.title, rest);
         b.appendChild(icons.icon(doc, "layer", "th", 16));
         b.appendChild(el("span", "rl", d.role));
         onClick(b, function () {
@@ -433,13 +449,13 @@ function createCreateView(doc, ctl, o) {
         if (it.role) {
           var sr = el("div", "dref sref");
           sr.setAttribute("data-ref", it.id);
-          sr.setAttribute("title", it.label);
+          hoverHint(sr, hint, it.label, rest);
           var st0 = el("div", "th");
           if (it.url) cover(st0, it.url, 24, 24, it.width || 0, it.height || 0);
           sr.appendChild(st0);
           sr.appendChild(el("span", "rl", it.role));
           var sx = el("div", "sx");
-          sx.setAttribute("title", "Remove the style picture");
+          hoverHint(sx, hint, "Remove the style picture", rest);
           sx.appendChild(icons.icon(doc, "close", null, 10));
           onClick(sx, function () {
             ctl.removeRef(it.id);
@@ -450,12 +466,12 @@ function createCreateView(doc, ctl, o) {
         }
         var b = el("div", "ref");
         b.setAttribute("data-ref", it.id);
-        b.setAttribute("title", it.label);
+        hoverHint(b, hint, it.label, rest);
         if (it.url) cover(b, it.url, 28, 28, it.width || 0, it.height || 0);
         else b.appendChild(icons.icon(doc, it.icon || "image", "ri", 16));
         if (it.removable) {
           var x = el("div", "rx");
-          x.setAttribute("title", "Remove reference");
+          hoverHint(x, hint, "Remove reference", rest);
           x.appendChild(icons.icon(doc, "close", null, 10));
           onClick(x, function () {
             ctl.removeRef(it.id);
@@ -468,7 +484,6 @@ function createCreateView(doc, ctl, o) {
     if (r.add) {
       var add = el("div", "ref-add");
       add.setAttribute("data-pop", "addref");
-      add.setAttribute("title", "Add a reference");
       add.appendChild(icons.icon(doc, "plus", null, 14));
       if (r.add_label) add.appendChild(el("span", null, r.add_label));
       onClick(add, function () {
@@ -476,7 +491,7 @@ function createCreateView(doc, ctl, o) {
       });
       box.appendChild(add);
     }
-    if (r.hint) box.appendChild(el("span", "hint", r.hint));
+    box.appendChild(hint);
   }
 
   function renderComposer(c) {

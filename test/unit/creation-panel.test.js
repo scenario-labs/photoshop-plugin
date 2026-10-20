@@ -628,7 +628,16 @@ test("contexts: a cut-out layer offers Add background first; a pixel layer that 
   assert.equal(doc.byId("ctx-thumb").className, "ctx-thumb chk", "a checkerboard behind a cut-out");
   assert.equal(doc.text("ctx-detail"), "Lands below Bottle at canvas size");
   await waitFor(() => findAll(doc, "data-ref", "auto").length === 1, { label: "the automatic reference" });
-  assert.equal(find(doc, "data-ref", "auto").getAttribute("title"), "Bottle, for light and perspective", "the layer goes as a reference, not removable");
+  // What the reference is shows in the row's hint while the pointer is on
+  // it, never as a native tooltip over the prompt.
+  const auto = find(doc, "data-ref", "auto");
+  assert.equal(auto.getAttribute("title"), null, "no tooltip over the prompt");
+  const hint = () => doc.byId("refs").children.filter((e) => e.className === "hint").map((e) => e.textContent).join("");
+  const before = hint();
+  auto.dispatch("mouseenter");
+  assert.equal(hint(), "Bottle, for light and perspective", "the layer goes as a reference, not removable");
+  auto.dispatch("mouseleave");
+  assert.equal(hint(), before);
   assert.equal(find(doc, "data-ref", "auto").children.some((c) => c.className === "rx"), false);
   ps.doc(7).activeLayers = [ps.doc(7).layers[1]];
   fire(ps);

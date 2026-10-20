@@ -1515,37 +1515,53 @@ body {
   opacity: 0.8;
 }
 
-/* The prompt box: the field, then a footer with Suggest at its bottom
-   right (FLOWS v2). The box's fill is the field's own (#252525 on the
-   medium gray theme, measured on 27.11), so both read as one box. */
+/* The prompt box draws the field: its border and fill are the native
+   field's own (#5c5c5c and the quiet field's #323232, measured on 27.11's
+   medium gray theme), the field inside is quiet and borderless, and its
+   wrapper clips the quiet field's underline. Suggest sits in the box's
+   footer at its bottom right, 5 px in from the inner edges like the text
+   (UXP draws a field above anything placed over it, so nothing can
+   overlap the text itself). */
 .cp .pbox {
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   border-radius: 4px;
-  background-color: rgba(0, 0, 0, 0.5);
+  border: 1px solid #5c5c5c;
+  background-color: #323232;
+}
+
+.cp .pfield {
+  position: relative;
+  overflow: hidden;
+  height: 44px;
+}
+
+.cp .pfield .prompt {
+  height: 48px;
 }
 
 .cp .pfoot {
   display: flex;
   flex-direction: row;
   justify-content: flex-end;
-  padding: 0 4px 4px 4px;
+  padding: 0 5px 5px 5px;
 }
 
-/* Suggest (Prompt Spark), in the prompt box's footer. */
+/* Suggest (Prompt Spark): sized and drawn like the composer chips. */
 .cp .sug {
   flex: 0 0 auto;
   display: flex;
   flex-direction: row;
   align-items: center;
-  height: 20px;
-  padding: 0 7px;
+  height: 24px;
+  padding: 0 8px 0 6px;
   margin: 0;
-  border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  font-size: 11px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.265);
+  font-size: 12px;
   white-space: nowrap;
-  color: var(--uxp-host-text-color-secondary);
+  color: var(--uxp-host-text-color);
   background-color: rgba(0, 0, 0, 0.19);
 }
 
@@ -1555,9 +1571,10 @@ body {
 }
 
 .cp .sug .ico {
-  width: 12px;
-  height: 12px;
-  margin-right: 4px;
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+  color: var(--uxp-host-text-color-secondary);
 }
 
 .cp .composer.covered .sug {
@@ -1584,7 +1601,6 @@ body {
 
 .cp .prompt {
   width: 100%;
-  min-height: 46px;
   font-size: 12px;
 }
 
@@ -2199,6 +2215,9 @@ body {
     height: 22px;
     margin: 0 4px 4px 0;
   }
+  .cp .sug {
+    height: 22px;
+  }
 }
 
 @media (max-height: 399px) {
@@ -2208,3 +2227,4 @@ body {
     overflow-y: auto;
   }
 }
+
