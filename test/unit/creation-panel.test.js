@@ -205,6 +205,7 @@ test("F1 a selection: Replace inside lands masked as a group above the layer; Re
   await landed(app);
   assert.equal(mock.paidCalls.length, 1);
   assert.equal(mock.paidCalls[0].model, PRECISE, "Replace inside runs Precise Edit");
+  assert.equal(app.ledger.all()[0].target.edit_mode, "inside", "the record keeps how the edit lands");
   assert.equal(mock.paidCalls[0].body.prompt, "A red kite");
   assert.equal(mock.paidCalls[0].body.numOutputs, 2);
   assert.ok(mock.paidCalls[0].body.mask, "a masked edit");
