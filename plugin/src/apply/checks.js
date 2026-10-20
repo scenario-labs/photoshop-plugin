@@ -21,6 +21,17 @@
 //   the whole picture: its ring residual is high at shifts of 0.01 to 0.25
 //   px, so a high residual alone is "Re-rendered around the edit"; "May be
 //   misaligned" needs a shift of 1 document px or more, or a wrong aspect.
+// - halo: in a ring just inside the mask (past the same small gap), the
+//   result against the context, both blurred, per 16 px cell: the mean
+//   tone shift (RGB mean, signed) and what is left once it is removed. A
+//   cell is a patch when it shifts by 15 or more and keeps the original's
+//   structure (residual under half the shift and under 12): the same surface, lighter
+//   or darker, cut by the mask, as the glass's reflection on the table in
+//   two of three live Inside selection takes on 2026-10-20. A new object
+//   changes the structure and is not a patch. The halo counts when 20% of
+//   the ring's cells are patches; tone is their mean shift. The seam ring
+//   above lies outside the mask, where a masked edit shows the original,
+//   so it cannot see this.
 // - aspect_ok: the result's aspect within 1% of the shaped capture.
 // - kept_share (Remove only, o.cleared): the share of the masked area whose
 //   16 px cells look as before (both blurred, the inside's tone shift
@@ -36,7 +47,7 @@
 
 var pixels = require("../capture/pixels.js");
 
-var LIMITS = { seam_bias: 12, seam_residual: 6, edited_mean: 3, untouched_max: 2, aspect: 0.01, ring: 12, gap: 2, blur: 4, cell: 16, kept_share: 0.3, shift_px: 1, shift_block: 32, shift_texture: 6, shift_away: 20, shift_search: 4, shift_blocks: 48 };
+var LIMITS = { halo: 15, halo_flat: 0.5, halo_resid: 12, halo_share: 0.2, seam_bias: 12, seam_residual: 6, edited_mean: 3, untouched_max: 2, aspect: 0.01, ring: 12, gap: 2, blur: 4, cell: 16, kept_share: 0.3, shift_px: 1, shift_block: 32, shift_texture: 6, shift_away: 20, shift_search: 4, shift_blocks: 48 };
 
 // Chamfer distance (in pixels) from each pixel to the nearest pixel where
 // inside(i) is true; 0 on those pixels.
@@ -328,6 +339,52 @@ function seam(context, result, mask, o) {
   return r;
 }
 
+// The halo of the header, or null when fewer than 4 cells hold the ring.
+function haloOf(context, result, mask, o) {
+  var w = context.width;
+  var h = context.height;
+  var dist = distanceTo(w, h, function (i) {
+    return mask.data[i] < 128;
+  });
+  var cb = pixels.boxBlur(rgbOf(context), o.blur);
+  var rb = pixels.boxBlur(rgbOf(result), o.blur);
+  var size = LIMITS.cell;
+  var cols = Math.ceil(w / size);
+  var cells = {};
+  var ring = [];
+  for (var i = 0; i < w * h; i++) {
+    if (mask.data[i] < 128 || !(dist[i] > o.gap && dist[i] <= o.gap + o.ring)) continue;
+    var id = Math.floor(Math.floor(i / w) / size) * cols + Math.floor((i % w) / size);
+    var s = cells[id] || (cells[id] = { d: [0, 0, 0], n: 0, r: 0 });
+    for (var c = 0; c < 3; c++) s.d[c] += rb.data[i * 3 + c] - cb.data[i * 3 + c];
+    s.n++;
+    ring.push(i, id);
+  }
+  for (var j = 0; j < ring.length; j += 2) {
+    var k = ring[j];
+    var cs = cells[ring[j + 1]];
+    for (var c2 = 0; c2 < 3; c2++) cs.r += Math.abs(rb.data[k * 3 + c2] - cb.data[k * 3 + c2] - cs.d[c2] / cs.n);
+  }
+  var list = [];
+  for (var key in cells) {
+    var e = cells[key];
+    if (e.n < 8) continue;
+    var tone = (e.d[0] + e.d[1] + e.d[2]) / (3 * e.n);
+    var resid = e.r / (3 * e.n);
+    if (!isFinite(tone) || !isFinite(resid)) return null;
+    list.push({ tone: tone, patch: Math.abs(tone) >= LIMITS.halo && resid < Math.min(LIMITS.halo_resid, Math.abs(tone) * LIMITS.halo_flat) });
+  }
+  if (list.length < 4) return null;
+  var patch = list.filter(function (x) {
+    return x.patch;
+  });
+  var sum = 0;
+  for (var q = 0; q < patch.length; q++) sum += patch[q].tone;
+  var share = patch.length / list.length;
+  var tone = patch.length ? sum / patch.length : 0;
+  return { tone: Math.round(tone * 100) / 100, share: Math.round(share * 100) / 100, cells: list.length, flag: share >= LIMITS.halo_share };
+}
+
 // Sizes in check pixels: document-pixel distances times the check scale,
 // at least 1.
 function scaled(v, scale) {
@@ -361,7 +418,8 @@ function check(o) {
   out.edited = !!(r.inside && r.inside.mean >= LIMITS.edited_mean);
   out.polarity_suspect = !!(r.inside && r.outside && r.outside.mean > r.inside.mean && r.outside.mean >= LIMITS.edited_mean);
   out.seam = o.masked === false ? null : seam(o.context, o.result, o.mask, { gap: gap, ring: scaled(LIMITS.ring, o.scale), blur: scaled(LIMITS.blur, o.scale) });
-  out.seam_ok = !out.seam || out.seam.residual === null || (out.seam.bias < LIMITS.seam_bias && out.seam.residual < LIMITS.seam_residual);
+  out.halo = o.masked === false ? null : haloOf(o.context, o.result, o.mask, { gap: gap, ring: scaled(LIMITS.ring, o.scale), blur: scaled(LIMITS.blur, o.scale) });
+  out.seam_ok = (!out.seam || out.seam.residual === null || (out.seam.bias < LIMITS.seam_bias && out.seam.residual < LIMITS.seam_residual)) && !(out.halo && out.halo.flag);
   out.shift_px = o.masked === false ? null : shiftOf(o.context, o.result, o.mask, o.scale);
   out.kept_share = o.cleared ? keptShare(o.context, o.result, o.mask, o.scale) : null;
   return out;
@@ -651,6 +709,7 @@ function badges(c, v, o) {
     var moved = hasShift ? c.shift_px >= LIMITS.shift_px : rough;
     if (o.masked && (moved || c.aspect_ok === false)) out.push("May be misaligned");
     else if (o.masked && rough && hasShift) out.push("Re-rendered around the edit");
+    if (o.masked && c.halo && c.halo.flag) out.push(c.halo.tone > 0 ? "Lighter patch at the selection edge" : "Darker patch at the selection edge");
     // c is a check result or the runner's summary of one (inside_mean).
     var measured = !!c.inside || (c.inside_mean !== null && c.inside_mean !== undefined);
     if (o.masked && measured && !c.edited) out.push(c.polarity_suspect ? "Unchanged inside: the model may have read the mask inverted" : "Unchanged inside");

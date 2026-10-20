@@ -175,6 +175,9 @@ function badgeOf(list) {
   list = list || [];
   for (var i = 0; i < list.length; i++) if (/misaligned|Changed outside|Unchanged inside/.test(list[i])) return { tone: "warn", text: "May not line up" };
   for (var j = 0; j < list.length; j++) if (/may be unchanged/.test(list[j])) return { tone: "warn", text: "Part unchanged" };
+  // Edges a person can see in the composite (2026-10-21): a patch at the
+  // selection edge, a step or a repeated detail at Extend's old edge.
+  for (var e = 0; e < list.length; e++) if (/patch at the selection edge|Step at the old edge|Repeated detail/.test(list[e])) return { tone: "warn", text: "Edge may show" };
   for (var s = 0; s < list.length; s++) if (/spills past/.test(list[s])) return { tone: "warn", text: "Spills past" };
   for (var k = 0; k < list.length; k++) if (/Seam ok/.test(list[k])) return { tone: "ok", text: "Edges ok" };
   return null;

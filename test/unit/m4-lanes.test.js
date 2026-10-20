@@ -71,7 +71,9 @@ test("Edit, selection on GPT Image 2.5 Flare: measured price, capture and mask u
     // The context the plugin reads (box 512..1536 at 1024 px), changed inside
     // the selection only (take coordinates 256..768).
     const ctx = ps.composite(7, { left: 512, top: 512, width: 1024, height: 1024 }, 1024, 1024);
-    const edited = paint(ctx, 256, 256, 512, 512, [200, 40, 30]);
+    // A new object with the surface around it, as a clean edit leaves it (a
+    // flat fill over the whole selection is a patch at its edge).
+    const edited = paint(ctx, 352, 352, 320, 320, [200, 40, 30]);
     return pngOf(tint ? shiftAll(edited, tint) : edited);
   };
   const sim = await bootGenerate(t, { docs: [DOC], active: 7, psOpts: { scene: true }, mockOpts: { cdn: cdnFor([take(0), take(25)]) } });
@@ -232,7 +234,7 @@ test("Trained edit, image and strength route: Z-Image with a LoRA, the capture a
   const BASE = "model_z-image";
   const DOC = { id: 7, title: "poster.psd", width: 1024, height: 1024, selection: { left: 384, top: 384, width: 256, height: 256 } };
   let ps;
-  const take = () => () => pngOf(paint(ps.composite(7, { left: 256, top: 256, width: 512, height: 512 }, 512, 512), 128, 128, 256, 256, [90, 60, 200]));
+  const take = () => () => pngOf(paint(ps.composite(7, { left: 256, top: 256, width: 512, height: 512 }, 512, 512), 176, 176, 160, 160, [90, 60, 200]));
   const sim = await bootGenerate(t, { docs: [DOC], active: 7, psOpts: { scene: true }, mockOpts: { answer: (model) => (model === BASE ? costAnswer(4) : undefined), cdn: cdnFor([take(), take()]) } });
   ps = sim.ps;
   const { app, mock } = sim;

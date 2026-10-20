@@ -1036,7 +1036,8 @@ function createRunner(o) {
       seam: c.seam ? { bias: c.seam.bias, residual: c.seam.residual } : null,
       seam_ok: c.seam_ok,
       kept_share: c.kept_share === undefined ? null : c.kept_share,
-      shift_px: typeof c.shift_px === "number" ? c.shift_px : null
+      shift_px: typeof c.shift_px === "number" ? c.shift_px : null,
+      halo: c.halo ? { tone: c.halo.tone, share: c.halo.share, flag: c.halo.flag } : null
     };
   }
 
