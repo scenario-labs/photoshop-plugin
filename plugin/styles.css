@@ -1856,6 +1856,19 @@ body {
   margin-bottom: 8px;
 }
 
+/* Upload and proposal cards (ui/agent-cards.js) show for as long as they
+   wait: each is an .agentcard inside #agent-cards, which agent-cards.js
+   hides when empty. The F5 card above is shown by create-view.js. */
+.cp .agentcards .agentcard {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.cp .agentcards .agentcard .actions {
+  justify-content: flex-end;
+  margin-bottom: -4px;
+}
+
 .cp .agentcard .who {
   display: flex;
   flex-direction: row;

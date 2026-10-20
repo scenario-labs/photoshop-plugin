@@ -147,6 +147,15 @@ test("approvals: one card per session at a time, the next shows after; 10-minute
   assert.ok(b1);
 });
 
+test("the upload and proposal cards are drawn: the stylesheet shows an .agentcard inside #agent-cards (the F5 card's own rule hides it until create-view shows it)", () => {
+  const css = require("node:fs").readFileSync(require.resolve("../../plugin/styles.css"), "utf8");
+  assert.match(css, /\.cp \.agentcard \{\s*display: none;/, "the F5 card starts hidden");
+  const rule = /\.cp \.agentcards \.agentcard \{([^}]*)\}/.exec(css);
+  assert.ok(rule, "a rule for the cards inside #agent-cards");
+  assert.match(rule[1], /display: flex;/);
+  assert.ok(css.indexOf(".cp .agentcards .agentcard {") > css.indexOf(".cp .agentcard {"), "it comes after the hiding rule");
+});
+
 test("inflate: zlib and raw deflate round-trip against Node; PNG decode of every color type the plugin reads", () => {
   for (const size of [0, 1, 100, 70000]) {
     const data = Buffer.from(Array.from({ length: size }, (_, i) => (i * 7 + (i >> 5)) & 255));
