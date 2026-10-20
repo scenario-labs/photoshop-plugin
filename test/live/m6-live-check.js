@@ -543,7 +543,7 @@ async function main() {
   if (spawnSync("pgrep", ["-x", "Adobe Photoshop 2026"]).status !== 0) throw new Error("Photoshop is not running");
   takeLock();
   const dest = installedFolder();
-  const keep = path.join(OUT, `installed-${Date.now()}`);
+  const keep = path.join(os.tmpdir(), `scenario-m6-installed-${Date.now()}`); // outside the evidence folder
   let result = null;
   try {
     log(`${PHASE}: ${gb.toFixed(1)} GB free; installed ${path.basename(dest)}`);
