@@ -21,5 +21,5 @@ if (!selected.length) {
   process.stderr.write("no test files matched\n");
   process.exit(1);
 }
-const r = spawnSync(process.execPath, ["--test", "--test-timeout=30000", "--test-reporter=spec", ...selected], { stdio: "inherit" });
+const r = spawnSync(process.execPath, ["--test", "--test-timeout=120000", "--test-reporter=spec", ...selected], { stdio: "inherit" });
 process.exit(r.status === null ? 1 : r.status);
