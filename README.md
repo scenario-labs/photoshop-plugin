@@ -62,7 +62,7 @@ Node 20 or later.
 npm ci
 npm test          # unit and integration tests (Node's built-in test runner)
 npm run lint      # syntax, typography and public-content checks
-npm run package   # build/scenario-photoshop-0.6.2.ccx
+npm run package   # build/scenario-photoshop-0.7.0.ccx
 ```
 
 Details for contributors and coding agents: [AGENTS.md](AGENTS.md). Design: [docs/spec/SPEC.md](docs/spec/SPEC.md) and the tool reference [docs/spec/MCP.md](docs/spec/MCP.md).

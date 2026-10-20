@@ -1,6 +1,6 @@
 {
   "name": "@scenario-labs/photoshop-mcp",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "Local MCP server (stdio) that links agent clients to the Scenario plugin in Adobe Photoshop",
   "license": "MIT",
   "repository": {
