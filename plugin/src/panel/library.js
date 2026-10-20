@@ -10,6 +10,7 @@
 // o: { client, downloader (scenario/download.js), host, log }
 
 var slugMod = require("../util/slug.js");
+var clipMod = require("../util/clip.js");
 var xmp = require("../util/xmp.js");
 var manifest = require("../../manifest.json");
 
@@ -64,7 +65,7 @@ function rowOf(a) {
   var height = typeof m.height === "number" ? m.height : typeof a.height === "number" ? a.height : null;
   return {
     asset_id: a.id,
-    name: name || (prompt ? prompt.slice(0, 40) : desc ? desc.slice(0, 40) : "Image"),
+    name: name || (prompt ? clipMod.clip(prompt, 40) : desc ? clipMod.clip(desc, 40) : "Image"),
     title: name || prompt || desc || "Image",
     width: width,
     height: height,

@@ -14,6 +14,7 @@
 //      settings, jobsModel, session, timers, log, urls (ui/thumbs.js) }
 
 var builtinMod = require("../util/builtin.js");
+var clipMod = require("../util/clip.js");
 var actionsMod = require("./actions.js");
 var imageMod = require("./image.js");
 var docRefsMod = require("./doc-refs.js");
@@ -109,7 +110,7 @@ function runName(prompt, kind) {
   var named = builtinMod.nameOf(prompt);
   if (named) return named;
   var p = String(prompt || "").trim();
-  if (p) return p.length > 60 ? p.slice(0, 57) + "..." : p;
+  if (p) return clipMod.clip(p, 60);
   var KINDS = { edit: "Edit", cutout: "Cut out", upscale: "Upscale", expand: "Extend canvas", video: "Animate" };
   return KINDS[kind] || "Image";
 }
@@ -1450,7 +1451,7 @@ function createController(o) {
         var raw = st.raw || {};
         if (!raw.doc) throw invalid("Open a document to place a Library image in it.");
         await o.library.place(row, { id: raw.doc.id, width: raw.doc.width, height: raw.doc.height }, { layer_id: raw.layer ? raw.layer.id : null, leave_prompts: !!o.leavePrompts });
-        st.note = row.name + " is placed as a new layer.";
+        st.note = clipMod.clip(row.name, 40) + " is placed as a new layer.";
       } else {
         var got = await o.library.fetch(assetId);
         if (mode === "ref") {

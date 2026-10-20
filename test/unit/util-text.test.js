@@ -120,3 +120,28 @@ test("canonical JSON refuses values JSON cannot carry", () => {
   assert.throws(() => cj.stringify(new Date(0)), /plain objects/);
   assert.throws(() => cj.stringify(10n), /unsupported/);
 });
+
+test("clip: cuts on a word boundary with an ellipsis, never inside a word; one helper for the panel's short texts", () => {
+  const { clip } = require("../../plugin/src/util/clip.js");
+  const caption = "A small fishing boat rests in harbor water at dawn";
+  const out = clip(caption, 40);
+  assert.equal(out, "A small fishing boat rests in harbor…");
+  assert.ok(out.length <= 40);
+  assert.equal(clip("Short caption", 40), "Short caption", "short text stays whole, no ellipsis");
+  assert.equal(clip("  spaces\n folded  ", 40), "spaces folded");
+  assert.equal(clip("one two three", 8), "one two…", "a cut right at a space keeps the word before it");
+  assert.equal(clip("Supercalifragilistic", 8), "Superca…", "a first word longer than the room is cut");
+  assert.equal(clip("Rests in harbor, waiting", 17), "Rests in harbor…", "punctuation before the ellipsis goes");
+  assert.equal(clip(null, 10), "");
+  // The Library's names and the place note use it.
+  const library = require("../../plugin/src/panel/library.js");
+  const row = library.rowOf({ id: "asset_x1", kind: "image", metadata: { type: "txt2img", prompt: caption } });
+  assert.equal(row.name, "A small fishing boat rests in harbor…");
+  const fs = require("node:fs");
+  const ctl = fs.readFileSync(require.resolve("../../plugin/src/panel/controller.js"), "utf8");
+  assert.match(ctl, /clipMod\.clip\(row\.name, 40\) \+ " is placed as a new layer\."/);
+  // "Result is N px for the M px area": no "an" before a number.
+  const runner = fs.readFileSync(require.resolve("../../plugin/src/jobs/runner.js"), "utf8");
+  assert.match(runner, /" px for the " \+ m \+ " px area"/);
+  assert.doesNotMatch(runner, /px for an /);
+});

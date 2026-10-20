@@ -6,6 +6,7 @@
 
 var view = require("./view.js");
 var icons = require("./icons.js");
+var clipMod = require("../util/clip.js");
 
 // doc: the panel's document. actions: { copyToken(), resetToken(), token() }.
 function createPanel(doc, actions, version) {
@@ -44,7 +45,7 @@ function createPanel(doc, actions, version) {
     if (headerDot) headerDot.className = "dot " + d.dot;
     // The header names the first connected agent (FLOWS v2: "Claude ●").
     var name = d.names && d.names.length ? d.names[0] : "";
-    setText("agent-name", name.length > 14 ? name.slice(0, 13) + "\u2026" : name);
+    setText("agent-name", clipMod.clip(name, 14));
     setTitle("agent-hit", name ? d.names.join(", ") + (d.names.length > 1 ? " are" : " is") + " connected" : d.headline);
     setText("link-headline", d.headline);
     setText("link-detail", d.detail);
