@@ -204,7 +204,7 @@ function createRunner(o) {
   function targetRecord(a) {
     var t = a.req.target || {};
     var out = { kind: t.kind || null, session: o.session || null, sample: t.sample || null };
-    var keep = ["canvas", "upload", "layer_id", "selection", "margin", "feather", "source", "read", "output", "lands", "expand", "route", "overlap", "anchor", "mask_box", "background", "insert", "expect"];
+    var keep = ["canvas", "upload", "layer_id", "selection", "margin", "feather", "source", "read", "output", "lands", "expand", "route", "overlap", "anchor", "mask_box", "background", "insert", "expect", "mode", "format", "text", "duration", "clip_asset", "mask_layer_id"];
     for (var i = 0; i < keep.length; i++) if (t[keep[i]] !== undefined) out[keep[i]] = JSON.parse(JSON.stringify(t[keep[i]]));
     if (t.kind === "new_document") {
       out.width = t.width;
@@ -621,7 +621,8 @@ function createRunner(o) {
     stops[id] = token;
     try {
       await update(id, { state: "downloading", error: null });
-      var kind = planMod.kindOf(rec.lane);
+      // Clips go to their own folder (FLOWS v2, F9).
+      var kind = rec.lane === "video" ? "video" : planMod.kindOf(rec.lane);
       var dp = datePath(rec.submitted_at || rec.created_at);
       var dir = OUTPUT_FOLDER + "/" + kind + "/" + dp.folder;
       var slug = slugMod.slug(rec.parameters && rec.parameters.prompt);
@@ -1010,6 +1011,8 @@ function createRunner(o) {
       var already = await checkPlaced(id);
       if (already) return already;
     }
+    var placer = o.placers && rec.target && rec.target.kind ? o.placers[rec.target.kind] : null;
+    if (placer) return placeWith(placer, id, rec, opts);
     var where;
     try {
       where = placement(rec, opts);
@@ -1061,6 +1064,58 @@ function createRunner(o) {
       }
       if (opts.auto && e && e.notActive) {
         await update(id, { state: "ready", error: null });
+        return o.ledger.get(id);
+      }
+      await update(id, { state: before === "applied" ? "applied" : "apply_failed", error: "Place failed: " + ((e && e.message) || e) });
+      throw e;
+    }
+  }
+
+  // The later flows' landings (FLOWS v2, F7 to F10: split layers, text, a
+  // selection, an artboard, a clip, a frame): the placer builds the plan
+  // and carries it out (apply/more-plan.js, host-more.js) in the job's own
+  // document, which must be in front; the record keeps what landed, as for
+  // every other placement.
+  async function placeWith(placer, id, rec, opts) {
+    var t = rec.target || {};
+    var active = o.host.activeDocumentId();
+    if (!placer.anyDocument) {
+      var home = homeDoc(rec);
+      if (!home) throw err("DocumentClosed", "Open " + docTitle(rec) + " to place this result there.");
+      if (home.id !== active) {
+        if (opts.auto) return o.ledger.get(id);
+        throw err("DocumentNotActive", "Bring " + docTitle(rec) + " to the front to place this result there.");
+      }
+      var size = o.host.documentSize(active);
+      if (t.canvas && size && (size.width !== t.canvas[0] || size.height !== t.canvas[1]) && !placer.anyCanvas) throw canvasChanged();
+    }
+    var before = rec.state;
+    await update(id, { state: "applying", placement_checked: true });
+    await hooks.at("place", { local_id: id, document_id: active });
+    try {
+      var result = await placer.place(rec, { document_id: active, version: o.version, auto: !!opts.auto, memo: memos[rec.local_id] || {} });
+      var done = await update(id, {
+        state: "applied",
+        error: null,
+        placement: {
+          document_id: result.document_id,
+          layer_ids: result.layer_ids || [],
+          group_id: result.group_id || null,
+          history: result.history || null,
+          masked: !!result.masked,
+          notes: result.notes || [],
+          checks: result.checks || [],
+          verify: null,
+          badges: result.badges || [],
+          undone: false,
+          landed: result.landed || null
+        }
+      });
+      emit({ type: "placed", local_id: id, auto: !!opts.auto, first: false });
+      return done;
+    } catch (e) {
+      if (opts.auto && e && (e.busy || e.notActive)) {
+        await update(id, { state: before === "applied" ? "applied" : "ready", error: null });
         return o.ledger.get(id);
       }
       await update(id, { state: before === "applied" ? "applied" : "apply_failed", error: "Place failed: " + ((e && e.message) || e) });

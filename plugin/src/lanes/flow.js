@@ -27,9 +27,12 @@ var requests = require("../forms/requests.js");
 var contextMod = require("./context.js");
 var editMod = require("./edit.js");
 var enhanceMod = require("./enhance.js");
+var moreMod = require("./more.js");
 var common = require("./common.js");
 
-var LANE = { edit: "edit", trained_edit: "edit", upscale: "upscale", expand: "expand", remove_background: "remove_background" };
+// The tools of the later flows (lanes/more.js) run in the Edit lane, or the
+// Video lane for clips.
+var LANE = { edit: "edit", trained_edit: "edit", upscale: "upscale", expand: "expand", remove_background: "remove_background", split: "edit", text: "edit", segment: "edit", reframe: "edit", video: "video", frames: "video" };
 
 function invalid(text) {
   return new errorsMod.ScenarioError("InvalidParameter", text);
@@ -52,6 +55,7 @@ function createFlow(o) {
     if (tool === "trained_edit") return editMod.trainedView(schema, ctx, a.trained, opts);
     if (tool === "upscale") return enhanceMod.upscaleView(schema, ctx, opts);
     if (tool === "expand") return enhanceMod.expandView(schema, ctx, opts);
+    if (moreMod.LANE[tool]) return moreMod.toolView(tool, schema, ctx, opts);
     return enhanceMod.cutoutView(schema, ctx, opts);
   }
 
@@ -118,7 +122,8 @@ function createFlow(o) {
     if (!p.req) throw invalid(p.view.blocked);
     if (!o.runner || !o.capture) throw invalid("Generate needs a secure random source; prices still show.");
     var spec = p.view.capture;
-    var cap = await o.capture[spec.kind](spec.spec);
+    // Frame to layer reads a clip already on Scenario: nothing is captured.
+    var cap = spec ? await o.capture[spec.kind](spec.spec) : null;
     var out = await o.runner.start({ req: p.req, quote: quote, refs: p.lane === "edit" && a.refs ? a.refs : [], capture: cap, model_name: p.schema.name, document_title: p.context.doc ? p.context.doc.title : null, name: a.name || null });
     out.view = p.view;
     return out;

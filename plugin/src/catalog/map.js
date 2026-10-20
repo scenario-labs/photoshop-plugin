@@ -65,9 +65,14 @@ function tabsOf(row) {
 }
 
 // MCP lanes of a catalog row (trained rows get theirs from trained.js).
+// Clip models (img2video, and video2img for Frame to layer) run in the
+// panel's Video lane (FLOWS v2, F9).
+var VIDEO_CAPABILITIES = ["img2video", "video2img"];
+
 function lanesOf(row) {
   var tabs = tabsOf(row);
   var out = [];
+  if (isBase(row) && !hidden(row) && hasAny(row.capabilities, VIDEO_CAPABILITIES) && !tabs.length) out.push("video");
   if (tabs.indexOf("image") >= 0) out.push("image");
   if (tabs.indexOf("edit") >= 0) out.push("edit");
   var tools = toolsOf(row);

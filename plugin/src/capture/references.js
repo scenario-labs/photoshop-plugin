@@ -148,7 +148,12 @@ function createReferences(o) {
   async function chooseFile(modelId) {
     var file = await o.host.chooseImageFile();
     if (!file) return null;
-    var bytes = file.bytes;
+    return fromBytes(file.bytes, file.name, modelId, "file");
+  }
+
+  // A PNG or JPEG file's bytes as a reference (a file on this computer, or
+  // a Library image saved in the data folder).
+  function fromBytes(bytes, name, modelId, source) {
     var out;
     if (png.isPng(bytes)) {
       var p = png.stripPng(bytes);
@@ -164,14 +169,14 @@ function createReferences(o) {
     }
     if (out.bytes.length >= LIMIT) throw invalid("This file is " + mb(out.bytes.length) + " without its metadata; files must be under 4 MB. Open it in Photoshop and add it as a layer to send it reduced.");
     out.id = newId();
-    out.source = "file";
-    out.label = String(file.name || "File");
+    out.source = source || "file";
+    out.label = String(name || "File");
     out.reduced = false;
     out.document_id = null;
     return out;
   }
 
-  return { capture: capture, chooseFile: chooseFile };
+  return { capture: capture, chooseFile: chooseFile, fromBytes: fromBytes };
 }
 
 module.exports = { createReferences: createReferences, acceptsJpeg: acceptsJpeg, LIMIT: LIMIT };

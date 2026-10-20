@@ -89,6 +89,8 @@
                 <div class="ctx-detail" id="ctx-detail"></div>
               </div>
             </div>
+            <!-- Select by description (F8): a layer's Select… field. -->
+            <div class="ctx-sel" id="ctx-sel"><sp-textfield size="s" class="sel-field" id="ctx-select" placeholder="Select…"></sp-textfield></div>
             <div class="prog" id="ctx-prog"></div>
           </div>
           <div class="acts" id="acts"></div>
@@ -127,13 +129,29 @@
               <div class="btn blue" id="agent-approve"><span class="bl" id="agent-approve-label">Approve</span></div>
             </div>
           </div>
+          <!-- F14: an agent's multi-step plan, only while one waits. -->
+          <div class="agentcard" id="plan-card">
+            <div class="who"><span class="dot on"></span><span id="plan-who"></span></div>
+            <div class="plan-steps" id="plan-steps"></div>
+            <div class="btnrow end" id="plan-btns">
+              <div class="btn" id="plan-decline"><span class="bl">Decline</span></div>
+              <div class="btn" id="plan-steps-btn"><span class="bl">Step by step</span></div>
+              <div class="btn blue" id="plan-all"><span class="bl" id="plan-all-label">Approve all</span></div>
+            </div>
+          </div>
           <div class="declined" id="declined"></div>
           <div class="ccard" id="ccard">
             <div class="cnote" id="c-note"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="c-note-text"></span></div>
+            <!-- Open from Library and + Reference > Library: the project's images. -->
+            <div class="lib" id="lib"></div>
             <div class="refs" id="refs"></div>
             <div class="noprompt" id="noprompt"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="noprompt-text"></span></div>
-            <sp-textarea class="prompt" id="prompt" placeholder="Describe the image"></sp-textarea>
-            <div class="prompt-ghost" id="prompt-ghost"></div>
+            <!-- The prompt box: the field, then Suggest at its bottom right. -->
+            <div class="pbox" id="pbox">
+              <sp-textarea class="prompt" id="prompt" placeholder="Describe the image"></sp-textarea>
+              <div class="prompt-ghost" id="prompt-ghost"></div>
+              <div class="pfoot" id="pfoot"></div>
+            </div>
             <div class="cchips" id="cchips"></div>
             <div class="confirm" id="confirm-card">
               <div class="text" id="confirm-text"></div>

@@ -28,6 +28,7 @@ var thumbs = require("../ui/thumbs.js");
 var pngMod = require("../util/png.js");
 var errorsMod = require("../scenario/errors.js");
 var sparkMod = require("../scenario/spark.js");
+var moreLanes = require("../lanes/more.js");
 
 var A = actionsMod.ACTIONS;
 var TAKES_PRICE_MS = 2500;
@@ -69,8 +70,11 @@ var TEXT = {
   match_note: "The picture goes with the run as its style reference; the prompt and the chips stay in charge.",
   ref_hint: "Selection, layer or file",
   empty_mid: "Takes and recent runs on this document show here.",
-  declined: "Declined. The agent was told, and nothing was spent."
+  declined: "Declined. The agent was told, and nothing was spent.",
+  need_select: "Type what to select",
+  frame_next: "Animate starts from the new frame layer: describe the next motion."
 };
+var FORMAT_KEYS = ["9:16", "4:5", "1:1", "16:9"];
 
 // Sent after the prompt when the Style chip is on Match an image; the style
 // picture is always the last reference image of the run.
@@ -93,6 +97,7 @@ function laneOf(id) {
   var a = A[id];
   if (!a || !a.family) return null;
   if (a.family === "cutout") return "remove_background";
+  if (a.family === "tool") return moreLanes.LANE[a.tool] || null;
   return a.family;
 }
 
@@ -102,7 +107,7 @@ function runName(prompt, kind) {
   if (named) return named;
   var p = String(prompt || "").trim();
   if (p) return p.length > 60 ? p.slice(0, 57) + "..." : p;
-  var KINDS = { edit: "Edit", cutout: "Cut out", upscale: "Upscale", expand: "Extend canvas" };
+  var KINDS = { edit: "Edit", cutout: "Cut out", upscale: "Upscale", expand: "Extend canvas", video: "Animate" };
   return KINDS[kind] || "Image";
 }
 
@@ -150,7 +155,12 @@ function classify(raw, meta) {
   if (raw.selection || raw.selection_raw) return { kind: "selection", run: null };
   var run = takesOf(meta);
   if (run) return { kind: "takes", run: run };
+  // A layer made by Split into layers has its own actions.
+  if (raw.layer && meta && meta.fields && meta.fields.kind === "split-element") return { kind: "element", run: null };
   if (isCutout(raw.layer, raw.doc, meta)) return { kind: "cutout", run: null };
+  // A document of one Background layer: a delivered or generated JPEG or
+  // PNG, opened as it is.
+  if (raw.layer && raw.layer.background && raw.doc.layers === 1) return { kind: "flat", run: null };
   return { kind: "layer", run: null };
 }
 
@@ -215,7 +225,20 @@ function createController(o) {
     // prompt; shortName is the person's short prompt while a proposal fills
     // the prompt box (the run keeps it as its name).
     spark: null,
-    shortName: null
+    shortName: null,
+    // The later flows' chips: New angle's preset, the Formats placement,
+    // Animate's duration; the Select… field's text; the clip Frame to layer
+    // reads (from the Animate card).
+    angle: "right45",
+    format: "9:16",
+    duration: 5,
+    selectText: "",
+    clip: null,
+    // Open from Library and + Reference > Library: the project's images.
+    lib: { state: "idle", rows: [], error: null },
+    libPick: false,
+    // F14: an agent's multi-step plan, shown only while one waits.
+    plan: null
   };
 
   function emit() {
@@ -248,11 +271,21 @@ function createController(o) {
     return d ? d.model_id : null;
   }
 
+  // An action with its own model keeps the person's choice for itself; the
+  // others share their lane's.
+  function modelKey(id) {
+    return A[id] && A[id].model ? "a:" + id : laneOf(id);
+  }
+
+  function defaultFor(id) {
+    return A[id] && A[id].model ? A[id].model : defaultModel(laneOf(id));
+  }
+
   function modelFor(id) {
     var lane = laneOf(id);
     if (!lane) return null;
     if (st.style && st.style.lane_ok && A[id].family === "edit" && A[id].chips.indexOf("style") >= 0) return st.style.base_model_id;
-    return st.models[lane] || defaultModel(lane);
+    return st.models[modelKey(id)] || defaultFor(id);
   }
 
   function styleApplies(id) {
@@ -276,6 +309,7 @@ function createController(o) {
   }
 
   function promptOf(id) {
+    if (A[id] && A[id].prompt === "field") return String(st.selectText || "").trim() || null;
     var t = actionsMod.promptFor(id, st.prompt);
     if (t && matchOn(id)) t = t + " " + STYLE_SENTENCE;
     return t;
@@ -283,11 +317,12 @@ function createController(o) {
 
   // GPT Image 2.5 and other models with a Low / Medium / High quality
   // input: Medium unless the person picks another level (Advanced).
-  function qualityOf(schema) {
+  function qualityOf(schema, id) {
     var q = schema ? commonMod.param(schema, "quality") : null;
     if (!q || !q.enum) return null;
     for (var i = 0; i < QUALITY.length; i++) if (q.enum.indexOf(QUALITY[i][0]) < 0) return null;
-    return st.adv.quality || "medium";
+    // Render sketch starts at High (FLOWS v2, changes after review 9).
+    return st.adv.quality || (A[id || st.action] && A[id || st.action].quality) || "medium";
   }
 
   function schemaFor(modelId) {
@@ -430,7 +465,7 @@ function createController(o) {
   function thumbKey() {
     var c = st.ctx;
     var raw = st.raw;
-    if (!raw || !raw.doc || (c.kind !== "layer" && c.kind !== "cutout" && c.kind !== "selection")) return null;
+    if (!raw || !raw.doc || (c.kind !== "layer" && c.kind !== "cutout" && c.kind !== "selection" && c.kind !== "element" && c.kind !== "flat")) return null;
     var b = thumbBounds();
     if (!b) return null;
     return [raw.doc.id, c.kind === "selection" ? "visible" : raw.layer && raw.layer.id, b.left, b.top, b.width, b.height].join(":");
@@ -558,7 +593,7 @@ function createController(o) {
         schema = null;
       }
     }
-    var quality = qualityOf(schema);
+    var quality = qualityOf(schema, id);
     if (a.family === "edit") {
       args.tool = styleApplies(id) && !modelId ? "trained_edit" : "edit";
       var sample = a.sample === "layer" ? "layer" : st.adv.sample === "layer" ? "layer" : "visible";
@@ -568,6 +603,13 @@ function createController(o) {
       // The Change chip on a model with a strength input (lanes/edit.js).
       if (args.tool === "edit" && changeOn(id, schema)) args.options.change = CHANGE[st.change].at;
       if (a.expect) args.options.expect = a.expect;
+      // Relight to scene: the layer's outline is the mask, the model sees
+      // the scene (FLOWS v2, F13).
+      if (a.mask_layer && !ctx.selection) {
+        args.options.mask_layer = true;
+        args.options.sample = "visible";
+      }
+      if (id === "angle") args.options.extra = angleOf().extra;
       if (args.tool === "trained_edit") {
         args.trained = { model_id: st.style.id, kind: st.style.kind, scale: st.style.scale };
         if (st.style.route === "image_strength") args.trained.strength = CHANGE[st.change].at;
@@ -584,6 +626,13 @@ function createController(o) {
     } else if (a.family === "cutout") {
       args.tool = "remove_background";
       args.options = { source: a.source, lands: a.lands || st.adv.lands || "mask" };
+    } else if (a.family === "tool") {
+      args.tool = a.tool;
+      args.options = { prompt: prompt || "", mode: a.mode, format: st.format, duration: st.duration };
+      if (a.tool === "frames" && st.clip) {
+        args.options.video_asset = st.clip.asset_id;
+        args.options.clip_name = st.clip.name;
+      }
     }
     args.lane = lane;
     return args;
@@ -591,7 +640,7 @@ function createController(o) {
 
   function imageOptions(id, refs, n, schema) {
     var a = A[id];
-    return { action: id, size: st.size, prompt: promptOf(id), takes: takesFor(id, n), references: refs, insert: a.insert || null, quality: qualityOf(schema) };
+    return { action: id, size: st.size, prompt: promptOf(id), takes: takesFor(id, n), references: refs, insert: a.insert || null, quality: qualityOf(schema, id) };
   }
 
   // Short words for a blocked view, from the prototype where it has them.
@@ -601,6 +650,20 @@ function createController(o) {
   }
 
   // ---- the price check ----
+
+  // The action waits for text: its prompt, or the Select… field.
+  function needsText(id) {
+    var a = A[id];
+    if (!a) return false;
+    if (a.prompt === "field") return !String(st.selectText || "").trim();
+    return a.prompt === "req" && !String(st.prompt).trim();
+  }
+
+  function angleOf() {
+    var list = actionsMod.ANGLES;
+    for (var i = 0; i < list.length; i++) if (list[i].key === st.angle) return list[i];
+    return list[0];
+  }
 
   function setPrice(p) {
     st.price = p;
@@ -615,7 +678,7 @@ function createController(o) {
       setPrice({ state: "none" });
       return;
     }
-    if (a.prompt === "req" && !String(st.prompt).trim()) {
+    if (needsText(id)) {
       setPrice({ state: "need_prompt" });
       return;
     }
@@ -676,12 +739,12 @@ function createController(o) {
   // its own timeout), so the open menu can be drawn again with them.
   var optCache = { key: null, prices: {}, pending: {} };
   function settingsKey(id) {
-    return JSON.stringify([st.key, id, st.prompt, st.takes[id] || null, st.models, st.style ? st.style.id || st.style.name : null, st.styleRef ? st.styleRef.id : null, st.size, st.target, st.factor, st.change, st.adv, refCount(id), st.drefOff]);
+    return JSON.stringify([st.key, id, st.prompt, st.takes[id] || null, st.models, st.style ? st.style.id || st.style.name : null, st.styleRef ? st.styleRef.id : null, st.size, st.target, st.factor, st.change, st.adv, refCount(id), st.drefOff, st.angle, st.format, st.duration, st.selectText]);
   }
   async function optionPrices(id, values, kind, current) {
     var a = A[id];
     var out = { prices: {}, pending: false, later: null };
-    if (!a || !a.family || (a.prompt === "req" && !String(st.prompt).trim())) return out;
+    if (!a || !a.family || needsText(id)) return out;
     if ((o.account && !o.account()) || (o.quotes.stopped && o.quotes.stopped())) return out;
     var key = settingsKey(id);
     if (optCache.key !== key) optCache = { key: key, prices: {}, pending: {} };
@@ -696,8 +759,9 @@ function createController(o) {
       }
       var n = kind === "takes" ? v : null;
       var f = kind === "upsize" ? v : null;
-      var m = kind === "model" ? v || defaultModel(laneOf(id)) : null;
+      var m = kind === "model" ? v || defaultFor(id) : null;
       var run = a.family === "image" ? priceImage(id, n, m) : flowArgs(id, n, f, m).then(function (args) {
+        if (kind === "duration") args.options.duration = v;
         return o.flow.price(args);
       });
       cache.pending[slot] = run.then(
@@ -746,7 +810,7 @@ function createController(o) {
     var jobs = ids.map(function (id) {
       var a = A[id];
       if (cache[id] !== undefined || !a || !a.family) return Promise.resolve();
-      if (a.prompt === "req" && !String(st.prompt).trim()) return Promise.resolve();
+      if (needsText(id)) return Promise.resolve();
       var run = a.family === "image" ? priceImage(id) : flowArgs(id).then(function (args) {
         return o.flow.price(args);
       });
@@ -782,7 +846,7 @@ function createController(o) {
       st.price = { state: "none" };
       return;
     }
-    if (a.prompt === "req" && !String(st.prompt).trim()) {
+    if (needsText(st.action)) {
       st.price = { state: "need_prompt" };
       return;
     }
@@ -858,6 +922,9 @@ function createController(o) {
     if (a.family === "cutout") return a.lands === "new_layer" || st.adv.lands === "new_layer";
     if (a.family === "image") return !!docId();
     if (a.family === "edit") return !(st.raw && (st.raw.selection || st.raw.selection_raw));
+    // Split and text land as a group or a layer; a selection, a formats
+    // document and a clip select nothing.
+    if (a.family === "tool") return a.tool === "split" || a.tool === "text" || a.tool === "frames";
     return true;
   }
 
@@ -893,7 +960,7 @@ function createController(o) {
       } else {
         var args = await flowArgs(id);
         args.refs = refs;
-        args.name = st.shortName;
+        args.name = st.shortName || (a.prompt === "none" || a.prompt === "field" || (a.family === "tool" && !String(st.prompt).trim()) ? a.label : null);
         if (id === "more_like" && args.context.selection) {
           // The capture reads the selection: the run's own, from its mask.
           await o.host.selectionFromMask(d, maskLayerOf(cardRun()), boxOf(cardRun()));
@@ -905,6 +972,8 @@ function createController(o) {
         delete st.done[out.record.local_id];
       }
       if (out.record && selectsResult(id)) selectAfter[out.record.local_id] = true;
+      if (out.record && id === "frame") afterFrame[out.record.local_id] = true;
+      if (out.record && id === "select_desc") st.selectText = "";
       if (out.record && d === null) st.latest.none = out.record.local_id;
       if (out.replayed) st.note = TEXT.replayed;
       else if (out.state === "awaiting_approval") st.confirm = { kind: "changed", local_id: out.record.local_id, text: "Price changed after upload. Now " + out.price + " CU (was " + out.was + " CU). Nothing was spent.", ok: "Approve · " + out.price + " CU" };
@@ -1059,12 +1128,50 @@ function createController(o) {
     if (id !== st.action) {
       st.action = id;
       st.confirm = st.confirm && st.confirm.kind === "changed" ? st.confirm : null;
-      if (A[id].prompt === "none") {
+      if (A[id].prompt === "none" || A[id].prompt === "field") {
         st.prompt = "";
         st.shortName = null;
       }
     }
     changed();
+  }
+
+  // The Select… field of a layer's card (F8): typing picks Select by
+  // description; clearing it goes back to the context's first action.
+  function setSelect(text) {
+    st.selectText = String(text || "");
+    var has = st.selectText.trim() !== "";
+    if (has && st.action !== "select_desc") {
+      st.action = "select_desc";
+      st.prompt = "";
+      st.shortName = null;
+    } else if (!has && st.action === "select_desc") st.action = actionsMod.CONTEXTS[st.ctx.kind][0];
+    changed();
+  }
+
+  // A single-result card's own buttons (cardActions).
+  async function cardAction(name) {
+    var c = st.card || cardRun();
+    var rec = c && c.local_id && o.ledger ? o.ledger.get(c.local_id) : null;
+    if (!rec) return;
+    if (name === "frame") {
+      var out = (rec.outputs || []).filter(function (x) {
+        return x.state === "saved";
+      })[0];
+      if (!out) return;
+      st.clip = { asset_id: out.asset_id, name: runName(rec.name || (rec.parameters && rec.parameters.prompt), rec.lane), local_id: rec.local_id };
+      st.keepAction = true;
+      selectAction("frame");
+      return;
+    }
+    if (name === "open_clip") {
+      try {
+        await o.runner.place(rec.local_id, {});
+      } catch (e) {
+        st.note = (e && e.message) || String(e);
+      }
+      await refresh();
+    }
   }
 
   function setPrompt(text) {
@@ -1088,8 +1195,8 @@ function createController(o) {
     if (kind === "takes") st.takes[id] = Number(value) || 1;
     else if (kind === "model") {
       if (lane) {
-        if (value) st.models[lane] = value;
-        else delete st.models[lane];
+        if (value) st.models[modelKey(id)] = value;
+        else delete st.models[modelKey(id)];
       }
       if (A[id].family === "edit" && st.style && !st.style.match) st.style = null;
     } else if (kind === "style") {
@@ -1104,6 +1211,9 @@ function createController(o) {
     else if (kind === "target") st.target = value;
     else if (kind === "upsize") st.factor = value;
     else if (kind === "change") st.change = Math.max(0, Math.min(CHANGE.length - 1, Number(value) || 0));
+    else if (kind === "angle") st.angle = value;
+    else if (kind === "format") st.format = value;
+    else if (kind === "duration") st.duration = Number(value) || 5;
     else if (kind === "suggest") {
       var items = st.spark && st.spark.state === "ready" ? st.spark.items : [];
       var pick = items[Number(value)];
@@ -1131,7 +1241,85 @@ function createController(o) {
     changed();
   }
 
+  // ---- the Library grid ----
+
+  async function loadLibrary(force) {
+    if (!o.library) {
+      st.lib = { state: "error", rows: [], error: "The Library needs a signed-in project." };
+      emit();
+      return;
+    }
+    if (st.lib.state === "loading") return;
+    st.lib = { state: "loading", rows: st.lib.rows, error: null };
+    emit();
+    try {
+      st.lib = { state: "ready", rows: await o.library.list(!!force), error: null };
+    } catch (e) {
+      st.lib = { state: "error", rows: [], error: (e && e.message) || String(e) };
+    }
+    emit();
+  }
+
+  function libraryModel() {
+    var pick = st.libPick;
+    if (!pick && !(A[st.action] && A[st.action].grid)) return null;
+    if (st.lib.state === "idle") loadLibrary();
+    return {
+      mode: pick ? "ref" : "open",
+      title: pick ? "Add a Library image as a reference" : null,
+      state: st.lib.state,
+      error: st.lib.error,
+      items: st.lib.rows.map(function (r) {
+        return { asset_id: r.asset_id, name: r.name, thumb: r.thumb, size: r.width && r.height ? { width: r.width, height: r.height } : null };
+      }),
+      empty: st.lib.state === "ready" && !st.lib.rows.length ? "No images in this project yet." : null
+    };
+  }
+
+  // A click in the grid: opens the image as a new document, or adds it to
+  // the refs row.
+  async function libraryPick(assetId) {
+    var row = st.lib.rows.filter(function (r) {
+      return r.asset_id === assetId;
+    })[0];
+    if (!row || !o.library) return;
+    var asRef = st.libPick;
+    st.note = "";
+    st.sending = true;
+    emit();
+    try {
+      var got = await o.library.fetch(assetId);
+      if (asRef) {
+        var bytes = await o.host.readDataBinary(got.path);
+        var r = o.references.fromBytes(bytes, row.name, modelFor(st.action), "library");
+        r.url = urls.fromBytes(r.bytes, r.mime);
+        st.refs.push(r);
+        st.libPick = false;
+      } else {
+        if (!o.openFile) throw invalid("This Photoshop cannot open files from the plugin.");
+        await o.openFile(got.path);
+      }
+    } catch (e) {
+      st.note = (e && e.message) || String(e);
+    } finally {
+      st.sending = false;
+    }
+    changed();
+    refresh();
+  }
+
+  function libraryCancel() {
+    st.libPick = false;
+    emit();
+  }
+
   async function addRef(source) {
+    if (source === "library") {
+      st.libPick = true;
+      loadLibrary();
+      emit();
+      return;
+    }
     var id = st.action;
     var modelId = modelFor(id);
     st.note = "";
@@ -1434,6 +1622,8 @@ function createController(o) {
         out.thumb = tl.url;
         out.thumb_size = tl.size;
       }
+      // Select by description (F8): the Select… field of a layer's card.
+      out.select = { value: st.selectText, placeholder: "Select…", on: st.action === "select_desc", title: "Select by description: type what to select, for example all the boats" };
     }
     var latest = latestRecord();
     var pr = runProgress(latest);
@@ -1476,7 +1666,7 @@ function createController(o) {
       return {
         kind: "single",
         local_id: rec.local_id,
-        title: runName(rec.name || (rec.parameters && rec.parameters.prompt), rec.lane),
+        title: rec.lane === "upscale" && rec.target && rec.target.document_title ? "New document from " + rec.target.document_title : runName(rec.name || (rec.parameters && rec.parameters.prompt), rec.lane),
         meta: rec.state === "applied" ? "Placed" : "",
         sub: [rec.model_name, rec.cu_charged || rec.cu_quoted ? (rec.cu_charged || rec.cu_quoted) + " CU" : null].filter(Boolean).join(" · "),
         thumb: first && first.state === "saved" ? thumbs.resultThumb(first.path) : null,
@@ -1484,6 +1674,8 @@ function createController(o) {
         line: rec.placement && rec.placement.notes && rec.placement.notes.length ? rec.placement.notes.join(" ") : line,
         tone: FAILED.indexOf(rec.state) >= 0 ? "warn" : "ok",
         place: rec.state === "ready",
+        actions: cardActions(rec),
+        compare: compareOf(rec),
         done: true
       };
     }
@@ -1508,6 +1700,41 @@ function createController(o) {
       by: rec && rec.origin && rec.origin.kind === "agent" ? String(rec.origin.client_name || "Agent") : null,
       done: st.ctx.kind !== "takes"
     };
+  }
+
+  // Upscale's card compares the same region at 100% (FLOWS v2, changes
+  // after review 12): the source as read, enlarged, beside the result at
+  // its own pixels, from the middle of the picture. Tiles are 120 x 90.
+  var COMPARE_TILE = { width: 120, height: 90 };
+  function compareOf(rec) {
+    if (!rec || rec.lane !== "upscale") return null;
+    var out = (rec.outputs || []).filter(function (x) {
+      return x.state === "saved" && x.width > 0 && x.height > 0;
+    })[0];
+    var cap = rec.inputs && rec.inputs.capture;
+    var file = cap && cap.files && cap.files[0];
+    if (!out || !cap || !cap.source_path || !file || !(file.width > 0)) return null;
+    var tw = Math.min(COMPARE_TILE.width, out.width);
+    var th = Math.min(COMPARE_TILE.height, out.height);
+    var crop = { x: (out.width - tw) / 2 / out.width, y: (out.height - th) / 2 / out.height, w: tw / out.width, h: th / out.height };
+    return {
+      tile: { width: tw, height: th },
+      before: { thumb: thumbs.resultThumb(cap.source_path), size: { width: file.width, height: file.height }, crop: crop, label: "Original, enlarged" },
+      after: { thumb: thumbs.resultThumb(out.path), size: { width: out.width, height: out.height }, crop: crop, label: "Upscale at 100%" }
+    };
+  }
+
+  // The buttons of a single-result card: an Animate clip offers Frame to
+  // layer and Open clip again (FLOWS v2, F9).
+  function cardActions(rec) {
+    var out = [];
+    if (rec.lane === "video" && rec.target && rec.target.kind === "video" && (rec.outputs || []).some(function (x) {
+      return x.state === "saved";
+    })) {
+      out.push({ id: "frame", label: "Frame to layer" });
+      if (rec.state === "applied") out.push({ id: "open_clip", label: "Open clip" });
+    }
+    return out;
   }
 
   // An edit inside a selection: its tiles show the selection (with a little
@@ -1560,8 +1787,8 @@ function createController(o) {
       g.label = TEXT.sending;
       return g;
     }
-    if (p.state === "need_prompt" || (a.prompt === "req" && !String(st.prompt).trim())) {
-      g.label = TEXT.need_prompt;
+    if (p.state === "need_prompt" || needsText(st.action)) {
+      g.label = a.prompt === "field" ? TEXT.need_select : TEXT.need_prompt;
       return g;
     }
     g.label = buttonLabel(st.action, current ? p.view : null);
@@ -1626,6 +1853,12 @@ function createController(o) {
       if (!changeOn(id, schema)) return null;
       return { kind: kind, icon: "slider", key_text: "Change", value: CHANGE[st.change].label, title: "Change amount", key_first: true };
     }
+    if (kind === "angle") return { kind: kind, icon: "refresh", value: angleOf().label, title: "Angle" };
+    if (kind === "format") {
+      var fm = moreLanes.FORMATS[st.format];
+      return { kind: kind, icon: "ratio", value: st.format, key_text: fm ? times(fm.width, fm.height) : "", title: "Format" };
+    }
+    if (kind === "duration") return { kind: kind, icon: "jobs", value: st.duration + " s", title: "Duration" };
     return null;
   }
 
@@ -1671,13 +1904,15 @@ function createController(o) {
 
   function composerModel() {
     var a = A[st.action] || {};
-    var c = { action: st.action, note: null, refs: null, prompt: null, none: null, chips: [], go: null, confirm: st.confirm, agent: st.agent, message: st.note || null, gear: false };
+    var c = { action: st.action, note: null, refs: null, prompt: null, none: null, chips: [], go: null, confirm: st.confirm, agent: st.agent, plan: planModel(), message: st.note || null, gear: false };
+    c.library = libraryModel();
     if (a.note) {
       c.note = a.note(cardModelLite());
       return c;
     }
     c.refs = refsModel();
     if (a.prompt === "none") c.none = a.none;
+    else if (a.prompt === "field") c.none = String(st.selectText || "").trim() ? 'Selects "' + String(st.selectText).trim() + '", one mask per object, as a Photoshop selection.' : a.none;
     else c.prompt = { placeholder: a.placeholder || "", value: st.prompt };
     c.suggest = !!c.prompt && sparkOk(st.action);
     var chips = (a.chips || []).map(chipModel).filter(Boolean);
@@ -1686,6 +1921,36 @@ function createController(o) {
     var gp = st.price.action === st.action ? st.price : {};
     c.gear = advancedFor(st.action, gp.schema || st.schemaCache[modelFor(st.action)] || null).length > 0;
     return c;
+  }
+
+  // F14: one card for an agent's plan: its steps, each with its price and
+  // state, one total, Approve all or step by step, Decline.
+  function planModel() {
+    var p = st.plan;
+    if (!p || !p.steps || !p.steps.length) return null;
+    var WORDS = { waiting: "", approved: "Approved", running: "Running", done: "Done", failed: "Failed", declined: "Declined" };
+    return {
+      who: String(p.client_name || "Agent") + " plans " + p.steps.length + " steps",
+      steps: p.steps.map(function (x, i) {
+        return { n: i + 1, label: String(x.label || ""), cu: x.cu !== undefined && x.cu !== null ? x.cu + " CU" : "", state: WORDS[x.state] !== undefined ? WORDS[x.state] : "" };
+      }),
+      total: p.total_cu !== undefined && p.total_cu !== null ? "Approve all · " + p.total_cu + " CU" : "Approve all",
+      pending: p.steps.some(function (x) {
+        return !x.state || x.state === "waiting";
+      })
+    };
+  }
+
+  function planDecision(kind) {
+    var p = st.plan;
+    if (!p) return;
+    var fn = kind === "all" ? p.approve_all : kind === "steps" ? p.step_by_step : p.decline;
+    if (kind === "decline") {
+      st.plan = null;
+      st.note = TEXT.declined;
+    }
+    emit();
+    if (typeof fn === "function") Promise.resolve(fn()).then(emit, emit);
   }
 
   function cardModelLite() {
@@ -1861,6 +2126,51 @@ function createController(o) {
         note: TEXT.base_note
       };
     }
+    if (kind === "model" && a.model) {
+      var own = [a.model].concat(a.alts || []);
+      var oitems = own.map(function (mid, i) {
+        var orow = o.catalog.find(mid);
+        var nm2 = orow ? orow.name : schema && schema.model_id === mid ? schema.name : mid;
+        return { value: i === 0 ? null : mid, label: nm2, thumb: orow ? thumbs.modelThumb(orow) : null, mono: monoOf(nm2), tag: i === 0 ? "Recommended" : null, checked: i === 0 ? !st.models[modelKey(id)] : st.models[modelKey(id)] === mid };
+      });
+      var ovals = oitems.map(function (x) {
+        return x.value;
+      });
+      var op = await optionPrices(id, ovals, "model", st.models[modelKey(id)] || null);
+      for (var oi = 0; oi < oitems.length; oi++) oitems[oi].right = op.prices[oitems[oi].value] || "";
+      return { title: null, groups: [{ title: "Models for " + a.label, items: oitems }], later: op.later, note: "Prices are price checks for this document and these settings." };
+    }
+    if (kind === "angle") {
+      return {
+        title: "Angle",
+        items: actionsMod.ANGLES.map(function (x) {
+          return { value: x.key, label: x.label, sub: "Turn " + x.extra.horizontalAngle + "°, tilt " + x.extra.verticalAngle + "°", checked: st.angle === x.key };
+        })
+      };
+    }
+    if (kind === "format") {
+      return {
+        title: "Format",
+        items: FORMAT_KEYS.map(function (k) {
+          var f = moreLanes.FORMATS[k];
+          return { value: k, label: f.label, sub: times(f.width, f.height), checked: st.format === k };
+        })
+      };
+    }
+    if (kind === "duration") {
+      var dp = schema ? commonMod.param(schema, "duration") : null;
+      var durs = moreLanes.DURATIONS.filter(function (d) {
+        return !dp || ((typeof dp.min !== "number" || d >= dp.min) && (typeof dp.max !== "number" || d <= dp.max));
+      });
+      var dpr = await optionPrices(id, durs, "duration", st.duration);
+      return {
+        title: "Duration",
+        later: dpr.later,
+        items: durs.map(function (d) {
+          return { value: d, label: d + " s", right: dpr.prices[d] || "", checked: st.duration === d };
+        })
+      };
+    }
     if (kind === "model") {
       var rec = defaultModel(lane);
       var recRow = o.catalog.find(rec);
@@ -1902,6 +2212,7 @@ function createController(o) {
       if (raw.doc && (raw.selection || raw.selection_raw)) add.push({ value: "selection", label: "Selection", sub: "What is inside the marching ants" });
       if (raw.doc) add.push({ value: "layer", label: "Layer", sub: "The active layer" }, { value: "visible", label: "All visible", sub: "The document as it looks now" });
       add.push({ value: "file", label: "File…", sub: "An image on this computer" });
+      if (o.library) add.push({ value: "library", label: "Library", sub: "An image of this project" });
       var groups2 = [{ title: "Add a reference", items: add }];
       if (raw.doc && raw.layer) {
         groups2.push({
@@ -1945,6 +2256,16 @@ function createController(o) {
   }
   // Runs whose group is selected once it lands (actions with selectGroup).
   var selectAfter = {};
+  // Frame to layer runs: once the frame lands, Animate is picked with it
+  // as the first frame of the next clip (FLOWS v2, changes after review 14).
+  var afterFrame = {};
+  function frameLanded(localId) {
+    delete afterFrame[localId];
+    st.action = "animate";
+    st.keepAction = true;
+    st.clip = null;
+    st.note = TEXT.frame_next;
+  }
   async function selectLanded(localId) {
     delete selectAfter[localId];
     var rec = o.ledger ? o.ledger.get(localId) : null;
@@ -1960,6 +2281,7 @@ function createController(o) {
   if (o.runner && typeof o.runner.onEvent === "function") {
     o.runner.onEvent(function (ev) {
       if (ev && ev.type === "placed") {
+        if (afterFrame[ev.local_id]) frameLanded(ev.local_id);
         if (selectAfter[ev.local_id]) selectLanded(ev.local_id).then(refresh);
         else refresh();
       } else emit();
@@ -1985,6 +2307,13 @@ function createController(o) {
     refresh: refresh,
     selectAction: selectAction,
     setPrompt: setPrompt,
+    setSelect: setSelect,
+    libraryPick: libraryPick,
+    libraryCancel: libraryCancel,
+    libraryReload: function () {
+      return loadLibrary(true);
+    },
+    cardAction: cardAction,
     choose: choose,
     togglePin: togglePin,
     toggleDocRef: toggleDocRef,
@@ -2013,6 +2342,15 @@ function createController(o) {
       st.agent = req || null;
       emit();
     },
+    // F14: an agent's plan of several steps (the agent link sends it; until
+    // a plan request exists nothing calls this, so the card never shows).
+    // plan: { client_name, steps: [{ label, cu, state }], total_cu,
+    // approve_all(), step_by_step(), decline() }, or null to clear it.
+    showAgentPlan: function (plan) {
+      st.plan = plan || null;
+      emit();
+    },
+    planDecision: planDecision,
     agentDecision: function (yes) {
       var req = st.agent;
       st.agent = null;
@@ -2030,7 +2368,7 @@ function createController(o) {
       return true;
     },
     state: function () {
-      return { action: st.action, kind: st.ctx.kind, prompt: st.prompt, price: st.price, sending: st.sending, confirm: st.confirm, note: st.note, latest: st.latest, active: st.active, key: st.key, pins: st.pins, refs: st.refs.length, drefs: st.drefs.slice() };
+      return { action: st.action, kind: st.ctx.kind, prompt: st.prompt, select: st.selectText, price: st.price, sending: st.sending, confirm: st.confirm, note: st.note, latest: st.latest, active: st.active, key: st.key, pins: st.pins, refs: st.refs.length, drefs: st.drefs.slice() };
     },
     TEXT: TEXT
   };

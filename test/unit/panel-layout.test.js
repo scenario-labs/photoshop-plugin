@@ -125,7 +125,8 @@ test("short panels: the chip rows stay whole and the button visible from about 3
   assert.ok(short, "a compact rule set below 600 px (Photoshop docks the panel at 420 px)");
   for (const sel of Object.keys(short)) assert.ok(!/overflow/.test(JSON.stringify(short[sel])), `${sel}: nothing starts to scroll at 599 px, the top stays whole`);
   assert.equal(short[".cp .ctx-thumb"]["width"], "36px");
-  assert.equal(short[".cp .prompt"]["height"], "36px");
+  assert.ok(!short[".cp .prompt"], "the prompt keeps its height in short panels: a fixed sp-textarea height drew it over the Suggest footer on 27.11");
+  assert.equal(R[".cp .prompt"]["min-height"], "46px");
   assert.equal(M["(max-height: 399px)"][".cp .sc-top"]["overflow-y"], "auto", "only below about 400 px does the top scroll, never the composer");
   assert.equal(M["(max-height: 399px)"][".cp .sc-top"]["flex"], "0 1 auto");
   assert.equal(R[".cp .recent.compact .rthumb"]["width"], "28px", "Recent collapses to one row of small thumbnails");

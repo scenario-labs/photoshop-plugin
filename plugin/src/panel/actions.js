@@ -3,17 +3,47 @@
 // what its composer asks for, which logic runs it and where it lands, and
 // which actions a context offers. Plain data and small functions, so the
 // panel and the tests read the same table. Only actions that run in this
-// build are listed: the P2 flows (sketch, split, select by description,
-// animate, formats, sets, workflows) are not entries here.
+// build are listed (Start a set, Same action on each and Run a workflow
+// are not entries here).
 //
 // family: which logic runs the action.
 //   "image"  the Image lane (panel/image.js, forms/requests.js)
 //   "edit"   lanes/edit.js through lanes/flow.js (tool edit or trained_edit)
 //   "expand", "upscale", "cutout"  lanes/enhance.js through lanes/flow.js
+//   "tool"   lanes/more.js through lanes/flow.js (tool: split, text,
+//            segment, reframe, video, frames); host-more.js lands it
+// model: the action's own recommended model (else the lane's default);
+// alts: the other models its Model menu offers (actions with their own
+// model list only those). quality: the Quality level it starts at.
 // prompt: "req" (needed), "opt" (may stay empty: the built-in prompt is
 // sent), "none" (the action takes no prompt; the note says so).
 // chips: the composer chips, in order (style, model, takes, size, target,
-// upsize, change). refs: the refs row shows (when the model takes images).
+// upsize, change, angle, format, duration). refs: the refs row shows (when
+// the model takes images).
+
+// Models of the later flows (recommend with quality priority plus the
+// newest-first search on 2026-10-20, matching the prototype review).
+var SUNBURST = "model_openai-gpt-image-2-5-sunburst";
+var MODELS = {
+  sketch: SUNBURST,
+  relight: SUNBURST,
+  angle: "model_qwen-edit-multiangle-2511",
+  split: "model_bytedance-seedream-5-0-flash-layerize",
+  text: "model_ideogram-v3-layerize-text",
+  segment: "model_meta-sam-3-1-image",
+  reframe: "model_scenario-smart-reframe",
+  video: "model_minimax-h3-fast",
+  frames: "model_scenario-video-to-image-seq"
+};
+
+// New angle presets: turn (horizontalAngle, degrees) and tilt.
+var ANGLES = [
+  { key: "left45", label: "Turn left 45°", extra: { horizontalAngle: 315, verticalAngle: 0, zoom: 5 } },
+  { key: "right45", label: "Turn right 45°", extra: { horizontalAngle: 45, verticalAngle: 0, zoom: 5 } },
+  { key: "side", label: "Side view", extra: { horizontalAngle: 90, verticalAngle: 0, zoom: 5 } },
+  { key: "back", label: "Back view", extra: { horizontalAngle: 180, verticalAngle: 0, zoom: 5 } },
+  { key: "above", label: "From above", extra: { horizontalAngle: 0, verticalAngle: 45, zoom: 5 } }
+];
 
 // The model needs a prompt even where the person gives none; these are sent
 // then, and named in SPEC 3.
@@ -220,6 +250,179 @@ var ACTIONS = {
     }
   },
 
+  // ---- Make variants, Layers, Finish, Animate (F6 to F10, F13) ----
+  sketch: {
+    label: "Render sketch",
+    family: "edit",
+    model: MODELS.sketch,
+    quality: "high",
+    sample: "layer",
+    prompt: "opt",
+    placeholder: "Optional: describe the finish",
+    builtin: BUILTIN.sketch,
+    takes: 2,
+    chips: ["style", "model", "takes"],
+    refs: true,
+    button: function () {
+      return "Render sketch";
+    },
+    land: function (L, n) {
+      return n > 1 ? "Lands above " + L + " as a group" : "Lands above " + L;
+    }
+  },
+  relight: {
+    label: "Relight to scene",
+    family: "edit",
+    model: MODELS.relight,
+    mask_layer: true,
+    prompt: "opt",
+    placeholder: "Optional: the light to match, or leave empty",
+    builtin: BUILTIN.relight,
+    takes: 2,
+    chips: ["model", "takes"],
+    refs: true,
+    button: function () {
+      return "Relight to scene";
+    },
+    land: function (L) {
+      return "Lands above " + L + ", masked to its outline";
+    }
+  },
+  angle: {
+    label: "New angle",
+    family: "edit",
+    model: MODELS.angle,
+    sample: "layer",
+    prompt: "none",
+    none: "Turns the subject to the angle you pick. No prompt needed.",
+    takes: 2,
+    chips: ["angle", "takes"],
+    button: function () {
+      return "New angle";
+    },
+    land: function (L, n) {
+      return n > 1 ? "Lands above " + L + " as a group" : "Lands above " + L;
+    }
+  },
+  split: {
+    label: "Split into layers",
+    family: "tool",
+    tool: "split",
+    model: MODELS.split,
+    alts: ["model_bytedance-seedream-5-0-pro-layerize"],
+    prompt: "opt",
+    placeholder: "What to separate, or leave empty for the main elements",
+    takes: 1,
+    chips: ["model"],
+    button: function () {
+      return "Split into layers";
+    },
+    land: function (L) {
+      return "Lands as a group above " + L + ": a background and one layer per element";
+    }
+  },
+  split_text: {
+    label: "Split text",
+    family: "tool",
+    tool: "text",
+    mode: "split",
+    model: MODELS.text,
+    prompt: "none",
+    none: "Separates the lettering from a clean background. No prompt needed.",
+    takes: 1,
+    chips: [],
+    button: function () {
+      return "Split text";
+    },
+    land: function (L) {
+      return "Lands as a group above " + L + ": the text and a clean background";
+    }
+  },
+  remove_text: {
+    label: "Remove text",
+    family: "tool",
+    tool: "text",
+    mode: "remove",
+    model: MODELS.text,
+    prompt: "none",
+    none: "Removes lettering and logos and rebuilds what was behind. No prompt needed.",
+    takes: 1,
+    chips: [],
+    button: function () {
+      return "Remove text";
+    },
+    land: function (L) {
+      return "Lands as a new layer above " + L;
+    }
+  },
+  select_desc: {
+    label: "Select by description",
+    family: "tool",
+    tool: "segment",
+    model: MODELS.segment,
+    // The description is typed in the context card's Select… field.
+    prompt: "field",
+    placeholder: "Select… (all the boats)",
+    none: "Type what to select in the Select… field above.",
+    takes: 1,
+    chips: [],
+    button: function () {
+      return "Select";
+    },
+    land: function () {
+      return "Makes a selection of what matches";
+    }
+  },
+  formats: {
+    label: "Formats",
+    family: "tool",
+    tool: "reframe",
+    model: MODELS.reframe,
+    prompt: "opt",
+    placeholder: "Optional: what must stay in frame",
+    takes: 1,
+    chips: ["format"],
+    button: function () {
+      return "Formats";
+    },
+    land: function (L, n, v) {
+      return v && v.out ? "Lands as an artboard " + v.out.width + " × " + v.out.height + " in a formats document" : "Lands as an artboard in a formats document";
+    }
+  },
+  animate: {
+    label: "Animate",
+    family: "tool",
+    tool: "video",
+    model: MODELS.video,
+    alts: ["model_minimax-h3"],
+    prompt: "req",
+    placeholder: "Describe the motion: lanterns flicker, water ripples, camera still",
+    takes: 1,
+    chips: ["duration", "model"],
+    button: function () {
+      return "Animate";
+    },
+    land: function () {
+      return "Opens the clip as a new document; the MP4 goes to the output folder";
+    }
+  },
+  frame: {
+    label: "Frame to layer",
+    family: "tool",
+    tool: "frames",
+    model: MODELS.frames,
+    prompt: "none",
+    none: "Brings the clip's last frame back as a layer. No prompt needed.",
+    takes: 1,
+    chips: [],
+    button: function () {
+      return "Frame to layer";
+    },
+    land: function (L) {
+      return "Lands as a layer above " + L;
+    }
+  },
+
   // ---- No document (F3) ----
   create: {
     label: "Create image",
@@ -234,6 +437,18 @@ var ACTIONS = {
     },
     land: function (L, n, v) {
       return v && v.out ? "Opens as a new document " + v.out.width + " × " + v.out.height : "Opens as a new document";
+    }
+  },
+
+  library: {
+    label: "Open from Library",
+    family: null,
+    grid: "open",
+    note: function () {
+      return "The project's latest images. Click one to open it as a new document.";
+    },
+    land: function () {
+      return "Opens as a new document";
     }
   },
 
@@ -296,28 +511,50 @@ function factorLabel(v) {
 // The actions of each context, in order; the first is selected when the
 // context appears.
 var CONTEXTS = {
-  none: ["create"],
+  none: ["create", "library"],
   layer: ["versions", "extend", "upscale", "remove_bg", "new_layer"],
-  cutout: ["background", "versions", "upscale", "extend"],
+  cutout: ["background", "relight", "versions", "upscale", "extend"],
+  // A layer made by Split into layers.
+  element: ["versions", "relight", "angle", "upscale"],
+  // A document of one layer (a generated or delivered JPEG or PNG).
+  flat: ["split", "versions", "upscale", "formats"],
   selection: ["replace", "remove", "versions_sel", "cutout"],
   takes: ["compare", "more_like", "refine", "upscale_kept"]
 };
 
 // More: every other action of the context that runs in this build, grouped.
+// Select by description is the Select… field of the layer card, not an
+// entry.
 var MORE = {
   none: [],
   layer: [
-    ["Finish", ["upscale_layer"]],
-    ["Select and cut", ["cutout_layer"]]
+    ["Finish", ["remove_text", "formats", "upscale_layer"]],
+    ["Select and cut", ["cutout_layer"]],
+    ["Layers", ["split", "split_text"]],
+    ["Make variants", ["sketch", "angle", "relight"]],
+    ["Animate", ["animate"]]
   ],
   cutout: [
     ["Finish", ["upscale_layer"]],
     ["Select and cut", ["remove_bg"]],
-    ["Layers", ["new_layer"]]
+    ["Layers", ["new_layer"]],
+    ["Make variants", ["angle", "sketch"]],
+    ["Animate", ["animate"]]
+  ],
+  element: [
+    ["Finish", ["extend", "remove_text"]],
+    ["Animate", ["animate"]]
+  ],
+  flat: [
+    ["Finish", ["extend", "remove_text"]],
+    ["Select and cut", ["remove_bg"]],
+    ["Layers", ["split_text"]],
+    ["Make variants", ["sketch", "angle", "relight"]],
+    ["Animate", ["animate"]]
   ],
   // Upscale the selection was Upscale with a crop: removed after the review.
   selection: [],
-  takes: []
+  takes: [["Animate", ["animate"]]]
 };
 
 var MAX_CHIPS = 6;
@@ -376,13 +613,15 @@ function togglePin(pins, kind, id) {
 function promptFor(id, text) {
   var a = ACTIONS[id];
   var t = String(text || "").trim();
-  if (!a || a.prompt === "none") return a && a.builtin ? a.builtin : null;
+  if (!a || a.prompt === "none" || a.prompt === "field") return a && a.builtin ? a.builtin : null;
   if (t) return t;
   return a.prompt === "opt" ? a.builtin || null : null;
 }
 
 module.exports = {
   ACTIONS: ACTIONS,
+  MODELS: MODELS,
+  ANGLES: ANGLES,
   CONTEXTS: CONTEXTS,
   MORE: MORE,
   BUILTIN: BUILTIN,

@@ -70,7 +70,16 @@
     "model_bfl-flux-2-klein-9b-base": { "capture_input": "referenceImages" },
     "model_bfl-flux-2-klein-4b": { "capture_input": "referenceImages" },
     "model_bfl-flux-2-klein-4b-base": { "capture_input": "referenceImages" },
-    "model_qwen-image-edit-2511": { "capture_input": "referenceImages" }
+    "model_qwen-image-edit-2511": { "capture_input": "referenceImages" },
+    "model_openai-gpt-image-2-5-sunburst": { "capture_input": "referenceImages", "price_inputs": { "referenceImages": { "rule": "count" }, "mask": { "rule": "omit" } }, "mask_polarity": "alpha", "input_formats": ["png", "jpeg"] },
+    "model_qwen-edit-multiangle-2511": { "capture_input": "images", "price_inputs": { "images": { "rule": "count" } } },
+    "model_meta-sam-3-1-image": { "price_inputs": { "image": { "rule": "any" } } },
+    "model_bytedance-seedream-5-0-flash-layerize": { "price_inputs": { "image": { "rule": "any" } } },
+    "model_bytedance-seedream-5-0-pro-layerize": { "price_inputs": { "image": { "rule": "any" } } },
+    "model_ideogram-v3-layerize-text": { "price_inputs": { "image": { "rule": "any" } } },
+    "model_scenario-smart-reframe": { "price_inputs": { "image": { "rule": "any" } } },
+    "model_minimax-h3-fast": { "capture_input": "firstFrameImage", "price_inputs": { "firstFrameImage": { "rule": "any" }, "lastFrameImage": { "rule": "omit" } } },
+    "model_minimax-h3": { "capture_input": "firstFrameImage", "price_inputs": { "firstFrameImage": { "rule": "any" }, "lastFrameImage": { "rule": "omit" } } }
   },
   "price_kinds": {
     "$comment": "SPEC 6.1 step 6. from: the charge can exceed the quote with no bound (M2.0 found none, so the list starts empty). range: the charge varies up to the price at the schema's maximum of bound_parameter.",

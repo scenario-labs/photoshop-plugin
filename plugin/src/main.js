@@ -37,6 +37,8 @@ var downloadMod = require("./scenario/download.js");
 var referencesMod = require("./capture/references.js");
 var captureMod = require("./capture/capture.js");
 var flowMod = require("./lanes/flow.js");
+var hostMoreMod = require("./host-more.js");
+var libraryMod = require("./panel/library.js");
 var devLive = require("./dev/live-run.js");
 var devHooks = require("./dev/test-hooks.js");
 var jobsModelMod = require("./jobs/view-model.js");
@@ -134,6 +136,7 @@ function boot(env) {
   var jobsView = null;
   var menu = null;
   var jobsModel = null;
+  var library = null;
   // Development builds only (dev/test-hooks.js); release builds carry a stub
   // whose points do nothing.
   var hooks = flags.DEV || env.testHooks ? devHooks.create({ log: logger.log, timers: host.timers }) : null;
@@ -198,6 +201,8 @@ function boot(env) {
       origins: env.downloadOrigins,
       hooks: hooks
     });
+    // Open from Library and + Reference > Library (panel/library.js).
+    library = libraryMod.createLibrary({ client: client, downloader: downloader, host: host, log: logger.log });
     runner = runnerMod.createRunner({
       client: client,
       quotes: quotes,
@@ -217,7 +222,9 @@ function boot(env) {
       pollDelay: env.pollDelay,
       hooks: hooks,
       blockedTexts: env.blockedTexts,
-      offlineMs: env.offlineMs
+      offlineMs: env.offlineMs,
+      // The later flows' landings (host-more.js), by target kind.
+      placers: env.placers || hostMoreMod.createMorePlacers(host, { log: logger.log })
     });
     jobsModel = jobsModelMod.createJobsModel({
       ledger: ledger,
@@ -390,6 +397,8 @@ function boot(env) {
       runner: runner,
       ledger: ledger,
       references: references,
+      library: library,
+      openFile: hostMoreMod.createOpener(host),
       client: client,
       account: accounts.current,
       settings: settings,

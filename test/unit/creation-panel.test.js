@@ -78,14 +78,14 @@ async function openJobs(doc) {
   };
 }
 
-test("no document: Create image is the one action; an empty prompt says how to see the price; no price check before the panel shows", async (t) => {
+test("no document: Create image leads, Open from Library beside it; an empty prompt says how to see the price; no price check before the panel shows", async (t) => {
   const { app, doc, ps, mock } = await bootGenerate(t, { docs: [] });
   await sleep(ctlMod.DEBOUNCE_MS + 100);
   const before = mock.requests.filter((r) => r.path.startsWith("/v1/generate")).length;
   assert.equal(before, 0, "nothing priced at launch");
   await show(app, ps);
   await ctxTitle(doc, "No document open");
-  assert.deepEqual(chips(doc), ["create"]);
+  assert.deepEqual(chips(doc), ["create", "library"], "Create image, then Open from Library");
   assert.deepEqual(onChip(doc), ["create"]);
   assert.equal(doc.text("ctx-detail"), "Opens as a new document");
   assert.equal(go(doc), "Fill in the prompt to see the price");
@@ -158,7 +158,7 @@ test("F3 Create image with no document: Size and Takes chips, the price on the b
 
   // The new document is active: its group is the takes context, the card shows its two takes.
   await waitFor(() => app.controller.state().kind === "takes", { label: "takes context", timeout: 4000 });
-  assert.deepEqual(chips(doc), ["compare", "more_like", "refine", "upscale_kept"]);
+  assert.deepEqual(chips(doc), ["compare", "more_like", "refine", "upscale_kept", "more"], "More holds Animate");
   assert.equal(doc.text("ctx-title"), "2 takes · A lighthouse on a rocky coast");
   assert.equal(doc.text("ctx-count"), "2");
   await waitFor(() => tiles(doc).length === 2, { label: "two tiles" });
@@ -249,7 +249,7 @@ test("F2 a layer: Make versions with the built-in prompt when empty, a group abo
   // More: grouped, pin one to the chips (kept on disk), then unpin.
   await popOpen(doc, "more");
   const pinOf = (id) => find(doc, "data-pin", id);
-  assert.deepEqual(findAll(doc, "data-pick").map((e) => e.getAttribute("data-pick")), ["upscale_layer", "cutout_layer"]);
+  assert.deepEqual(findAll(doc, "data-pick").map((e) => e.getAttribute("data-pick")), ["remove_text", "formats", "upscale_layer", "cutout_layer", "split", "split_text", "sketch", "angle", "relight", "animate"]);
   // Each entry shows its own price (free price checks with its default model).
   const rightOf = (id) => (find(doc, "data-pick", id).children[0].children.find((c) => c.className === "r") || { textContent: "" }).textContent;
   assert.deepEqual([rightOf("upscale_layer"), rightOf("cutout_layer")], ["10 CU", "1 CU"]);
@@ -273,7 +273,7 @@ test("F2 a layer: Make versions with the built-in prompt when empty, a group abo
   assert.equal(ps.history.filter((h) => h.document_id === 7).length, 1);
   // The new group is selected, so the next action works on the takes.
   await waitFor(() => app.controller.state().kind === "takes", { label: "the group is the takes context", timeout: 4000 });
-  assert.deepEqual(chips(doc), ["compare", "more_like", "refine", "upscale_kept"]);
+  assert.deepEqual(chips(doc), ["compare", "more_like", "refine", "upscale_kept", "more"], "More holds Animate");
   assert.equal(ps.history.filter((h) => h.document_id === 7).length, 1, "selecting the group adds no History state");
 });
 
@@ -301,7 +301,11 @@ test("F4 one-click actions: Upscale opens a new document at the shown size; Remo
   ps.setActive(7);
   fire(ps);
   await ctxTitle(doc, "Background · Layer 1024 × 1024");
-  find(doc, "data-act", "remove_bg").click();
+  // A lone Background is a flat image: Split into layers leads, Remove
+  // background is in More.
+  assert.deepEqual(chips(doc), ["split", "versions", "upscale", "formats", "more"]);
+  await popOpen(doc, "more");
+  find(doc, "data-pick", "remove_bg").children[0].click();
   await button(doc, "Remove background · 1 CU");
   assert.equal(doc.text("ctx-detail"), "Lands as a mask on Background");
   doc.byId("go").click();
@@ -326,7 +330,7 @@ test("the takes come back from the layers' metadata after a restart: the group i
   d.activeLayers = [d.layers[0]];
   await show(app, ps);
   await ctxTitle(doc, "2 takes · a quiet harbor");
-  assert.deepEqual(chips(doc), ["compare", "more_like", "refine", "upscale_kept"]);
+  assert.deepEqual(chips(doc), ["compare", "more_like", "refine", "upscale_kept", "more"], "More holds Animate");
   assert.equal(doc.text("ctx-detail"), "Showing take 1 · click a take to compare");
   assert.equal(doc.text("c-note-text"), "Click a take above to show it in the document, then Keep it.");
   await waitFor(() => tiles(doc).length === 2, { label: "two tiles" });
@@ -373,7 +377,7 @@ test("a reference and a different price after upload: the run waits for approval
   // The refs row: the add tile and its hint; the menu lists the sources and the document-reference roles.
   await waitFor(() => findAll(doc, "data-pop", "addref").length === 1, { label: "the add tile" });
   await popOpen(doc, "addref");
-  assert.deepEqual(menuValues(doc).map((e) => e.getAttribute("data-value")), ["layer", "visible", "file", "pin:Character", "pin:Set", "pin:Style", "pin:Product"]);
+  assert.deepEqual(menuValues(doc).map((e) => e.getAttribute("data-value")), ["layer", "visible", "file", "library", "pin:Character", "pin:Set", "pin:Style", "pin:Product"]);
   menuValues(doc).find((e) => e.getAttribute("data-value") === "visible").click();
   await waitFor(() => findAll(doc, "data-ref").length === 1, { label: "reference added" });
   assert.equal(app.controller.state().refs, 1);
@@ -620,7 +624,7 @@ test("contexts: a cut-out layer offers Add background first; a pixel layer that 
   const { app, doc, ps } = await bootGenerate(t, { docs: [DOC], active: 7 });
   await show(app, ps);
   await ctxTitle(doc, "Bottle · Layer 400 × 600");
-  assert.deepEqual(chips(doc), ["background", "versions", "upscale", "extend", "more"]);
+  assert.deepEqual(chips(doc), ["background", "relight", "versions", "upscale", "extend", "more"]);
   assert.equal(doc.byId("ctx-thumb").className, "ctx-thumb chk", "a checkerboard behind a cut-out");
   assert.equal(doc.text("ctx-detail"), "Lands below Bottle at canvas size");
   await waitFor(() => findAll(doc, "data-ref", "auto").length === 1, { label: "the automatic reference" });

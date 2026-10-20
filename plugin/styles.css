@@ -822,6 +822,86 @@ body {
   color: var(--uxp-host-text-color-secondary);
 }
 
+/* F14: the plan card's steps, one row each, the price on the right. */
+.cp .plan-step {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.cp .plan-step .pc {
+  color: var(--uxp-host-text-color-secondary);
+}
+
+/* The Library grid (Open from Library, + Reference > Library). */
+.cp .lib {
+  flex-direction: column;
+  margin-bottom: 6px;
+}
+
+.cp .lib-head {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.cp .lib-x {
+  color: var(--uxp-host-link-text-color, #4b9cf5);
+}
+
+.cp .lib-note {
+  font-size: 11px;
+  margin-bottom: 4px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .lib-grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.cp .lib-tile {
+  margin: 0 4px 4px 0;
+  border-radius: 3px;
+}
+
+/* Upscale's 100% compare: two tiles side by side, a label under each. */
+.cp .cmp {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.cp .cmp-col {
+  display: flex;
+  flex-direction: column;
+  margin-right: 6px;
+}
+
+.cp .cmp-l {
+  font-size: 11px;
+  margin-top: 2px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+/* Select by description (F8): the Select… field under a layer's title.
+   The row keeps its height while the field hides under a popover. */
+.cp .ctx-sel {
+  display: flex;
+  flex-direction: row;
+  height: 26px;
+  margin-top: 6px;
+}
+
+.cp .ctx-sel .sel-field {
+  width: 100%;
+}
+
 .cp .ctx-detail.run {
   color: var(--uxp-host-text-color);
 }
@@ -1374,13 +1454,30 @@ body {
   opacity: 0.8;
 }
 
-/* Suggest (Prompt Spark), at the right end of the refs row. */
+/* The prompt box: the field, then a footer with Suggest at its bottom
+   right (FLOWS v2). The box's fill is the field's own (#252525 on the
+   medium gray theme, measured on 27.11), so both read as one box. */
+.cp .pbox {
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.cp .pfoot {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  padding: 0 4px 4px 4px;
+}
+
+/* Suggest (Prompt Spark), in the prompt box's footer. */
 .cp .sug {
   flex: 0 0 auto;
   display: flex;
   flex-direction: row;
   align-items: center;
-  height: 22px;
+  height: 20px;
   padding: 0 7px;
   margin: 0;
   border-radius: 5px;
@@ -1402,8 +1499,13 @@ body {
   margin-right: 4px;
 }
 
-.cp .composer.covered .sug span {
-  color: transparent;
+.cp .composer.covered .sug {
+  opacity: 0;
+}
+
+.cp .pbox .prompt-ghost {
+  border-color: transparent;
+  background-color: transparent;
 }
 
 /* A proposal: up to three lines, then cut (no line-clamp in UXP). */
@@ -1996,10 +2098,6 @@ body {
   }
   .cp .ccard > * {
     margin-bottom: 6px;
-  }
-  .cp .prompt {
-    min-height: 36px;
-    height: 36px;
   }
   .cp .prompt-ghost {
     padding: 4px 8px;

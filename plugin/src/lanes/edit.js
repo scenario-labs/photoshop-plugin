@@ -12,6 +12,11 @@
 //   quality: "low" | "medium" | "high" (models with a quality input),
 //   expect: "cleared" (Remove: the checks look for parts left unchanged),
 //   feather: px of the placed mask's edge (default 2),
+//   mask_layer: true: no selection needed, the active layer's outline is
+//            the mask (Relight to scene),
+//   extra: { name: value } for the model's own inputs that the action
+//            sets (New angle: horizontalAngle, verticalAngle, zoom); names
+//            the schema lacks are left out,
 //   change: 0..1, the Change amount (Subtle to Free) for a model with a
 //            strength input, mapped onto that input's range,
 //   trained: null | { model_id, kind: "lora" | "composition", scale,
@@ -96,10 +101,21 @@ function editView(schema, ctx, o) {
   var captureInput = schema.capture_input_name;
   if (!captureInput) return blockedView(view, TEXT.no_capture);
   var sel = ctx.selection;
+  // Relight to scene (FLOWS v2, F13): the layer's own outline is the mask,
+  // read from its transparency at Generate, and the model sees the scene
+  // around it.
+  var maskLayer = null;
+  if (o.mask_layer && !sel) {
+    if (!ctx.layer) return blockedView(view, TEXT.no_layer);
+    if (!ctx.layer.visible) return blockedView(view, common.hiddenText(ctx.layer.name));
+    sel = common.layerBox(ctx.layer, canvas);
+    if (!sel) return blockedView(view, TEXT.layer_empty);
+    maskLayer = ctx.layer.id;
+  }
   if (ctx.selection_raw && !sel) return blockedView(view, TEXT.outside);
   if (sel && (sel.width < common.MIN_SELECTION || sel.height < common.MIN_SELECTION)) return blockedView(view, TEXT.too_small);
   var kind = sel ? "selection" : sample === "layer" ? "layer" : "canvas";
-  view.source = { kind: kind, text: sourceText(kind, ctx, sel), sample: sample === "layer" ? "Current layer" : "All visible" };
+  view.source = { kind: kind, text: maskLayer ? 'Outline of "' + ctx.layer.name + '"' : sourceText(kind, ctx, sel), sample: sample === "layer" ? "Current layer" : "All visible" };
   var si = schema.size_inputs || { kind: "none" };
   var resParam = common.param(schema, "resolution");
   var so = { max_long: 2048, resolutions: resParam && resParam.enum ? resParam.enum : [], margin: margin };
@@ -128,6 +144,7 @@ function editView(schema, ctx, o) {
   if (schema.prompt_input && o.prompt) params[schema.prompt_input] = o.prompt;
   // Quality (Advanced): Low, Medium or High, for models that have the input.
   if (o.quality && !trained && qualityOk(schema, o.quality)) params.quality = o.quality;
+  if (o.extra) for (var xk in o.extra) if (common.param(schema, xk) && o.extra[xk] !== undefined && o.extra[xk] !== null) params[xk] = o.extra[xk];
   if (trained) {
     if (trained.kind === "composition") params.modelId = trained.model_id;
     else {
@@ -168,6 +185,7 @@ function editView(schema, ctx, o) {
     margin: marginPx,
     feather: feather
   };
+  if (maskLayer) target.mask_layer_id = maskLayer;
   // Remove: the check also looks for parts of the selection left as they were.
   if (o.expect === "cleared" && sel) target.expect = "cleared";
   view.request = {
@@ -191,6 +209,7 @@ function editView(schema, ctx, o) {
       box: shaped.box,
       upload: shaped.upload,
       selection: !!sel,
+      mask_layer_id: maskLayer,
       polarity: common.polarity(schema),
       mask_input: view.mask ? mask : null,
       capture_input: captureInput,

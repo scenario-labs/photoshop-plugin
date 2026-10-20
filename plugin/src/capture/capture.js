@@ -132,6 +132,23 @@ function createCapture(o) {
     return o.host.readPixels({ document_id: docId, layer_id: layerId || null, bounds: clip, long_side: longSide, exact: true });
   }
 
+  // A layer's outline as a gray mask in document pixels over `clip` (its
+  // alpha; an opaque layer covers all of it), shaped like readSelectionMask.
+  async function layerOutline(docId, layerId, clip) {
+    var px = await read(docId, layerId, clip, Math.max(clip.width, clip.height));
+    var n = px.width * px.height;
+    var data = new Uint8Array(n);
+    var any = false;
+    for (var i = 0; i < n; i++) {
+      data[i] = px.components === 4 ? px.data[i * 4 + 3] : 255;
+      if (data[i]) any = true;
+    }
+    if (!any) return null;
+    var g = { width: px.width, height: px.height, components: 1, data: data };
+    if (px.width !== clip.width || px.height !== clip.height) g = pixels.resize(g, clip.width, clip.height);
+    return { left: clip.left, top: clip.top, width: clip.width, height: clip.height, data: g.data };
+  }
+
   // Selection edit or whole-layer edit. c: { document_id, document_title,
   // canvas {width, height}, layer_id (sample: current layer), box (shaped),
   // upload {width, height}, selection (bounds or null), polarity, mask_input
@@ -145,7 +162,10 @@ function createCapture(o) {
     var got = await read(c.document_id, c.layer_id, clip, longRead);
     var context = fromRead(got, clip, c.box, c.upload.width, c.upload.height, "clamp");
     var sel = null;
-    if (c.selection) {
+    if (c.selection && c.mask_layer_id) {
+      sel = await layerOutline(c.document_id, c.mask_layer_id, clip);
+      if (!sel) throw invalid("The layer has no visible pixels to relight.");
+    } else if (c.selection) {
       sel = await o.host.readSelectionMask(c.document_id);
       if (!sel) throw invalid("The selection is empty.");
     }

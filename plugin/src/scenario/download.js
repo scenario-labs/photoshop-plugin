@@ -47,7 +47,46 @@ function webpInfo(b) {
 }
 
 // What the bytes are: { ext, mime, width, height }, or throws.
+// An MP4 clip (Animate, FLOWS v2 F9): an ISO media file whose first box is
+// "ftyp". Its size comes from the first track header with a width.
+function isMp4(b) {
+  return b.length > 12 && b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70;
+}
+
+function u32be(b, at) {
+  return ((b[at] << 24) | (b[at + 1] << 16) | (b[at + 2] << 8) | b[at + 3]) >>> 0;
+}
+
+function mp4Size(b) {
+  var CONTAINERS = { moov: 1, trak: 1 };
+  function walk(from, to, depth) {
+    var at = from;
+    while (at + 8 <= to && depth < 6) {
+      var size = u32be(b, at);
+      var type = String.fromCharCode(b[at + 4], b[at + 5], b[at + 6], b[at + 7]);
+      if (size < 8 || at + size > to) return null;
+      if (type === "tkhd") {
+        var version = b[at + 8];
+        var end = at + size;
+        var w = u32be(b, end - 8) / 65536;
+        var h = u32be(b, end - 4) / 65536;
+        if (version <= 1 && w > 0 && h > 0) return { width: Math.round(w), height: Math.round(h) };
+      } else if (CONTAINERS[type]) {
+        var got = walk(at + 8, at + size, depth + 1);
+        if (got) return got;
+      }
+      at += size;
+    }
+    return null;
+  }
+  return walk(0, b.length, 0) || { width: null, height: null };
+}
+
 function sniff(bytes) {
+  if (isMp4(bytes)) {
+    var m = mp4Size(bytes);
+    return { ext: "mp4", mime: "video/mp4", width: m.width, height: m.height };
+  }
   if (png.isPng(bytes)) {
     var p = png.pngInfo(bytes);
     return { ext: "png", mime: "image/png", width: p.width, height: p.height };
@@ -60,7 +99,7 @@ function sniff(bytes) {
     var w = webpInfo(bytes);
     return { ext: "webp", mime: "image/webp", width: w.width, height: w.height };
   }
-  throw new Error("the file is not a PNG, JPEG or WebP image");
+  throw new Error("the file is not a PNG, JPEG or WebP image, or an MP4 clip");
 }
 
 // o: { client, fetch, AbortController, timers: {setTimeout, clearTimeout},
@@ -213,4 +252,4 @@ function createDownloader(o) {
   return { download: download, stop: stop, allowed: allowed };
 }
 
-module.exports = { createDownloader: createDownloader, sniff: sniff, originOf: originOf, ATTEMPTS: ATTEMPTS, BACKOFF_MS: BACKOFF_MS };
+module.exports = { createDownloader: createDownloader, sniff: sniff, mp4Size: mp4Size, originOf: originOf, ATTEMPTS: ATTEMPTS, BACKOFF_MS: BACKOFF_MS };

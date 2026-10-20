@@ -145,6 +145,13 @@ function createCreateView(doc, ctl, o) {
       d.textContent = c.detail || "";
       d.className = c.running ? "ctx-detail run" : "ctx-detail";
     }
+    var sw = byId("ctx-sel");
+    var sf = byId("ctx-select");
+    if (sw) show(sw, !!c.select, "flex");
+    if (sf && c.select) {
+      if (!selectFocused && sf.value !== c.select.value) sf.value = c.select.value;
+      sf.setAttribute("title", c.select.title || "");
+    }
     var p = byId("ctx-prog");
     if (p) {
       show(p, c.running, "block");
@@ -202,7 +209,9 @@ function createCreateView(doc, ctl, o) {
     return b;
   }
 
-  function renderCard(card) {
+  // maxTile: the tallest a tile may be, so the card and its buttons fit the
+  // middle on a short panel (fitMid); null draws tiles at their own ratio.
+  function renderCard(card, maxTile) {
     var box = byId("mid-card");
     if (!box) return;
     clear(box);
@@ -236,6 +245,7 @@ function createCreateView(doc, ctl, o) {
           var cw = t.crop ? size.width * t.crop.w : size.width;
           var ch = t.crop ? size.height * t.crop.h : size.height;
           var th = Math.max(40, Math.min(Math.round(tw * 1.25), Math.round((tw * ch) / cw)));
+          if (maxTile) th = Math.max(40, Math.min(th, maxTile));
           var w = el("div", "tw");
           w.style.width = tw - 4 + "px";
           w.style.height = th + "px";
@@ -280,7 +290,20 @@ function createCreateView(doc, ctl, o) {
       sec.appendChild(row);
     } else {
       var one = el("div", "single");
-      if (card.thumb) {
+      if (card.compare) {
+        var cmp = el("div", "cmp");
+        [card.compare.before, card.compare.after].forEach(function (side) {
+          var col = el("div", "cmp-col");
+          var tile = el("div", "tw");
+          tile.style.width = card.compare.tile.width + "px";
+          tile.style.height = card.compare.tile.height + "px";
+          coverCrop(tile, side.thumb, card.compare.tile.width, card.compare.tile.height, side.size.width, side.size.height, side.crop);
+          col.appendChild(tile);
+          col.appendChild(el("span", "cmp-l", side.label));
+          cmp.appendChild(col);
+        });
+        sec.appendChild(cmp);
+      } else if (card.thumb) {
         var tb = el("div", "tw");
         tb.style.width = "96px";
         tb.style.height = "64px";
@@ -292,6 +315,13 @@ function createCreateView(doc, ctl, o) {
       one.appendChild(txt);
       sec.appendChild(one);
       var r2 = el("div", "btnrow");
+      (card.actions || []).forEach(function (ca) {
+        r2.appendChild(
+          btn(ca.label, null, function () {
+            return ctl.cardAction(ca.id);
+          }, ca.id)
+        );
+      });
       if (card.place)
         r2.appendChild(
           btn("Place", "pri", function () {
@@ -354,9 +384,9 @@ function createCreateView(doc, ctl, o) {
     return b;
   }
 
-  // The refs row also carries Suggest at its right end: UXP draws the
-  // prompt field above anything placed over it, so the button cannot sit
-  // inside the prompt box as in the prototype.
+  // Suggest sits in the prompt box's own footer, under the field: UXP draws
+  // the field above anything placed over it, so the button cannot overlap
+  // the text area itself.
   function suggestEl() {
     var b = el("div", "sug");
     b.setAttribute("data-pop", "suggest");
@@ -369,18 +399,20 @@ function createCreateView(doc, ctl, o) {
     return b;
   }
 
-  function renderRefs(r, suggest) {
+  function renderSuggest(on) {
+    var foot = byId("pfoot");
+    if (!foot) return;
+    clear(foot);
+    show(foot, on);
+    if (on) foot.appendChild(suggestEl());
+  }
+
+  function renderRefs(r) {
     var box = byId("refs");
     if (!box) return;
     clear(box);
-    show(box, !!r || !!suggest);
-    if (!r) {
-      if (suggest) {
-        box.appendChild(el("span", "hint", ""));
-        box.appendChild(suggestEl());
-      }
-      return;
-    }
+    show(box, !!r);
+    if (!r) return;
     for (var i = 0; i < r.drefs.length; i++) {
       (function (d) {
         var b = el("div", d.on ? "dref" : "dref off");
@@ -444,8 +476,7 @@ function createCreateView(doc, ctl, o) {
       });
       box.appendChild(add);
     }
-    if (r.hint || suggest) box.appendChild(el("span", "hint", r.hint || ""));
-    if (suggest) box.appendChild(suggestEl());
+    if (r.hint) box.appendChild(el("span", "hint", r.hint));
   }
 
   function renderComposer(c) {
@@ -459,14 +490,34 @@ function createCreateView(doc, ctl, o) {
       setText("agent-meta", (c.agent.model_name ? c.agent.model_name + " · " : "") + "asked through the Scenario MCP");
       setText("agent-approve-label", "Approve · " + c.agent.cu + " CU");
     }
+    var plan = byId("plan-card");
+    show(plan, !!c.plan);
+    if (c.plan) {
+      setText("plan-who", c.plan.who);
+      var ps = byId("plan-steps");
+      if (ps) {
+        clear(ps);
+        c.plan.steps.forEach(function (stp) {
+          var r = el("div", "plan-step");
+          r.appendChild(el("span", "pn", stp.n + ". " + stp.label));
+          r.appendChild(el("span", "pc", [stp.cu, stp.state].filter(Boolean).join(" · ")));
+          ps.appendChild(r);
+        });
+      }
+      setText("plan-all-label", c.plan.total);
+      show(byId("plan-btns"), c.plan.pending, "flex");
+    }
     var declined = c.message && c.message === ctl.TEXT.declined;
     setText("declined", declined ? c.message : "");
     show(byId("declined"), declined, "block");
 
+    renderLibrary(c.library);
     var noteOnly = !!c.note;
     show(byId("c-note"), noteOnly);
     setText("c-note-text", c.note || "");
-    renderRefs(noteOnly ? null : c.refs, !noteOnly && !!c.suggest);
+    renderRefs(noteOnly ? null : c.refs);
+    show(byId("pbox"), !noteOnly && !!c.prompt);
+    renderSuggest(!noteOnly && !!c.prompt && !!c.suggest);
     show(byId("noprompt"), !noteOnly && !!c.none);
     setText("noprompt-text", c.none || "");
     var pr = byId("prompt");
@@ -514,6 +565,44 @@ function createCreateView(doc, ctl, o) {
     show(byId("c-message"), !!msg);
   }
 
+  // The Library grid: three columns of square tiles, the name in the
+  // tooltip; a click opens the image or adds it as a reference.
+  function renderLibrary(m) {
+    var box = byId("lib");
+    if (!box) return;
+    clear(box);
+    show(box, !!m, "flex");
+    if (!m) return;
+    if (m.title) {
+      var head = el("div", "lib-head");
+      head.appendChild(el("span", "lib-t", m.title));
+      var x = el("span", "lib-x", "Cancel");
+      onClick(x, function () {
+        ctl.libraryCancel();
+      });
+      head.appendChild(x);
+      box.appendChild(head);
+    }
+    if (m.state === "loading" && !m.items.length) box.appendChild(el("div", "lib-note", "Loading the project's images…"));
+    if (m.error) box.appendChild(el("div", "lib-note warn", m.error));
+    if (m.empty) box.appendChild(el("div", "lib-note", m.empty));
+    var w = Math.max(60, Math.floor((panelWidth() - 24 - 16 - 8) / 3));
+    var row = el("div", "lib-grid");
+    m.items.forEach(function (it) {
+      var t = el("div", "tw lib-tile");
+      t.style.width = w + "px";
+      t.style.height = w + "px";
+      t.setAttribute("title", it.name);
+      t.setAttribute("data-lib", it.asset_id);
+      if (it.thumb) cover(t, it.thumb, w, w, it.size ? it.size.width : 0, it.size ? it.size.height : 0);
+      onClick(t, function () {
+        return ctl.libraryPick(it.asset_id);
+      });
+      row.appendChild(t);
+    });
+    box.appendChild(row);
+  }
+
   // ---- popovers ----
 
   function closePop() {
@@ -532,6 +621,10 @@ function createCreateView(doc, ctl, o) {
   // open, the field is hidden and a plain stand-in of the same size shows its
   // text, so the layout does not move.
   function coverPrompt(on) {
+    // The Select… field is a native field too: hidden while a popover is
+    // open (its row keeps its height, so nothing moves).
+    var sf = byId("ctx-select");
+    if (sf) sf.style.display = on ? "none" : "block";
     var t = byId("prompt");
     var g = byId("prompt-ghost");
     var comp = byId("composer");
@@ -845,8 +938,22 @@ function createCreateView(doc, ctl, o) {
   // line goes first: it shows only when it fits whole. Needs layout boxes: skipped where
   // there are none (tests).
   var lastRecent = [];
+  var lastCard = null;
+  // UXP did not always report the overflow in scrollHeight (seen on 27.11
+  // at the 420 px dock), so the boxes of the middle's shown children are
+  // compared with its own as well.
   function overflows(mid) {
-    return typeof mid.scrollHeight === "number" && typeof mid.clientHeight === "number" && mid.clientHeight > 0 && mid.scrollHeight > mid.clientHeight + 1;
+    if (typeof mid.scrollHeight === "number" && typeof mid.clientHeight === "number" && mid.clientHeight > 0 && mid.scrollHeight > mid.clientHeight + 1) return true;
+    var r = rect(mid);
+    if (!r) return false;
+    var kids = mid.children || [];
+    for (var i = 0; i < kids.length; i++) {
+      var k = kids[i];
+      if (k.style && k.style.display === "none") continue;
+      var kr = rect(k);
+      if (kr && kr.height > 0 && kr.bottom > r.bottom + 1) return true;
+    }
+    return false;
   }
   function fitMid() {
     var mid = byId("mid");
@@ -854,6 +961,19 @@ function createCreateView(doc, ctl, o) {
     if (!r || !(r.height > 0)) return;
     var empty = byId("mid-empty");
     if (empty && empty.style && empty.style.display !== "none" && overflows(mid)) show(empty, false);
+    // The Takes card's buttons stay in view: its tiles get shorter first.
+    var cardBox = byId("mid-card");
+    var cr = rect(cardBox);
+    if (lastCard && lastCard.kind === "takes" && cr && cr.bottom > r.bottom + 1) {
+      var tile = cardBox.querySelector ? cardBox.querySelector(".tw") : null;
+      var tr = rect(tile);
+      if (tr) {
+        var rows = lastCard.takes.length > 2 ? 2 : 1;
+        var over = cr.bottom - r.bottom + 2;
+        var cap = Math.floor(tr.height - over / rows);
+        if (cap >= 40 && cap < tr.height) renderCard(lastCard, cap);
+      }
+    }
     var box = byId("recent");
     if (lastRecent.length && box && overflows(mid)) {
       renderRecent(lastRecent, true);
@@ -870,6 +990,7 @@ function createCreateView(doc, ctl, o) {
       var m = ctl.model();
       renderCtx(m.ctx);
       renderActs(m.chips, m.more);
+      lastCard = m.card || null;
       renderCard(m.card);
       lastRecent = m.recent || [];
       renderRecent(lastRecent, false);
@@ -897,7 +1018,7 @@ function createCreateView(doc, ctl, o) {
   }
 
   function findAnchor(kind) {
-    var ids = ["cchips", "acts", "refs"];
+    var ids = ["cchips", "acts", "refs", "pfoot"];
     for (var i = 0; i < ids.length; i++) {
       var box = byId(ids[i]);
       var kids = box ? box.children || [] : [];
@@ -921,6 +1042,25 @@ function createCreateView(doc, ctl, o) {
     });
     pr0.addEventListener("blur", function () {
       promptFocused = false;
+    });
+  }
+  var selectFocused = false;
+  var sel0 = byId("ctx-select");
+  if (sel0) {
+    sel0.addEventListener("input", function () {
+      ctl.setSelect(sel0.value);
+    });
+    sel0.addEventListener("focus", function () {
+      selectFocused = true;
+    });
+    sel0.addEventListener("blur", function () {
+      selectFocused = false;
+    });
+    sel0.addEventListener("keydown", function (ev) {
+      if (ev && (ev.key === "Enter" || ev.keyCode === 13)) {
+        closePop();
+        ctl.go();
+      }
     });
   }
   var go0 = byId("go");
@@ -956,6 +1096,13 @@ function createCreateView(doc, ctl, o) {
     onClick(de0, function () {
       ctl.agentDecision(false);
     });
+  [["plan-all", "all"], ["plan-steps-btn", "steps"], ["plan-decline", "decline"]].forEach(function (pb) {
+    var b = byId(pb[0]);
+    if (b)
+      onClick(b, function () {
+        ctl.planDecision(pb[1]);
+      });
+  });
   var agentHit = byId("agent-hit");
   if (agentHit)
     onClick(agentHit, function () {

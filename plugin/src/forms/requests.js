@@ -12,8 +12,12 @@ function invalid(text) {
   return new errorsMod.ScenarioError("InvalidParameter", text);
 }
 
-function checkLane(lane) {
-  if (enums.lane.v1.indexOf(lane) >= 0) return;
+// Lanes the panel's own flows use that agents are not offered (FLOWS v2, F9
+// Animate and Frame to layer): the agent tools keep the shared list.
+var PANEL_LANES = ["video"];
+
+function checkLane(lane, panel) {
+  if (enums.lane.v1.indexOf(lane) >= 0 || (panel && PANEL_LANES.indexOf(lane) >= 0)) return;
   if (enums.lane.v1_1 && enums.lane.v1_1.indexOf(lane) >= 0) throw invalid("The " + lane + " lane comes in a later release.");
   throw invalid("lane must be one of: " + enums.lane.v1.join(", ") + ".");
 }
@@ -82,7 +86,7 @@ function checkModelLane(schema, lane, trained) {
 //      (how many references wait for upload), mask (false: no mask input
 //      filled), trained (a trained edit on this base) }
 function build(schema, a) {
-  checkLane(a.lane);
+  checkLane(a.lane, a.lane === "video" && a.target && (a.target.kind === "video" || a.target.kind === "frames"));
   checkModelLane(schema, a.lane, !!a.trained);
   var params = a.parameters || {};
   return {
@@ -90,7 +94,9 @@ function build(schema, a) {
     lane: a.lane,
     parameters: params,
     takes: a.takes === undefined ? null : a.takes,
-    pending: pendingFor(a.lane, schema, params, a.references || 0, { mask: a.mask }),
+    // Frame to layer sends a clip already on Scenario (its asset id): nothing
+    // waits for upload.
+    pending: a.target && a.target.kind === "frames" ? {} : pendingFor(a.lane, schema, params, a.references || 0, { mask: a.mask }),
     source_size: a.source_size || null,
     target: a.target || null
   };

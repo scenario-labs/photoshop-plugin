@@ -748,6 +748,41 @@ function createHost(hostRequire, g) {
         return null;
       }
     },
+    // What the later flows' placements build on (host-more.js: split
+    // layers, text, a selection from masks, artboards, clips, frames). Kept
+    // apart from the agent tools' own internals() so both can grow.
+    moreInternals: function () {
+      return {
+        ps: ps,
+        modal: modal,
+        play: play,
+        inOneState: inOneState,
+        findDoc: findDoc,
+        findLayer: findLayer,
+        boundsOf: boundsOf,
+        frameOf: frameOf,
+        readArea: readArea,
+        selectLayers: selectLayers,
+        placeFile: placeFile,
+        setXmp: setXmp,
+        putMask: putMask,
+        maskToSelection: maskToSelection,
+        deleteLayer: deleteLayer,
+        entryFor: entryFor,
+        srgb: SRGB
+      };
+    },
+    // How many layers the document has at its top level and how many are
+    // selected (the flat-image and several-layers contexts), or null.
+    documentStats: function (docId) {
+      var d = findDoc(docId);
+      if (!d) return null;
+      try {
+        return { layers: (d.layers || []).length, selected: (d.activeLayers || []).length };
+      } catch (e) {
+        return null;
+      }
+    },
     // The same for a layer by id, or null when it is gone.
     layerInfo: async function (docId, layerId) {
       var d = findDoc(docId);
