@@ -20,7 +20,7 @@ Scenario for Photoshop, development build 0.7.1. Pictures and recordings in this
 
 ## Quick start
 
-From install to a first image in about two minutes, once the package is built (see the [README](../README.md#install)).
+From install to a first image in a few steps, once the package is built (the time was not measured live yet) (see the [README](../README.md#install)).
 
 1. **Install** the `.ccx` and restart Photoshop, then open **Plugins > Scenario**. The panel opens on **Connect your Scenario account**.
 

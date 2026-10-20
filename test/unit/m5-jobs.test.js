@@ -60,12 +60,12 @@ function mockJob(idv, body, minutesAgo, plan = ["success"]) {
 }
 
 test("jobs list rows read as measured: model jobs, the prompt as a text asset, upload jobs kept apart", () => {
-  const row = jobsApi.readJob({ jobId: "job_iynrFXCefTm11zBzUZcjq97N", jobType: "custom", billing: { cuCost: 2, cuDiscount: 0 }, metadata: { input: { modelId: FLARE, height: 1024, numOutputs: 1, prompt: "asset_xvxNLiRQwWr5hQVQkDrvzbHL", quality: "low", width: 1024 }, assetIds: ["asset_DXgyeR29LENZuJvuwnVXTF4z"] }, ownerId: "proj_x", authorId: "apiu_x", createdAt: "2026-10-19T07:18:03.243Z", status: "success", progress: 1 });
+  const row = jobsApi.readJob({ jobId: "job_fixtureListRow0001", jobType: "custom", billing: { cuCost: 2, cuDiscount: 0 }, metadata: { input: { modelId: FLARE, height: 1024, numOutputs: 1, prompt: "asset_fixturePromptText01", quality: "low", width: 1024 }, assetIds: ["asset_fixtureOutput00001"] }, ownerId: "proj_x", authorId: "apiu_x", createdAt: "2026-10-19T07:18:03.243Z", status: "success", progress: 1 });
   assert.equal(row.job_type, "custom");
   assert.equal(row.model_id, FLARE);
   assert.equal(row.created_at, "2026-10-19T07:18:03.243Z");
   assert.equal(row.status, "succeeded");
-  assert.equal(row.input.prompt, "asset_xvxNLiRQwWr5hQVQkDrvzbHL");
+  assert.equal(row.input.prompt, "asset_fixturePromptText01");
   assert.ok(!JSON.stringify(row).includes("proj_x") && !JSON.stringify(row).includes("apiu_x"), "owner and author ids are not kept");
   const upload = jobsApi.readJob({ jobId: "job_PnQb0000", jobType: "upload", billing: { cuCost: 0, cuDiscount: 0 }, metadata: { input: { uploadId: "upl_x", uploadType: "multipart" } }, createdAt: "2026-10-19T07:12:02.657Z", status: "success" });
   assert.equal(upload.job_type, "upload");

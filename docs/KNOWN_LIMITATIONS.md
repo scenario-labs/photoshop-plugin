@@ -19,9 +19,12 @@ Development build 0.7.1. This page lists what the build does not do yet, what it
 - **The panel is hidden on Photoshop's Home screen.** Photoshop hides docked panels there, so the panel shows once a document is open. The panel's own "no document" screen was never seen live.
 - **Document events while Photoshop is in the background.** With Photoshop in the background, its document events did not reach the panel, so the context card can show the previous document or selection until the panel reads the document again.
 - **Sign-in**: typing or pasting into the key and secret fields, and the error screens for a refused key or a plan without API access, were *not tested* live (the live passes signed in through a development key import). The pictures of those screens in the User Guide are drawn from the panel's own failure copy.
+- **Release package and first-run time.** The live passes installed development builds; installing the release `.ccx` and the time from install to a first image were *not tested* live.
 - **One Photoshop at a time.** Two Photoshop instances on one computer sharing the helper's port: *not tested*.
 
 ## Creation and application
+
+- **Color-managed documents** (a profile other than sRGB, 16-bit, CMYK or Lab), **large documents** (over about 8000 px on a side) and **Undo and Redo** of a landed result were *not tested* live. Each run is one History state (*verified live*), so Undo is expected to remove it in one step.
 
 - **Extend canvas can show seams.** In two live runs (16:9 and 3:2), the original image was placed over a new frame the model had drawn again, and the joins showed: a doubled sun and a step where the old edge was. The seam check did not flag them. Look at the result before keeping it, or extend in smaller steps.
 - **Inside selection can leave a lighter patch.** Replace inside with Inside selection and a feathered elliptical selection left a lighter oval on the surface around the new object in two of three live takes, and the take showed no badge. An object taller than the selection is cut at its edge. Draw the selection to the size of the new object, or use **Bolder**.
