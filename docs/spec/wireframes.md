@@ -358,12 +358,13 @@ A target the canvas already has puts "Already 1:1, pick another target" on the b
 +--------------------------------------+
 ```
 
-A trained row names its kind and first base:
+A trained row names its kind and first base, and its trigger words when its record has them; a click is **Run with** (SPEC 3.4):
 
 ```
 +--------------------------------------+
 | [th]   Ink outline         Public    |
 |        LoRA via FLUX.2 Dev           |
+|        Trigger INKOUT                |
 +--------------------------------------+
 ```
 
@@ -399,7 +400,7 @@ Empty result:
 
 ## 5. Style chip
 
-**Style** (SPEC 3.4): No style, **Match an image** (a picture as the style reference, any model), then on the edit actions (Replace inside, Make versions) a **Trained styles** group with the current project's trained models that can edit. A trained style switches the Model chip to the model it was trained on; on the image and strength route, and on any edit model with a strength setting, the **Change** chip shows (Subtle, Light, Balanced, Strong, Free, mapped onto the model's own range):
+**Style** (SPEC 3.4): No style, **Match an image** (a picture as the style reference, any model), then a **Trained styles** group with the current project's trained styles that fit the action: on the edit actions (Replace inside, Make versions, Render sketch, More like this) and, since M7, on Create image, New layer and Add background. Each row shows the thumbnail, "Trained style · 32 images · FLUX.1 Dev", and the trigger words in its tooltip. A trained style switches the Model chip to the model it was trained on; on the image and strength route, and on any edit model with a strength setting, the **Change** chip shows (Subtle, Light, Balanced, Strong, Free, mapped onto the model's own range):
 
 ```
 |           +------------------------+ |
@@ -413,7 +414,9 @@ Empty result:
 |           |        model           | |
 |           | TRAINED STYLES         | |
 |           |   [th] Ink & Wash      | |
-|           |        Trained style   | |
+|           |        Trained style . | |
+|           |        32 images .     | |
+|           |        FLUX.1 Dev      | |
 |           | ---------------------- | |
 |           | Trained styles are the | |
 |           | project's trained      | |
@@ -441,7 +444,7 @@ Empty result:
 +--------------------------------------+
 ```
 
-Under a trained style, the Model menu lists only its base:
+Under a trained style, the Model menu lists its base, then the trained models that stack with it on that base (**Run with**, M7):
 
 ```
 |           +------------------------+ |
@@ -449,6 +452,11 @@ Under a trained style, the Model menu lists only its base:
 |           | v [th] FLUX.1 Dev  N CU| |
 |           |   Ink & Wash is        | |
 |           |   trained on it        | |
+|           | RUN WITH INK & WASH    | |
+|           |   [th] Sir Bram    N CU| |
+|           |   Trained character .  | |
+|           |   20 images .          | |
+|           |   FLUX.1 Dev           | |
 |           | ---------------------- | |
 |           | A trained style runs   | |
 |           | on the model it was    | |
@@ -460,25 +468,62 @@ Under a trained style, the Model menu lists only its base:
 |           +------------------------+ |
 ```
 
-Otherwise the Model menu shows each model's price for this document and these settings (`Free` for a zero price).
+Otherwise the Model menu shows each model's price for this document and these settings (`Free` for a zero price). On an action with a Style chip it also lists **Your trained models** (characters first); a row there is Run with, and the Model chip then reads the trained model's name.
+
+```
+|           +------------------------+ |
+|           | RECOMMENDED FOR MAKE   | |
+|           | VERSIONS               | |
+|           | v [GI] GPT Image 2.5   | |
+|           |        Flare      5 CU | |
+|           | YOUR TRAINED MODELS    | |
+|           |   [SB] Sir Bram   5 CU | |
+|           |   Trained character .  | |
+|           |   20 images .          | |
+|           |   FLUX.1 Dev           | |
+|           | CATALOG . CAN MAKE     | |
+|           | VERSIONS               | |
+|           |   [F1] FLUX.1 Dev 5 CU | |
+|           +------------------------+ |
+```
+
+Advanced, under trained models (M7): a weight per LoRA and the trigger words.
+
+```
+|           +------------------------+ |
+|           | ADVANCED . FLUX.1 DEV  | |
+|           | Sir Bram weight        | |
+|           | (0.25)(0.5)(0.75)      | |
+|           | ((0.8 (its own)))(1)   | |
+|           | (1.25)(1.5)            | |
+|           | Trigger words . BRAMKN | |
+|           | ((Add to the prompt))  | |
+|           | (Leave out)            | |
+|           +------------------------+ |
+```
 
 ## 6. Library
 
-Open from Library (no document) and `+ Reference > Library` show the project's 12 newest images as a 3-column grid in the composer (free reads; the plugin's own uploads are left out). A click opens the image as a new document, or adds it to the refs row; `x` closes the grid when it was opened for a reference.
+Open from Library (no document), **Place from Library** (More > Layers, with a document) and `+ Reference > Library` show the project's images in the composer (free reads; the plugin's own uploads, hidden assets and other kinds are left out): a search field, the filters **All**, **Generated**, **Edited**, **Uploaded**, a 3-column grid of 12 tiles that scrolls inside the composer, and **Show more**. A tile's tooltip names the image and its size. A click opens the image as a new document, places it as a new layer above the active one at its own size (never enlarged, shrunk to fit a smaller canvas), or adds it to the refs row; Cancel closes the grid when it was opened for a reference. Drag into the document is not in this build.
 
 ```
 +--------------------------------------+
-| LIBRARY . Fall campaign          x   |
+| (i) Click an image to place it as a  |
+|     new layer.                       |
+| [ Search this project              ] |
+| ((All)) (Generated) (Edited)         |
+| (Uploaded)                           |
+| +--------+ +--------+ +--------+  |  |
+| |  [th]  | |  [th]  | |  [th]  |  |  |
+| +--------+ +--------+ +--------+  |  |
+| +--------+ +--------+ +--------+  |  |
+| |  [th]  | |  [th]  | |  [th]  |  v  |
 | +--------+ +--------+ +--------+     |
-| |  [th]  | |  [th]  | |  [th]  |     |
-| +--------+ +--------+ +--------+     |
-| +--------+ +--------+ +--------+     |
-| |  [th]  | |  [th]  | |  [th]  |     |
-| +--------+ +--------+ +--------+     |
-| Click an image to open it as a new   |
-| document.                            |
+| Show more                            |
 +--------------------------------------+
 ```
+
+A search with no match: `No image matches "lantern" in the 32 newest (Show more reads further).`
 
 ## 6b. Later flows (P2)
 
