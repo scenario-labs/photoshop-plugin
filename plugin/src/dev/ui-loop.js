@@ -275,6 +275,31 @@ function start(o) {
         hk.arm(String(cmd.point), { action: String(spec.action || "delay"), ms: Math.min(120000, Number(spec.ms) || 0), skip: Number(spec.skip) || 0 });
         return { armed: String(cmd.point) };
       }
+      case "runwith": {
+        // M7: Run with a trained model of the catalog (what a click on its
+        // row in All models does).
+        var trow = app.catalog && typeof app.catalog.find === "function" ? app.catalog.find(String(cmd.model_id)) : null;
+        if (!trow) throw new Error("no such model in the catalog");
+        await app.controller.chooseModel(trow);
+        return { run_with: app.controller.state().runWith, style: app.controller.state().style };
+      }
+      case "lastrun": {
+        // M7: the newest job record, for a live check to follow its run.
+        var lr = (app.ledger ? app.ledger.all() : []).slice().sort(function (x, y) {
+          return String(y.created_at || "").localeCompare(String(x.created_at || ""));
+        })[0];
+        if (!lr) return { record: null };
+        return { record: { local_id: lr.local_id, state: lr.state, model_id: lr.model_id, trained_model_ids: lr.trained_model_ids || [], cu_quoted: lr.cu_quoted, cu_charged: lr.cu_charged, job_id: lr.job_id || null, document_id: lr.placement ? lr.placement.document_id : null, error: lr.error || null } };
+      }
+      case "library": {
+        // M7: the Library grid's search, filters, Show more and the
+        // reference picker, as the panel's own controls call them.
+        if (cmd.add_ref) await app.controller.addRef("library");
+        if (cmd.filter) app.controller.libraryFilter(String(cmd.filter));
+        if (cmd.search !== undefined) app.controller.librarySearch(String(cmd.search));
+        if (cmd.more) await app.controller.libraryMore();
+        return { library: app.controller.model().composer.library };
+      }
       case "closedoc": {
         var ids = cmd.all ? made.slice() : [own(cmd.document_id)];
         await live().closeDocs(ids);
