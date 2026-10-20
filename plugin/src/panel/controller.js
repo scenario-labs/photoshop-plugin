@@ -183,6 +183,19 @@ function badgeOf(list) {
   return null;
 }
 
+// The price a run card shows: what was charged, else the price waiting for
+// approval (a price that changed after the upload, New angle 1 to 6 CU
+// live), else the quote.
+function cuOf(rec) {
+  if (!rec) return null;
+  var has = function (v) {
+    return v !== null && v !== undefined && v !== "";
+  };
+  if (has(rec.cu_charged)) return rec.cu_charged;
+  if (has(rec.cu_quoted_new)) return rec.cu_quoted_new;
+  return has(rec.cu_quoted) ? rec.cu_quoted : null;
+}
+
 function needsConfirm(q, limit) {
   if (q.price_kind === "from") return true;
   var compare = q.price_kind === "range" && q.cu_cost_max !== null && q.cu_cost_max !== undefined ? price.toThousandths(q.cu_cost_max) : price.toThousandths(q.cu_cost);
@@ -1980,7 +1993,7 @@ function createController(o) {
         local_id: rec.local_id,
         title: rec.lane === "upscale" && rec.target && rec.target.document_title ? "New document from " + rec.target.document_title : runName(rec.name || (rec.parameters && rec.parameters.prompt), rec.lane),
         meta: rec.state === "applied" ? "Placed" : "",
-        sub: [rec.model_name, rec.cu_charged || rec.cu_quoted ? (rec.cu_charged || rec.cu_quoted) + " CU" : null].filter(Boolean).join(" · "),
+        sub: [rec.model_name, cuOf(rec) ? cuOf(rec) + " CU" : null].filter(Boolean).join(" · "),
         thumb: first && first.state === "saved" ? thumbs.resultThumb(first.path) || posterOf(rec) : null,
         thumb_size: sizeOfOut(first),
         line: rec.placement && rec.placement.notes && rec.placement.notes.length ? rec.placement.notes.join(" ") : line,
@@ -1999,7 +2012,7 @@ function createController(o) {
       var idx = (Number(c.fields.take) || i + 1) - 1;
       return { i: i, n: idx + 1, on: !!sh && sh.i === i, thumb: thumbOf(rec, c.fields.assetId), size: sizeOfOut(outputFor(rec, c.fields.assetId)), crop: crop, badge: badgeOf(badges[idx]), name: c.name };
     });
-    var cu = rec ? rec.cu_charged || rec.cu_quoted : null;
+    var cu = cuOf(rec);
     return {
       kind: "takes",
       local_id: rec ? rec.local_id : null,
@@ -2785,4 +2798,4 @@ function createController(o) {
   };
 }
 
-module.exports = { createController: createController, classify: classify, takesOf: takesOf, isCutout: isCutout, badgeOf: badgeOf, needsConfirm: needsConfirm, TEXT: TEXT, DEBOUNCE_MS: DEBOUNCE_MS, TARGETS: TARGETS, CHANGE: CHANGE };
+module.exports = { createController: createController, classify: classify, takesOf: takesOf, isCutout: isCutout, badgeOf: badgeOf, cuOf: cuOf, needsConfirm: needsConfirm, TEXT: TEXT, DEBOUNCE_MS: DEBOUNCE_MS, TARGETS: TARGETS, CHANGE: CHANGE };
