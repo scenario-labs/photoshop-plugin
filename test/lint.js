@@ -42,7 +42,7 @@ for (const f of files.filter((x) => x.endsWith(".json"))) {
 }
 
 // 2. Typography and public content, in every text file.
-const EMAIL_ALLOWED = new Set(["privacy@scenario.com", "noreply@github.com"]);
+const EMAIL_ALLOWED = new Set(["privacy@scenario.com", "support@scenario.com", "noreply@github.com"]);
 const RULES = [
   [/\u2014/, "em dash (use a comma, colon or period)"],
   [/\/Users\/|\/home\/[a-z]|\/private\/(tmp|var)|[A-Z]:\\Users\\/i, "machine path"],
