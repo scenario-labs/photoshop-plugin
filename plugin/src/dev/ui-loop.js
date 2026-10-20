@@ -307,6 +307,7 @@ function start(o) {
         // M7: the Library grid's search, filters, Show more and the
         // reference picker, as the panel's own controls call them.
         if (cmd.add_ref) await app.controller.addRef("library");
+        if (cmd.remove_ref) app.controller.removeRef(String(cmd.remove_ref));
         if (cmd.filter) app.controller.libraryFilter(String(cmd.filter));
         if (cmd.search !== undefined) app.controller.librarySearch(String(cmd.search));
         if (cmd.more) await app.controller.libraryMore();
@@ -334,6 +335,20 @@ function start(o) {
 
   async function run(cmd) {
     switch (cmd.cmd) {
+      case "ctxprobe": {
+        // What the context read sees: the active document and the list.
+        var pr = { active: null, docs: null, error: null };
+        try {
+          pr.active = o.host.activeDocumentId();
+          pr.docs = o.host.listDocuments();
+          var t0 = Date.now();
+          await Promise.race([o.app.controller.refresh(), new Promise(function (r) { host.timers.setTimeout(r, 8000); })]);
+          pr.refresh_ms = Date.now() - t0;
+        } catch (e) {
+          pr.error = (e && e.message) || String(e);
+        }
+        return pr;
+      }
       case "ping":
         return { pong: true };
       case "reload":

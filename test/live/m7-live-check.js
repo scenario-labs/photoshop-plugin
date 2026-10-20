@@ -117,6 +117,11 @@ async function until(fn, label, ms = 20000, step = 400) {
 }
 
 const state = () => send({ cmd: "state" });
+async function clearRefs() {
+  const s = await state();
+  const items = (s.model.composer.refs && s.model.composer.refs.items) || [];
+  for (const it of items) if (it.removable || it.role) await send({ cmd: "library", remove_ref: it.id });
+}
 const lib = async () => (await state()).model.composer.library;
 
 function fixture(w, h) {
@@ -141,6 +146,15 @@ async function makeDoc(w, h, selection) {
 
 async function placeCase(w, h) {
   const docId = await makeDoc(w, h);
+  // Place goes to the document the panel's context names: wait until that
+  // is the new one, or the image lands in the document made before it. With
+  // Photoshop in the background its document events may not reach the
+  // panel (seen live 2026-10-20), so a view command re-reads the context.
+  await until(async () => {
+    await send({ cmd: "view", name: "main" });
+    await sleep(600);
+    return String((await state()).state.key || "").startsWith(docId + "|");
+  }, "the context on the new document", 30000);
   // The new document's context read can land after the pick and reset the
   // action to the context's first one: pick again until it holds.
   await until(async () => {
@@ -155,10 +169,14 @@ async function placeCase(w, h) {
   const before = await send({ cmd: "inspect", document_id: docId });
   const item = L.items[0];
   await send({ cmd: "click", attr: "data-lib", value: item.asset_id });
-  const after = await until(async () => {
+  // The layer can show before its History state is read back: wait for
+  // both, then read once more if only the layer came.
+  let after = await until(async () => {
     const x = await send({ cmd: "inspect", document_id: docId });
-    return x.layers.length > before.layers.length ? x : null;
-  }, "the placed layer", 30000);
+    return x.layers.length > before.layers.length && x.history_count > before.history_count ? x : null;
+  }, "the placed layer", 60000).catch(() => null);
+  if (!after) after = await send({ cmd: "inspect", document_id: docId });
+  if (after.layers.length <= before.layers.length) throw new Error("timed out: the placed layer");
   const layer = after.layers.find((l) => l.fields && l.fields.kind === "library");
   const size = item.size || null;
   const b = layer && layer.bounds;
@@ -229,7 +247,13 @@ const CASES = [
     free: true,
     run: async () => {
       await send({ cmd: "closedoc", all: true }).catch(() => null);
-      await send({ cmd: "view", name: "main", action: "library" });
+      // Closing documents re-reads the context, which can reset the action
+      // after the pick: pick again until Open from Library holds.
+      await until(async () => {
+        await send({ cmd: "view", name: "main", action: "library" });
+        await sleep(1200);
+        return (await state()).state.action === "library";
+      }, "Open from Library picked", 30000);
       const all = await until(async () => {
         const x = await lib();
         return x && x.state === "ready" ? x : null;
@@ -301,7 +325,11 @@ const CASES = [
         const s = await state();
         return s.state.refs > before ? s : null;
       }, "the reference added", 30000);
-      return { ok: after.state.refs === before + 1 && !after.model.composer.library, res: { mode: L && L.mode, refs: after.state.refs } };
+      const ok = after.state.refs === before + 1 && !after.model.composer.library;
+      // Take the reference off again: a reference left in the composer
+      // blocks the text-only trained cases after this one.
+      await clearRefs();
+      return { ok, res: { mode: L && L.mode, refs: after.state.refs } };
     }
   },
   {
@@ -335,6 +363,7 @@ const CASES = [
     max_cu: 15,
     run: async () => {
       await send({ cmd: "closedoc", all: true }).catch(() => null);
+      await clearRefs();
       await send({ cmd: "view", name: "main", action: "create" });
       await send({ cmd: "runwith", model_id: BASES.flux1.lora });
       await send({ cmd: "prompt", text: "a small wooden lighthouse figurine on a table" });
@@ -356,6 +385,9 @@ const CASES = [
       await send({ cmd: "view", name: "main", action: "replace" });
       await send({ cmd: "runwith", model_id: b.lora });
       await send({ cmd: "prompt", text: "a brass lantern" });
+      // One take, as the header says (the edit lane's default is two).
+      await send({ cmd: "pop", kind: "takes" });
+      await send({ cmd: "click", attr: "data-value", value: "1" });
       const r = await runComposer({ max_cu: 35 }, docId);
       if (!r.ok || PRICE_ONLY) return { ok: r.ok, res: { route: b.route, ...r.out } };
       return { ok: !!r.layer && trainedFieldsOk(r.layer.fields, b.base, [b.lora]), res: { route: b.route, ...r.out } };
@@ -371,6 +403,7 @@ const CASES = [
       const styleId = arg("--stack-style", null);
       if (!styleId) return { skip: "no project trained style given (--stack-style <id>): the signed-in project had none in M7" };
       await send({ cmd: "closedoc", all: true }).catch(() => null);
+      await clearRefs();
       await send({ cmd: "view", name: "main", action: "create" });
       await send({ cmd: "pop", kind: "style" });
       await send({ cmd: "click", attr: "data-value", value: styleId });
