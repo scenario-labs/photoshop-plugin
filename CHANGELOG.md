@@ -4,6 +4,17 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## Unreleased
 
+### Fixed
+
+Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures), *not verified live*.
+
+- Extend canvas: the new frame shows through an eased band inside the original (6% of its short side, at least the overlap) instead of a 32 px ramp, and on models that take a mask the frame's tone along the old edge is matched to the original's (a `-landed.png` copy lands; the downloaded take is kept). Past the band the original is untouched.
+- Extend canvas checks read across the old edge: **Step at the old edge** and **Repeated detail past the old edge** (a feature of the original drawn again, as the doubled sun of a live run).
+- Replace inside: a lighter or darker patch just inside the selection edge is flagged (**Lighter patch at the selection edge**, **Darker patch at the selection edge**). The seam ring outside the selection could not see it.
+- The Takes card shows **Edge may show** for those badges; before, a take with a visible edge showed no badge.
+- The run card shows the charged price, else the price waiting for approval after a price change on upload, else the quote. It kept the first quote.
+- Jobs and its popover name video jobs (Animate, Frame to layer) "Video", not "Image".
+
 ### Documentation
 
 - README rewritten for people installing the plugin: what it does, install from a built `.ccx`, a first generation, and links to the guides. The build-by-build technical status moved to `docs/STATUS.md`.

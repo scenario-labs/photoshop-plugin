@@ -240,19 +240,40 @@ function expandEditMask(box, outW, outH, old, sides, overlap) {
   });
 }
 
-// The placement mask: the new area, then a ramp across the overlap.
-function expandPlacementMask(box, old, sides, overlap) {
+// How far the redrawn frame shows through inside the original, in document
+// px: the overlap, and at least 6% of the original's short side (at most a
+// quarter of it). Two live runs (2026-10-20) with a 32 px ramp on a 1536 px
+// image showed a step where the old edge was.
+function blendWidth(old, overlap) {
+  var short = Math.min(old.width, old.height);
+  var w = Math.max(overlap || 0, Math.round(short * 0.06));
+  return Math.max(1, Math.min(w, Math.round(short / 4)));
+}
+
+// 1 at the old edge to 0 at `blend` px inside, eased at both ends so the
+// gradient has no visible start or end.
+function blendRamp(d, blend) {
+  if (d === 0) return 1;
+  if (d >= blend) return 0;
+  var t = d / blend;
+  return 1 - t * t * (3 - 2 * t);
+}
+
+// The placement mask: the new area, then an eased ramp across the blend
+// band inside the original (blend defaults to the overlap). The original
+// is untouched past the band: the mask there is 0.
+function expandPlacementMask(box, old, sides, overlap, blend) {
+  var b = blend || overlap;
   var w = Math.round(box.width);
   var h = Math.round(box.height);
   var f = expandField({ left: box.left, top: box.top, width: w, height: h }, w, h, old, sides, function (d) {
-    if (d === 0) return 255;
-    if (d >= overlap) return 0;
-    return Math.round(255 * (1 - d / overlap));
+    return Math.round(255 * blendRamp(d, b));
   });
   return { left: Math.round(box.left), top: Math.round(box.top), width: w, height: h, data: f.data };
 }
 
-// The band where the seam check runs: inside the original, within the overlap.
+// The band where the seam check runs: inside the original, within
+// `overlap` px of the old edge (the runner passes the blend width).
 function expandBand(box, outW, outH, old, sides, overlap) {
   return expandField(box, outW, outH, old, sides, function (d) {
     return d > 0 && d < overlap ? 255 : 0;
@@ -319,6 +340,8 @@ module.exports = {
   placementMask: placementMask,
   expandEditMask: expandEditMask,
   expandPlacementMask: expandPlacementMask,
+  blendWidth: blendWidth,
+  blendRamp: blendRamp,
   expandBand: expandBand,
   expandInput: expandInput,
   addAlpha: addAlpha,

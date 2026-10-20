@@ -490,11 +490,15 @@ test("a reference and a different price after upload: the run waits for approval
   assert.equal(mock.paidCalls.length, 0);
   assert.equal(mock.uploads.length, 2);
   assert.equal(app.ledger.all()[0].state, "awaiting_approval");
+  // The run card shows the price waiting for approval, not the first quote
+  // (live on New angle: the card kept 1 CU after the price changed to 6).
+  await waitFor(() => app.controller.model().card && /5 CU/.test(app.controller.model().card.sub), { label: `the run card at the new price (now ${JSON.stringify(app.controller.model().card)})` });
   doc.byId("confirm-ok").click();
   await landed(app);
   assert.equal(mock.paidCalls.length, 1);
   assert.deepEqual(mock.paidCalls[0].body.referenceImages, [mock.uploads[1].id]);
   assert.equal(app.ledger.all()[0].cu_quoted, "5");
+  await waitFor(() => app.controller.model().card && app.controller.model().card.sub === "GPT Image 2.5 Flare · " + app.ledger.all()[0].cu_charged + " CU", { label: `the takes card at the charged price (now ${JSON.stringify((app.controller.model().card || {}).sub)})` });
   const d = ps.doc(7);
   assert.equal(d.layers[d.layers.length - 1].name, "Background");
   assert.equal(d.layers[0].kind, "group", "two takes above the layer");
