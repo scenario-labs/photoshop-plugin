@@ -4,9 +4,27 @@ The Scenario plugin for Photoshop ships a small local Scenario MCP server, `scen
 
 The server runs on this computer only. It talks to the panel over a local link (`localhost`), never over the network, and it holds no Scenario key: generations run through the plugin with the account you signed in with.
 
-The full tool reference is [spec/MCP.md](spec/MCP.md).
+The full tool reference is [spec/MCP.md](spec/MCP.md). Claims carry how they were checked: *verified live* (in Photoshop 27.11 on macOS), *tested automated* or *not tested*.
 
-> **Draft.** Screenshots marked `[screenshot: ...]` are placeholders until the illustrated docs pass.
+![Claude Code creates a poster image; the spend card and the proposal card are approved in the panel](media/video/agent-scenario-mcp.gif)
+
+*Claude Code 2.1.304 run headless with this helper over stdio, asked to make a travel poster image in the open document. Both cards were approved in the panel. [MP4](media/video/agent-scenario-mcp.mp4). Verified live.*
+
+| Client | How it was checked |
+|---|---|
+| Claude Code | *Verified live*: setup command, then real Claude Code sessions that read the document, priced, spent through the approval card and landed through the proposal card. The `claude mcp add` registration step is *tested automated* (stand-in CLI); the live runs used `--config` with a temporary file |
+| Codex | *Tested headless*: the setup command through the real `codex` CLI with a temporary `CODEX_HOME`. No Codex session against Photoshop was run |
+| Cursor | Config file writing *tested automated*. Cursor itself *not tested* (not installed) |
+| Claude Desktop | Config file writing *tested automated*. The `.mcpb` extension *not tested* |
+| Windows | *Not tested* |
+
+> **Development build.** The helper is not on npm yet, so the commands that read `npx -y @scenario-labs/photoshop-mcp@X.Y.Z` do not work until it is published. From a checkout of this repository, use `node helper/bin/scenario-photoshop.js` in their place and add `--local`, which registers this checkout's helper with your Node:
+>
+> ```sh
+> pbpaste | node helper/bin/scenario-photoshop.js setup claude-code --local --token-stdin
+> ```
+>
+> (after **Copy pairing token** in the panel). This is the route the live runs used.
 
 ## Before you start
 
@@ -16,15 +34,13 @@ The full tool reference is [spec/MCP.md](spec/MCP.md).
 
 ## Connect a client
 
-1. In the panel, open **Settings > Agents** and go to **Connect a client**.
+1. In the panel, open **Settings** and go to **Connect an AI agent > Connect a client**.
 
-   [screenshot: m8-connect-open.png]
+   <img src="media/screens/connect-a-client.png" width="320" alt="Connect a client: Claude Code, Codex, Cursor and Claude Desktop rows with their buttons and status, then Other clients">
 
 2. Find your client's row and use its button (details per client below). The buttons that hold the pairing token clear the clipboard 60 seconds after copying.
 3. Restart the client so it starts the helper.
 4. Ask the agent something simple, such as "What document is open in Photoshop?". The row turns to **Connected, last call just now**.
-
-   [screenshot: m8-connect-connected.png]
 
 ### Claude Code
 
@@ -39,13 +55,9 @@ The setup command:
 - saves the pairing token in `~/.config/scenario-photoshop/token`, readable by your account only (file mode 600, folder 700);
 - registers the server with `claude mcp add --scope user`, so it is available in every project. The entry it adds holds no token.
 
-[screenshot: m8-connect-claude-code.png]
-
 ### Codex
 
 Click **Copy command** on the Codex row and run it in a terminal. It does the same as for Claude Code, with `setup codex`, and registers the server with `codex mcp add scenario-photoshop`. The entry in `~/.codex/config.toml` holds no token.
-
-[screenshot: m8-connect-codex.png]
 
 ### Cursor
 
@@ -58,8 +70,6 @@ Click **Copy command** on the Cursor row and run it in a terminal. The setup com
 
 The entry holds no token: the helper reads the token file.
 
-[screenshot: m8-connect-cursor.png]
-
 ### Claude Desktop
 
 1. Click **Get the extension**. It opens the release page of `scenario-photoshop-X.Y.Z.mcpb`.
@@ -68,7 +78,7 @@ The entry holds no token: the helper reads the token file.
 
 If you prefer the token file, **Copy setup command** gives the same terminal command as the other clients, with `setup claude-desktop`. It writes the entry into Claude Desktop's config file the way it does for Cursor.
 
-[screenshot: m8-connect-claude-desktop.png]
+The release page and the `.mcpb` file come with the first published release; *not tested*.
 
 ### Other clients
 
@@ -80,14 +90,14 @@ If you prefer the token file, **Copy setup command** gives the same terminal com
 
 - The setup command reads the token from its environment, or from standard input with `--token-stdin`, never from its arguments, which other accounts on the same computer can list.
 - The pasted line stays in your shell history. To keep it out, pipe the token in instead, for example after **Copy token**: `pbpaste | npx -y @scenario-labs/photoshop-mcp@X.Y.Z setup claude-code --token-stdin`.
-- Clients set up with the setup command share the token file. After **Reset** (Settings > Agents > Details, under Pairing token), run one new setup command and every one of them reconnects.
+- Clients set up with the setup command share the token file. After **Reset** (Settings > Connect an AI agent > Details, under Pairing token), run one new setup command and every one of them reconnects.
 - On Windows the buttons give the PowerShell form: `$env:SCENARIO_PHOTOSHOP_TOKEN='<token>'; npx -y @scenario-labs/photoshop-mcp@X.Y.Z setup <client>; Remove-Item Env:SCENARIO_PHOTOSHOP_TOKEN`.
 
 ## What agents may do
 
-**Settings > Agents** holds three switches. All are off by default.
+**Settings > Connect an AI agent** holds three switches. All are off by default.
 
-[screenshot: m8-agents-settings.png]
+<img src="media/screens/settings-agents.png" width="320" alt="The agent switches, No-spend mode and Agent spending in Settings">
 
 | Switch | Off | On |
 |---|---|---|
@@ -97,31 +107,29 @@ If you prefer the token file, **Copy setup command** gives the same terminal com
 
 Agents change only the document in front. The plugin never brings another document forward for an agent; a proposal for another document waits until you bring it forward.
 
-**No-spend** refuses every agent request that would spend credits, whatever the other settings say.
+**No-spend mode** refuses every agent request that would spend credits, whatever the other settings say.
 
 ## Approvals
 
 ### Spending credits
 
-An agent first prices a run (free), then asks to run it. The panel shows a card above the prompt bar: which client asks, what it will make and for which document, the prompt, the model and the price. **Approve** runs it; **Decline** tells the agent and spends nothing.
+An agent first prices a run (free), then asks to run it. The panel shows a card above the prompt bar: which client asks, what it will make with which model and how many takes, the prompt and the price on the Approve button. **Approve** runs it; **Decline** tells the agent and spends nothing. *Verified live* (approve and decline).
 
-[screenshot: m8-agent-spend-card.png]
+<img src="media/screens/agent-spend-card.png" width="320" alt="claude-code wants to: Create image with GPT Image 2.5 Flare, 1 take, the prompt, asked through the Scenario MCP, Decline and Approve 12 CU">
 
 The agent must send back the exact price it was quoted. If the price changed, or the quote is older than its time limit, the request is refused before anything is spent and the agent prices it again. A card left unanswered expires after 10 minutes.
 
-**Agent spending** in Settings > Agents changes this for one client session at a time: **Ask each time** (the default) or **Allow**, with a limit per call and a total for the session. **End** stops it at once. The activity log lists every agent request, approved, declined or refused.
+**Agent spending** in Settings changes this for one client session at a time: **Ask each time** (the default) or **Allow**, with a limit per call and a total for the session. **End** stops it at once. The activity log lists every agent request, approved, declined or refused.
 
 ### Sending pixels to Scenario
 
-Before an agent sends pixels from a document to Scenario for the first time in a session, the panel asks: "Allow <client> to send pixels from <document> to Scenario for this session?". Declining tells the agent, and nothing is uploaded.
-
-[screenshot: m8-agent-upload-card.png]
+Before an agent sends pixels from a document to Scenario for the first time in a session, the panel asks: "Allow <client> to send pixels from <document> to Scenario for this session?". Declining tells the agent, and nothing is uploaded. *Tested automated*; an approved upload *verified live* through the development loop, the card itself not seen on screen live.
 
 ### Landing results
 
-With **Agents may modify the document** off, each result the agent wants to land shows a proposal card: the preview, the target document and position, and the History name. **Apply** lands it as one History step; **Dismiss** drops it. A proposal expires after 10 minutes or when the document changes.
+With **Agents may modify the document** off, each result the agent wants to land shows a proposal card: the client, the model and the target document, the History name and the time left. The card shows no picture of the result in this build. **Apply** lands it as one History step; **Dismiss** drops it. A proposal expires after 10 minutes or when the document changes. *Verified live* (Apply).
 
-[screenshot: m8-agent-proposal-card.png]
+<img src="media/screens/agent-proposal-card.png" width="320" alt="claude-code proposes a change: GPT Image 2.5 Flare result into Travel poster, History Scenario agent: Place image, expires in 10 min, Dismiss and Apply">
 
 Results always land as layers with their Scenario metadata (model, prompt, job), the same as results you make yourself, and they show in **Jobs**, marked with the client's name.
 
@@ -148,7 +156,7 @@ A typical edit: `document_summary`, `set_selection`, `capture_reference`, `uploa
 | `VersionMismatch` | The plugin and the helper versions differ. Connect a client shows the command for the new version |
 | `SwitchOff`, or a proposal card instead of a change | Turn on **Agents may modify the document**, or use **Apply** on the card |
 | `DocumentNotActive` | Bring the document forward in Photoshop, then ask the agent to retry |
-| `NoSpend` | Turn off **No-spend** in Settings > Agents |
+| `NoSpend` | Turn off **No-spend mode** in Settings |
 | `QuoteExpired` or `CostMismatch` | Nothing was spent. The agent prices the run again |
 | `SpendDeclined` or `UploadDeclined` | You declined the card. Nothing was spent or sent |
 | `npx` not found | Install Node.js 20 or later, or use Claude Desktop's extension |
