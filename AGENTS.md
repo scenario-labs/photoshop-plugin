@@ -43,8 +43,8 @@ node test/run.js setup # only the test files whose path contains "setup"
 npm run lint           # node --check, JSON, no em dashes, no machine paths or addresses, UXP rules
 npm run build          # plugin/dist/main.js (release bundle)
 npm run build:dev      # development bundle (adds the dev token import, below)
-npm run package        # build/scenario-photoshop-0.7.0.ccx
-npm run package:dev    # build/scenario-photoshop-0.7.0-dev.ccx
+npm run package        # build/scenario-photoshop-0.7.1.ccx
+npm run package:dev    # build/scenario-photoshop-0.7.1-dev.ccx
 ```
 
 `npm test` and `npm run lint` pass on Node 20 and 22 on macOS (*tested automated*). CI runs them on Node 20 and 22, on Ubuntu and macOS.
@@ -77,7 +77,7 @@ npm run package:dev    # build/scenario-photoshop-0.7.0-dev.ccx
 1. `npm run package:dev`.
 2. Install the package with Adobe's installer (macOS path shown; the plugin loads at the next Photoshop launch). The installer needs an absolute path: a relative one fails with status -160 (*verified live* on 27.11).
    ```sh
-   "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/build/scenario-photoshop-0.7.0-dev.ccx"
+   "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/build/scenario-photoshop-0.7.1-dev.ccx"
    ```
    Installing a newer version over an older one (0.2.0-dev over 0.1.0-dev) reported success and kept the data folder and secure storage; the new version loaded after a Photoshop restart (*verified live* on 27.11). When the same version is already installed, the installer reports success but keeps the old copy; `--remove Scenario` removes it, and also clears the plugin's data folder and secure storage (saved keys, the pairing token and the job records), so the person signs in again. Bump the version instead when keys should stay.
 3. `node test/live/m1-live-check.js`, then start or restart Photoshop. The script writes a fresh token as `dev-pairing-token` into the plugin's data folder; a development build adopts it at startup and deletes the file, so no one has to open the panel. The script then runs the helper with that token and calls `scenario_status` until Photoshop answers. It prints the status (document titles hidden unless `--show-titles`) and the `Host`, `Origin` and `User-Agent` the plugin's WebSocket sent.

@@ -4,7 +4,7 @@ This page describes what the Scenario plugin for Adobe Photoshop and its local S
 
 Status: written against the v1 specification ([docs/spec/SPEC.md](docs/spec/SPEC.md)). It is checked against the released build before each release. It sits at the root of the repository so the panel's About link points to one short path.
 
-## In the current development build (0.7.0)
+## In the current development build (0.7.1)
 
 This build does less than the release described below. Each line is marked *tested automated* (Node test suite with a mock of Scenario's API and a fake Photoshop) or *not tested* in Photoshop.
 

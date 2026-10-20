@@ -4,6 +4,15 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## Unreleased
 
+## 0.7.1 - 2026-10-20
+
+### Fixed
+
+- Replace inside with a reference shows one line under the refs row: "Use an object or a style as the reference. A whole scene can be copied in."
+- The small result note reads "Result is 2048 px for the 2304 px area".
+- Library names, the place note and run names are cut on a word boundary with an ellipsis, never inside a word.
+- Recent comes back after the panel reloads while Photoshop keeps running, also for a document that was never saved.
+
 ## 0.7.0 - 2026-10-20
 
 The creation panel, the agent tools and the trained and Library work in one build.
