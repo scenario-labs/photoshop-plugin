@@ -73,6 +73,9 @@ var TEXT = {
   base_note: "A trained style runs on the model it was trained on. Pick No style or Match an image in the Style chip to use another model.",
   match_note: "The picture goes with the run as its style reference; the prompt and the chips stay in charge.",
   ref_hint: "Selection, layer or file",
+  // Replace inside with a reference (SPEC 3.7, refs row): a
+  // reference of the whole scene is drawn into the selection as it is.
+  replace_ref_note: "Use an object or a style as the reference. A whole scene can be copied in.",
   empty_mid: "Takes and recent runs on this document show here.",
   declined: "Declined. The agent was told, and nothing was spent.",
   need_select: "Type what to select",
@@ -2202,7 +2205,8 @@ function createController(o) {
       items: items,
       add: !!a.refs && (most === null || sent < most),
       add_label: count ? "" : "Reference",
-      hint: drefs.length ? "" : st.refs.length === 1 ? st.refs[0].label : st.refs.length > 1 ? st.refs.length + " references" : items.length ? "" : TEXT.ref_hint
+      hint: drefs.length ? "" : st.refs.length === 1 ? st.refs[0].label : st.refs.length > 1 ? st.refs.length + " references" : items.length ? "" : TEXT.ref_hint,
+      note: st.action === "replace" && sent > 0 ? TEXT.replace_ref_note : null
     };
   }
 

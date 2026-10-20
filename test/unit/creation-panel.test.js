@@ -253,9 +253,15 @@ test("F1 references: Replace inside on Precise Edit shows the + Reference row ab
   assert.equal(find(doc, "data-pop", "addref").textContent, "Reference");
   const hint = () => doc.byId("refs").children.filter((e) => e.className === "hint").map((e) => e.textContent).join("");
   assert.equal(hint(), "Selection, layer or file");
+  assert.equal(doc.shown("refs-note"), false, "no note before a reference is attached");
   await popOpen(doc, "addref");
   menuValues(doc).find((e) => e.getAttribute("data-value") === "layer").click();
   await waitFor(() => findAll(doc, "data-ref").length === 1, { label: "layer reference added" });
+  // One short line under the row: a whole-scene reference is copied in.
+  await waitFor(() => doc.shown("refs-note"), { label: "the reference note shows" });
+  assert.equal(doc.text("refs-note"), "Use an object or a style as the reference. A whole scene can be copied in.");
+  const htmlNote = html.indexOf('id="refs-note"');
+  assert.ok(htmlNote > html.indexOf('id="refs"') && htmlNote < html.indexOf('id="pbox"'), "the note sits under the refs row, above the prompt");
   doc.type("prompt", "A red sail");
   await button(doc, "Replace inside · 3 CU");
   doc.byId("go").click();

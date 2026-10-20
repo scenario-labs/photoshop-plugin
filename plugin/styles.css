@@ -1623,9 +1623,18 @@ body {
   color: var(--uxp-host-text-color-secondary);
 }
 
+/* One line under the refs row (Replace inside with a reference). */
+.cp .refs-note {
+  display: none;
+  margin: 2px 0 2px 0;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
 /* Text in the refs row was seen drawn through an open popover on 27.11. */
 .cp .composer.covered .ref-add span,
-.cp .composer.covered .refs .hint {
+.cp .composer.covered .refs .hint,
+.cp .composer.covered .refs-note {
   color: transparent;
 }
 

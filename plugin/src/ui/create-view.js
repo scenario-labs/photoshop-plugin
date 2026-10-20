@@ -433,6 +433,11 @@ function createCreateView(doc, ctl, o) {
     if (!box) return;
     clear(box);
     show(box, !!r);
+    var note = byId("refs-note");
+    if (note) {
+      note.textContent = (r && r.note) || "";
+      show(note, !!(r && r.note), "block");
+    }
     if (!r) return;
     var rest = r.hint || "";
     var hint = el("span", "hint", rest);
