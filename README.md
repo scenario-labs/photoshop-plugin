@@ -2,7 +2,7 @@
 
 Generate, edit, upscale and cut out with [Scenario](https://www.scenario.com) models without leaving Photoshop. Select something, pick an action, see its price on the button, click. The result lands as a layer you can compare, keep or undo in one step.
 
-![The Scenario panel next to a café scene where the cup was replaced by a glass of lemonade](docs/media/hero.jpg)
+![Photoshop with the Scenario panel docked: a giant koi kite has just landed in the sky of a painted cliff town, and the panel shows its two takes](docs/media/hero.jpg)
 
 ![A selection edit from the panel: select the cup, describe the change, see the price, click](docs/media/video/selection-edit.gif)
 

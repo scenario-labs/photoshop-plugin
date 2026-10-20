@@ -59,7 +59,7 @@ Draw a selection with any Photoshop tool. The context card reads "Selection W ×
 
 **Replace inside**: describe what goes inside the selection. Default model Ideogram 4.5 Precise Edit (Inside selection) or GPT Image 2.5 Flare (Bolder), see [the next section](#selection-edits-inside-selection-or-bolder).
 
-![Before, Inside selection, Bolder: a coffee cup replaced by a glass of iced lemonade](media/before-after/replace-inside-cafe.jpg)
+![A patch of empty sky selected over a painted cliff town, then a giant koi kite inside it; at 100% the town outside the selection is unchanged](media/before-after/replace-inside-koi-kite.jpg)
 
 **Remove**: removes what is inside the selection and fills it with what should be behind. No prompt needed (a built-in one is sent).
 
