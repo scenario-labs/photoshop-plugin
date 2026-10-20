@@ -161,6 +161,9 @@ function start(app, hostRequire, o) {
   // ---- M6 agent checks ----
 
   var agentDocs = [];
+  // Cards a decide step answered: a card stays listed for a moment after its
+  // answer, and a later decide step must wait for the next one.
+  var decided = {};
 
   function trimJson(v, max) {
     var text = JSON.stringify(v, function (k, x) {
@@ -317,6 +320,7 @@ function start(app, hostRequire, o) {
           var list = app.approvals.showing();
           for (var c = 0; c < list.length; c++) {
             var x = list[c];
+            if (decided[x.id]) continue;
             if (step.kind && x.kind !== step.kind) continue;
             if (step.client && !new RegExp(step.client, "i").test(String(x.client_name))) continue;
             card = x;
@@ -341,6 +345,11 @@ function start(app, hostRequire, o) {
           else await app.approvals.decline(card.id);
           row.path = "approvals";
         }
+        decided[card.id] = true;
+        var gone = host.timers.now() + 5000;
+        while (host.timers.now() < gone && app.approvals.showing().some(function (y) {
+          return y.id === card.id;
+        })) await sleep(host, 100);
         row.action = step.action;
         return row;
       }

@@ -79,7 +79,7 @@ function takeLock() {
   if (!LOCK) throw new Error("--lock <file> is required");
   try {
     const held = fs.readFileSync(LOCK, "utf8").trim();
-    if (held && !held.startsWith(NAME)) throw new Error(`the lock is held: ${held}`);
+    if (held && !held.includes(NAME)) throw new Error(`the lock is held: ${held}`);
   } catch (e) {
     if (e.code !== "ENOENT") throw e;
   }
@@ -87,7 +87,45 @@ function takeLock() {
   fs.writeFileSync(LOCK, `photoshop ${NAME} ${hm}\n`);
 }
 
+// A Photoshop alert or dialog (a window with the AXDialog subrole), read
+// through System Events without activating Photoshop. Returns its text, or
+// null. Never presses anything.
+let blocked = null;
+function alertText() {
+  const script = [
+    'tell application "System Events" to tell process "Adobe Photoshop 2026"',
+    'set out to ""',
+    "repeat with w in windows",
+    'if subrole of w is "AXDialog" then',
+    "repeat with e in (static texts of w)",
+    "try",
+    "set out to out & (value of e as text) & \" \"",
+    "end try",
+    "end repeat",
+    'if out is "" then set out to "(a dialog with no text)"',
+    "end if",
+    "end repeat",
+    "return out",
+    "end tell"
+  ];
+  const r = spawnSync("osascript", script.flatMap((l) => ["-e", l]), { encoding: "utf8", timeout: 15000 });
+  const t = (r.stdout || "").trim();
+  return t || null;
+}
+
+function checkAlert() {
+  const t = alertText();
+  if (t) {
+    blocked = t;
+    throw new Error("BLOCKED: " + t);
+  }
+}
+
 function releaseLock() {
+  if (blocked) {
+    fs.writeFileSync(LOCK, `photoshop ${NAME} ${new Date().toTimeString().slice(0, 5)} BLOCKED: a Photoshop alert is open: "${blocked}". A person must dismiss it.\n`);
+    return;
+  }
   try {
     const held = fs.readFileSync(LOCK, "utf8");
     if (held.includes(NAME)) fs.renameSync(LOCK, `${LOCK}.released-m6-${new Date().toTimeString().slice(0, 5).replace(":", "")}`);
@@ -160,8 +198,10 @@ async function agent(id, steps, timeoutMs = 120000) {
   }
   fs.writeFileSync(path.join(DATA, "dev-live-run.json"), JSON.stringify({ id, agent: { steps } }));
   const until = Date.now() + timeoutMs;
+  let n = 0;
   while (Date.now() < until) {
     await sleep(500);
+    if (++n % 8 === 0) checkAlert();
     let text = null;
     try {
       text = fs.readFileSync(path.join(dir, "result.json"), "utf8");
@@ -210,6 +250,10 @@ async function pushOwn(dest, keep) {
 
 async function restore(dest, keep) {
   for (const f of SAVED) fs.copyFileSync(path.join(keep, path.basename(f)), path.join(dest, f));
+  if (blocked) {
+    log("restored the installed files; no reload while an alert is open");
+    return;
+  }
   try {
     await uiSend({ cmd: "reload" });
     await sleep(1500);
@@ -258,7 +302,7 @@ const EVENT_CASES = {
   subtractFrom: [{ _obj: "subtractFrom", _target: SEL, to: { _obj: "rectangle", top: PX(10), left: PX(10), bottom: PX(20), right: PX(20) } }],
   inverse: [{ _obj: "inverse" }, { _obj: "inverse" }],
   align: [{ _obj: "align", _target: LAYER, using: { _enum: "alignDistributeSelector", _value: "ADSCentersH" }, alignToCanvas: true }],
-  applyImage: [{ _obj: "applyImage", with: { _obj: "calculation", to: { _ref: [{ _ref: "channel", _enum: "channel", _value: "RGB" }, { _ref: "layer", _enum: "ordinal", _value: "targetEnum" }] }, calculation: { _enum: "calculationType", _value: "multiply" }, opacity: { _unit: "percentUnit", _value: 20 } } }],
+  applyImage: [{ _obj: "applyImage", with: { _obj: "calculation", to: { _ref: [{ _ref: "channel", _enum: "channel", _value: "RGB" }, { _ref: "layer", _name: "Background" }] }, calculation: { _enum: "calculationType", _value: "multiply" }, opacity: { _unit: "percentUnit", _value: 20 } } }],
   minimum: [{ _obj: "minimum", radius: PX(1) }],
   maximum: [{ _obj: "maximum", radius: PX(1) }],
   displace: null,
@@ -376,15 +420,17 @@ async function measure() {
   // Each case starts on a pixel layer of its own ("m6 pixels", a copy of
   // the Background): a new layer is empty, and a transform or a filter on
   // an empty layer is an error (the first run met it as a modal alert).
-  const events = [{ do: "call", tool: "execute_batchplay", args: { document_id: "$doc0", descriptors: [{ _obj: "duplicate", _target: [{ _ref: "layer", _name: "Background" }], name: "m6 pixels" }], label: "m6 pixels" }, label: "setup" }];
-  const onPixels = { _obj: "select", _target: [{ _ref: "layer", _name: "m6 pixels" }], makeVisible: false };
+  const events = [];
+  // A fresh, visible pixel layer per case: earlier cases hide, merge or
+  // rename layers.
+  const onPixels = { _obj: "duplicate", _target: [{ _ref: "layer", _name: "Background" }] };
   for (const [ev, descs] of Object.entries(EVENT_CASES)) {
     if (!descs) continue;
     events.push({ do: "call", tool: "execute_batchplay", args: { document_id: "$doc0", descriptors: [...(["make", "mergeVisible", "get"].includes(ev) ? [] : [onPixels]), ...(["expand", "contract", "feather", "smoothness", "intersectWith", "subtractFrom", "inverse", "crop", "fill"].includes(ev) ? [{ _obj: "set", _target: SEL, to: { _obj: "rectangle", top: PX(60), left: PX(60), bottom: PX(300), right: PX(380) } }] : []), ...descs], label: "m6 " + ev }, label: ev, max_chars: 600 });
   }
   const r3 = await agent("m6-measure-3", [{ do: "front", index: 0 }, ...events, { do: "inspect", index: 0 }], 300000);
   out.steps.events = r3;
-  const evRows = r3.steps.filter((s) => s.do === "call").map((s) => ({ event: s.label, outcome: s.error ? "error: " + s.error : s.out.result.outcome, history: s.out ? s.out.result.history_state : null, detail: s.out && s.out.result.error ? s.out.result.error : null }));
+  const evRows = r3.steps.filter((s) => s.do === "call").map((s) => ({ event: s.label, outcome: s.error ? "error: " + s.error : s.out.result.outcome || ((/"outcome":"(\w+)"/.exec(s.out.result.head || "") || [])[1]), history: s.out ? s.out.result.history_state : null, detail: s.out && s.out.result.error ? s.out.result.error : null }));
   out.events = evRows;
   log(`events: ${evRows.filter((r) => r.outcome === "committed").length} committed of ${evRows.length}; not committed: ${evRows.filter((r) => r.outcome !== "committed").map((r) => r.event).join(", ") || "none"}`);
   // The target-active rows of SPEC 12.1, with B's real ids, A in front.
@@ -393,18 +439,22 @@ async function measure() {
   const layerB = r1.steps[2].out.layers[0].id;
   const cases = [...REFUSED_LIVE, ...targetActive(docAId, docBId, layerB)];
   const r4 = await agent("m6-measure-4", [
+    { do: "front", index: 1 },
+    { do: "inspect", index: 1 },
     { do: "front", index: 0 },
     { do: "inspect", index: 0 },
-    { do: "inspect", index: 1 },
     ...cases.map(([label, d, ok]) => ({ do: "call", tool: "execute_batchplay", args: { document_id: "$doc0", descriptors: d, label: "m6 " + label }, label, expect_error: ok ? null : "CommandRefused", max_chars: 400 })),
     { do: "inspect", index: 0 },
+    { do: "front", index: 1 },
     { do: "inspect", index: 1 },
+    { do: "front", index: 0 },
     { do: "activity" }
   ], 240000);
   out.steps.refused = r4;
   out.cases = r4.steps.filter((s) => s.do === "call").map((s) => ({ case: s.label, expected: s.expect_error ? "refused" : "runs", outcome: s.error ? s.error.split(":")[0] : s.out && s.out.result ? s.out.result.outcome || "ran" : "ran", ok: s.expect_error ? !!s.expected : !s.error }));
   const ins = r4.steps.filter((s) => s.do === "inspect");
-  out.history_unchanged = { a_count: [ins[0].out.history.count, ins[2].out.history.count], b: [JSON.stringify(ins[1].out.history), JSON.stringify(ins[3].out.history)], b_unchanged: JSON.stringify(ins[1].out.history) === JSON.stringify(ins[3].out.history) };
+  const h = (k) => (ins[k] && ins[k].out ? ins[k].out.history_detail : null);
+  out.history_unchanged = { a: [h(1), h(2)], b: [h(0), h(3)], b_unchanged: JSON.stringify(h(0)) === JSON.stringify(h(3)) && !!h(0) };
   log(`cases: ${out.cases.filter((c) => c.ok).length} as expected of ${out.cases.length}; not as expected: ${out.cases.filter((c) => !c.ok).map((c) => c.case + "=" + c.outcome).join(", ") || "none"}; B History unchanged: ${out.history_unchanged.b_unchanged}`);
   const r5 = await agent("m6-measure-5", [{ do: "switches", set: { agents_may_modify: false } }, { do: "close" }]);
   out.steps.close = r5;
@@ -435,6 +485,21 @@ const SESSION_TOOLS = [
   "list_local_jobs"
 ];
 
+function declinePrompt(docId, stamp) {
+  return [
+    "You are checking the Scenario plugin for Photoshop through the scenario-photoshop tools. A test harness approves and declines the cards in the panel for the person; do not wait for a human in any other way.",
+    `Work only on Photoshop document ${docId} (title "Scenario M6 decline"), which is in front. Use exactly these steps, one tool call at a time:`,
+    "0. scenario_status. If it does not report the plugin as linked, call it again, up to 5 times, until it does.",
+    `1. set_selection on document ${docId} with ellipse [150, 170, 132, 132].`,
+    `2. capture_reference with document_id ${docId}, purpose "edit", source "selection", model_id "${FLARE}".`,
+    "3. upload_reference with that capture_id, then poll reference_upload_status for each reference_id every few seconds until every part is imported (stop after 5 minutes).",
+    `4. estimate_cost with model_id "${FLARE}", lane "edit", the capture_id, parameters {"prompt": "a green cube instead of the red ball", "quality": "low"}, takes 1.`,
+    `5. generate with lane "edit", the same model_id and parameters, the quote_id, approved_cost equal to cu_cost_exact exactly, idempotency_key "m6-exit-c-${stamp}". This request is expected to be declined.`,
+    "6. wait_for_job with timeout 60 until the status is final, then job_status for that local_id. Report the final status, the error and cu_charged.",
+    "Do not call any tool outside these steps."
+  ].join("\n");
+}
+
 function prompt(docId, stamp) {
   return [
     "You are checking the Scenario plugin for Photoshop through the scenario-photoshop tools. A test harness approves and declines the cards in the panel for the person; do not wait for a human in any other way.",
@@ -452,7 +517,8 @@ function prompt(docId, stamp) {
   ].join("\n");
 }
 
-async function session() {
+async function session(decline) {
+  const P = decline ? "m6-decline" : "m6-session";
   const out = (partial = { phase: "session", started_at: new Date().toISOString() });
   const stamp = Date.now().toString(36);
   const work = path.join(OUT, "session-config");
@@ -479,45 +545,53 @@ async function session() {
   if (fs.existsSync(tokenPath)) throw new Error("the plugin did not adopt dev-pairing-token");
   // 2. The document, the switches.
   fixture(path.join(DATA, "dev-live", "m6-fixture.png"), 512, 384);
-  const r1 = await agent("m6-session-1", [
+  const r1 = await agent(`${P}-1`, [
     { do: "switches", set: { agents_may_modify: true, agents_may_run_commands: false, active_document_only: true }, no_spend: false },
-    { do: "open", document: { width: 512, height: 384, fixture: "dev-live/m6-fixture.png", flatten: true }, name: "Scenario M6 session" },
+    { do: "open", document: { width: 512, height: 384, fixture: "dev-live/m6-fixture.png", flatten: true }, name: decline ? "Scenario M6 decline" : "Scenario M6 session" },
     { do: "inspect" }
   ]);
   out.prepare = r1;
   const docId = r1.steps[1].out.document_id;
   log(`session document ${docId}`);
   // 3. The decisions, through the dev entry, while Claude Code runs.
-  fs.writeFileSync(path.join(DATA, "dev-live-run.json"), JSON.stringify({ id: "m6-session-2", agent: { steps: [
-    { do: "decide", action: "approve", kind: "upload", wait_s: 600, label: "upload card" },
-    { do: "decide", action: "approve", kind: "spend", wait_s: 600, label: "spend card 1" },
-    { do: "decide", action: "decline", kind: "spend", wait_s: 900, label: "spend card 2" }
-  ] } }));
+  const decisions = decline
+    ? [{ do: "decide", action: "approve", kind: "upload", wait_s: 600, label: "upload card" }, { do: "decide", action: "decline", kind: "spend", wait_s: 600, label: "spend card (declined)" }]
+    : [{ do: "decide", action: "approve", kind: "upload", wait_s: 600, label: "upload card" }, { do: "decide", action: "approve", kind: "spend", wait_s: 600, label: "spend card 1" }, { do: "decide", action: "decline", kind: "spend", wait_s: 900, label: "spend card 2" }];
+  fs.writeFileSync(path.join(DATA, "dev-live-run.json"), JSON.stringify({ id: `${P}-2`, agent: { steps: decisions } }));
   const allowed = SESSION_TOOLS.map((t) => `mcp__scenario-photoshop__${t}`);
-  const transcript = path.join(OUT, "claude-session.jsonl");
-  const claudeArgs = ["-p", prompt(docId, stamp), "--mcp-config", mcpConfig, "--restricted", "--strict-mcp-config", "--allowedTools", allowed.join(","), "--disallowedTools", BUILTINS.join(","), "--output-format", "stream-json", "--verbose", "--max-turns", "60"];
+  const transcript = path.join(OUT, decline ? "claude-decline.jsonl" : "claude-session.jsonl");
+  const claudeArgs = ["-p", decline ? declinePrompt(docId, stamp) : prompt(docId, stamp), "--mcp-config", mcpConfig, "--restricted", "--strict-mcp-config", "--allowedTools", allowed.join(","), "--disallowedTools", BUILTINS.join(","), "--output-format", "stream-json", "--verbose", "--max-turns", "60"];
   out.claude = { args: claudeArgs.filter((a, i) => i !== 1).join(" ").slice(0, 2000), allowed_tools: SESSION_TOOLS };
   log("claude -p starts");
   const env = { ...process.env };
   delete env.SCENARIO_PHOTOSHOP_TOKEN;
   const t0 = Date.now();
   const code = await new Promise((resolve) => {
-    const c = spawn("claude", claudeArgs, { cwd: arg("--cwd", os.tmpdir()), env, stdio: ["ignore", fs.openSync(transcript, "w"), fs.openSync(path.join(OUT, "claude-session.stderr.txt"), "w")] });
+    const c = spawn("claude", claudeArgs, { cwd: arg("--cwd", os.tmpdir()), env, stdio: ["ignore", fs.openSync(transcript, "w"), fs.openSync(path.join(OUT, decline ? "claude-decline.stderr.txt" : "claude-session.stderr.txt"), "w")] });
     const kill = setTimeout(() => c.kill("SIGTERM"), 25 * 60 * 1000);
+    const watch = setInterval(() => {
+      const t = alertText();
+      if (t) {
+        blocked = t;
+        c.kill("SIGTERM");
+      }
+    }, 10000);
     c.on("exit", (n) => {
       clearTimeout(kill);
+      clearInterval(watch);
       resolve(n);
     });
   });
   out.claude.exit = code;
+  if (blocked) throw new Error("BLOCKED: " + blocked);
   out.claude.seconds = Math.round((Date.now() - t0) / 1000);
   const lines = fs.readFileSync(transcript, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l));
   const final = lines.filter((l) => l.type === "result").pop();
-  fs.writeFileSync(path.join(OUT, "claude-session.txt"), (final && final.result) || "(no result line)");
+  fs.writeFileSync(path.join(OUT, decline ? "claude-decline.txt" : "claude-session.txt"), (final && final.result) || "(no result line)");
   out.claude.tool_calls = lines.filter((l) => l.type === "assistant").flatMap((l) => (l.message.content || []).filter((c) => c.type === "tool_use").map((c) => c.name.replace("mcp__scenario-photoshop__", "")));
   log(`claude -p exit ${code} after ${out.claude.seconds} s; ${out.claude.tool_calls.length} tool calls`);
   // 4. The decisions' outcome, the document, then close.
-  const dir = path.join(DATA, "dev-live", "m6-session-2");
+  const dir = path.join(DATA, "dev-live", `${P}-2`);
   let decided = null;
   for (let i = 0; i < 120 && !decided; i++) {
     try {
@@ -527,16 +601,56 @@ async function session() {
     }
   }
   out.decisions = decided;
-  const r3 = await agent("m6-session-3", [{ do: "inspect" }, { do: "call", tool: "list_local_jobs", args: { filter: "agents", limit: 5 }, session: "m6-check", client_name: "m6 check" }, { do: "activity" }]);
+  const r3 = await agent(`${P}-3`, [{ do: "inspect" }, { do: "call", tool: "list_local_jobs", args: { filter: "agents", limit: 5 }, session: "m6-check", client_name: "m6 check" }, { do: "activity" }]);
   out.after = r3;
-  const r4 = await agent("m6-session-4", [{ do: "switches", set: { agents_may_modify: false, active_document_only: false } }, { do: "close" }]);
+  const r4 = await agent(`${P}-4`, [{ do: "switches", set: { agents_may_modify: false, active_document_only: false } }, { do: "close" }]);
   out.close = r4;
   out.finished_at = new Date().toISOString();
   return out;
 }
 
+// Extras of SPEC 12.2 item 11 the dev entry can run, free: a proposal card
+// (modify off) answered through the approvals module, and No-spend.
+async function extras() {
+  const out = (partial = { phase: "extras", started_at: new Date().toISOString() });
+  const job = arg("--job");
+  const steps = [
+    { do: "switches", set: { agents_may_modify: false, agents_may_run_commands: false, active_document_only: false }, no_spend: false },
+    { do: "open", document: { width: 512, height: 384 }, name: "Scenario M6 extras" },
+    { do: "call", tool: "job_status", args: { local_id: job }, label: "job", max_chars: 1500 }
+  ];
+  const r0 = await agent("m6-extras-0", steps);
+  const jr = r0.steps[2].out ? r0.steps[2].out.result : {};
+  const rev = jr.revision !== undefined ? jr.revision : Number((/"revision":(\d+)/.exec(jr.head || "") || [])[1]);
+  out.job = { status: jr.status || (/"status":"(\w+)"/.exec(jr.head || "") || [])[1], revision: rev };
+  const r1 = await agent("m6-extras-1", [
+    { do: "call", tool: "prepare_result_application", args: { local_id: job, expected_revision: rev, purpose: "new_layer", target: { document_id: r0.steps[1].out.document_id } }, label: "prepare", max_chars: 1500 },
+    { do: "inspect" }
+  ]);
+  const app = r1.steps[0].out ? r1.steps[0].out.result.application_id : null;
+  const r2 = await agent("m6-extras-2", [
+    { do: "call", tool: "apply_result_application", args: { application_id: app }, label: "apply with modify off", max_chars: 1500 },
+    { do: "cards" },
+    { do: "decide", action: "approve", kind: "proposal", wait_s: 30, label: "proposal card" },
+    { do: "inspect" },
+    { do: "switches", set: {}, no_spend: true },
+    { do: "call", tool: "estimate_cost", args: { model_id: FLARE, lane: "image", parameters: { prompt: "a red ball", quality: "low" }, takes: 1 }, label: "quote", max_chars: 1500 }
+  ]);
+  const q = r2.steps[5].out ? r2.steps[5].out.result : {};
+  const r3 = await agent("m6-extras-3", [
+    { do: "call", tool: "generate", args: { lane: "image", model_id: FLARE, quote_id: q.quote_id, approved_cost: q.cu_cost_exact, parameters: { prompt: "a red ball", quality: "low" } }, label: "generate under No-spend", expect_error: "NoSpend" },
+    { do: "cards" },
+    { do: "switches", set: {}, no_spend: false },
+    { do: "activity" },
+    { do: "close" }
+  ]);
+  Object.assign(out, { r0, r1, r2, r3 });
+  log(`extras: apply=${JSON.stringify(r2.steps[0].out || r2.steps[0].error).slice(0, 200)}; proposal=${JSON.stringify(r2.steps[2].out || r2.steps[2].error).slice(0, 200)}; after=${r2.steps[3].out ? r2.steps[3].out.history : "?"}; no-spend=${r3.steps[0].expected ? "refused" : JSON.stringify(r3.steps[0].out || r3.steps[0].error).slice(0, 200)}; cards after=${JSON.stringify(r3.steps[1].out)}`);
+  return out;
+}
+
 async function main() {
-  if (!["measure", "session"].includes(PHASE)) throw new Error("--phase measure|session");
+  if (!["measure", "session", "decline", "extras"].includes(PHASE)) throw new Error("--phase measure|session|decline|extras");
   fs.mkdirSync(OUT, { recursive: true });
   const gb = freeGb();
   if (gb < 8) throw new Error(`only ${gb.toFixed(1)} GB free; live work stops under 8 GB`);
@@ -549,11 +663,19 @@ async function main() {
     log(`${PHASE}: ${gb.toFixed(1)} GB free; installed ${path.basename(dest)}`);
     await waitPing("the start");
     await pushOwn(dest, keep);
-    result = PHASE === "measure" ? await measure() : await session();
+    result = PHASE === "measure" ? await measure() : PHASE === "extras" ? await extras() : await session(PHASE === "decline");
   } catch (e) {
     log(`${PHASE} stopped: ${e.message}`);
     result = { ...(partial || {}), error: e.message };
     process.exitCode = 1;
+    if (!blocked) {
+      try {
+        await agent("m6-cleanup-" + Date.now().toString(36), [{ do: "switches", set: { agents_may_modify: false, agents_may_run_commands: false, active_document_only: false } }, { do: "close" }], 60000);
+        log("closed the documents this run opened");
+      } catch (e2) {
+        log(`cleanup did not answer: ${e2.message}`);
+      }
+    }
   } finally {
     await restore(dest, keep);
     releaseLock();
