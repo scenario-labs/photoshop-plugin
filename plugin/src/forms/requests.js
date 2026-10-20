@@ -34,6 +34,25 @@ function referenceInput(schema) {
   return null;
 }
 
+// The reference input of an edit model when it is not the capture's own
+// input, or null.
+function separateReferenceInput(schema) {
+  var ref = referenceInput(schema);
+  return ref && ref.name !== schema.capture_input_name ? ref : null;
+}
+
+// How many references the input takes: its schema maximum, lowered by the
+// model's measured rule when a mask goes too (catalog-map
+// reference_max_with_mask: Ideogram 4.5 Precise Edit takes 4, or 3 with a
+// mask). null: no limit.
+function refMax(schema, input, masked) {
+  var most = input.multiple ? input.max || null : 1;
+  var facts = Object.prototype.hasOwnProperty.call(MAP.models, schema.model_id) ? MAP.models[schema.model_id] : null;
+  var withMask = facts && typeof facts.reference_max_with_mask === "number" ? facts.reference_max_with_mask : null;
+  if (masked && withMask !== null) most = most === null ? withMask : Math.min(most, withMask);
+  return most;
+}
+
 // The file inputs the lane fills from the document, as {name: count}. In
 // the Image lane these are the references the person added: captured when
 // added, uploaded at Generate, priced by count until then. In the other
@@ -55,13 +74,27 @@ function pendingFor(lane, schema, params, refCount, opts) {
   var name = schema.capture_input_name;
   if (!name) throw invalid("This model takes no image input, so it can't run in the " + lane + " lane.");
   var input = fileInput(schema, name);
-  if (input && (input.multiple || params[name] === undefined)) pending[name] = 1 + (input.multiple && lane === "edit" ? refCount || 0 : 0);
+  // In the Edit lane the references go with the capture when its input
+  // takes several images, else to the model's own reference input (Ideogram
+  // 4.5 Precise Edit: image, mask, referenceImages).
+  var withCapture = !!(input && input.multiple && lane === "edit");
+  if (input && (input.multiple || params[name] === undefined)) pending[name] = 1 + (withCapture ? refCount || 0 : 0);
   if (input && input.multiple && input.max && pending[name] > input.max) throw invalid("This model takes at most " + input.max + " images, the capture included.");
+  var masked = false;
   if ((lane === "edit" || lane === "expand") && opts.mask !== false) {
     for (var i = 0; i < schema.file_inputs.length; i++) {
       var f = schema.file_inputs[i];
-      if (f.role === "mask" && params[f.name] === undefined) pending[f.name] = 1;
+      if (f.role === "mask" && params[f.name] === undefined) {
+        pending[f.name] = 1;
+        masked = true;
+      }
     }
+  }
+  var own = lane === "edit" && refCount && !withCapture ? separateReferenceInput(schema) : null;
+  if (own) {
+    var most = refMax(schema, own, masked);
+    if (most !== null && refCount > most) throw invalid("This model takes at most " + most + " reference image" + (most === 1 ? "" : "s") + (masked && most !== (own.multiple ? own.max || null : 1) ? " with a selection." : "."));
+    pending[own.name] = refCount;
   }
   return pending;
 }
@@ -102,4 +135,4 @@ function build(schema, a) {
   };
 }
 
-module.exports = { build: build, pendingFor: pendingFor, checkLane: checkLane, referenceInput: referenceInput, fileInput: fileInput };
+module.exports = { build: build, pendingFor: pendingFor, checkLane: checkLane, referenceInput: referenceInput, separateReferenceInput: separateReferenceInput, refMax: refMax, fileInput: fileInput };

@@ -2168,9 +2168,17 @@ function createController(o) {
     var p = st.price.action === st.action ? st.price : {};
     var schema = p.schema || st.schemaCache[modelFor(st.action)] || null;
     if (schema && a.family === "image" && !requests.referenceInput(schema)) return null;
+    // How many references the model takes beside the capture (null: no
+    // limit). An edit model takes them with its capture (GPT Image 2.5) or
+    // in its own reference input (Ideogram 4.5 Precise Edit, 3 with a
+    // selection's mask).
+    var most = null;
     if (schema && a.family === "edit") {
       var ci = commonMod.fileInput(schema, schema.capture_input_name);
-      if (!ci || !ci.multiple) return null;
+      var own = requests.separateReferenceInput(schema);
+      if (ci && ci.multiple) most = ci.max ? ci.max - 1 : null;
+      else if (own) most = requests.refMax(schema, own, st.ctx.kind === "selection");
+      else return null;
     }
     var items = [];
     if (a.autoRef && st.raw && st.raw.layer) items.push({ id: "auto", label: st.raw.layer.name + ", for light and perspective", url: null, icon: "layer", removable: false });
@@ -2185,10 +2193,13 @@ function createController(o) {
       for (var i = 0; i < st.refs.length; i++) items.push({ id: st.refs[i].id, label: st.refs[i].label + ", sent at " + times(st.refs[i].width, st.refs[i].height), url: st.refs[i].url || null, width: st.refs[i].width, height: st.refs[i].height, icon: st.refs[i].source === "file" ? "file" : st.refs[i].source === "selection" ? "selection" : st.refs[i].source === "visible" ? "visible" : "layer", removable: true });
     }
     var count = items.length + drefs.length;
+    var sent = items.length + drefs.filter(function (d) {
+      return d.on;
+    }).length;
     return {
       drefs: drefs,
       items: items,
-      add: a.refs,
+      add: !!a.refs && (most === null || sent < most),
       add_label: count ? "" : "Reference",
       hint: drefs.length ? "" : st.refs.length === 1 ? st.refs[0].label : st.refs.length > 1 ? st.refs.length + " references" : items.length ? "" : TEXT.ref_hint
     };

@@ -58,6 +58,7 @@
     },
     "model_ideogram-v4-5-precise-edit": {
       "capture_input": "image",
+      "reference_max_with_mask": 3,
       "price_inputs": { "image": { "rule": "any" }, "mask": { "rule": "omit" } },
       "mask_polarity": "white",
       "input_formats": ["png", "jpeg"]

@@ -238,6 +238,57 @@ test("F1 a selection: Replace inside lands masked as a group above the layer; Re
   assert.equal(doc.byId("prompt").value, "", "an empty prompt to refine");
 });
 
+test("F1 references: Replace inside on Precise Edit shows the + Reference row above the prompt; a layer reference goes to referenceImages beside the capture and the mask; three at most with a selection", async (t) => {
+  const sel = { left: 100, top: 200, width: 512, height: 512 };
+  const DOC = { ...POSTER, selection: sel, layers: [{ name: "Boat", kind: "pixel", frame: { left: 0, top: 0, width: 1024, height: 1024 } }, { name: "Background", background: true }] };
+  const { app, doc, ps, mock } = await bootGenerate(t, { docs: [DOC], active: 7, mockOpts: { answer: flarePrice() } });
+  await show(app, ps);
+  await ctxTitle(doc, "Selection 512 × 512 on Boat");
+  assert.deepEqual(onChip(doc), ["replace"]);
+  // The row shows before the price (the schema decides) and reads as the prototype.
+  await waitFor(() => findAll(doc, "data-pop", "addref").length === 1, { label: "the add tile" });
+  assert.ok(doc.shown("refs"), "the refs row shows");
+  const html = require("node:fs").readFileSync(require.resolve("../../plugin/index.html"), "utf8");
+  assert.ok(html.indexOf('id="refs"') > 0 && html.indexOf('id="refs"') < html.indexOf('id="pbox"'), "the refs row sits above the prompt");
+  assert.equal(find(doc, "data-pop", "addref").textContent, "Reference");
+  const hint = () => doc.byId("refs").children.filter((e) => e.className === "hint").map((e) => e.textContent).join("");
+  assert.equal(hint(), "Selection, layer or file");
+  await popOpen(doc, "addref");
+  menuValues(doc).find((e) => e.getAttribute("data-value") === "layer").click();
+  await waitFor(() => findAll(doc, "data-ref").length === 1, { label: "layer reference added" });
+  doc.type("prompt", "A red sail");
+  await button(doc, "Replace inside · 3 CU");
+  doc.byId("go").click();
+  await landed(app);
+  assert.equal(mock.paidCalls.length, 1);
+  const body = mock.paidCalls[0].body;
+  assert.equal(mock.paidCalls[0].model, PRECISE);
+  assert.equal(typeof body.image, "string", "the capture goes to image");
+  assert.ok(body.mask, "the selection's mask goes too");
+  assert.ok(Array.isArray(body.referenceImages) && body.referenceImages.length === 1, "the layer reference goes to referenceImages");
+  assert.notEqual(body.referenceImages[0], body.image);
+  // Precise Edit takes 4 references, 3 with a mask: the add tile goes at 3.
+  for (let i = 0; i < 2; i++) {
+    await popOpen(doc, "addref");
+    menuValues(doc).find((e) => e.getAttribute("data-value") === "layer").click();
+    await waitFor(() => findAll(doc, "data-ref").length === i + 2, { label: `reference ${i + 2}` });
+  }
+  await waitFor(() => findAll(doc, "data-pop", "addref").length === 0, { label: "no add tile at the model's limit" });
+});
+
+test("pendingFor: an edit model with its own reference input counts the references there; a mask lowers Precise Edit's limit to 3", () => {
+  const schemaMod = require("../../plugin/src/forms/schema.js");
+  const requests = require("../../plugin/src/forms/requests.js");
+  const { records } = require("../helpers/fixture-scenario.js");
+  const s = schemaMod.normalize(records[PRECISE]);
+  assert.equal(requests.separateReferenceInput(s).name, "referenceImages");
+  assert.deepEqual(requests.pendingFor("edit", s, {}, 2, {}), { image: 1, mask: 1, referenceImages: 2 });
+  assert.deepEqual(requests.pendingFor("edit", s, {}, 4, { mask: false }), { image: 1, referenceImages: 4 });
+  assert.throws(() => requests.pendingFor("edit", s, {}, 4, {}), /at most 3 reference images with a selection/);
+  const flare = schemaMod.normalize(records[FLARE]);
+  assert.equal(requests.separateReferenceInput(flare), null, "Flare takes references with its capture");
+});
+
 test("F2 a layer: Make versions with the built-in prompt when empty, a group above the layer; context chips and More with pins kept on disk", async (t) => {
   const { app, doc, ps, mock } = await bootGenerate(t, { docs: [POSTER], active: 7, mockOpts: { answer: flarePrice() } });
   await show(app, ps);
