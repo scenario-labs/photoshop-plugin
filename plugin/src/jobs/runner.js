@@ -1009,7 +1009,7 @@ function createRunner(o) {
     };
   }
 
-  // "Result is N px for an M px area" (SPEC 3.9): the result was scaled up
+  // "Result is N px for the M px area" (SPEC 3.9): the result was scaled up
   // into its box.
   function smallResult(rec, output) {
     var t = rec.target || {};
@@ -1017,7 +1017,7 @@ function createRunner(o) {
     if (t.kind === "upscale" && t.lands === "new_document") return null;
     var n = Math.max(output.width, output.height);
     var m = Math.round(Math.max(t.box[2], t.box[3]));
-    return n < m ? "Result is " + n + " px for an " + m + " px area" : null;
+    return n < m ? "Result is " + n + " px for the " + m + " px area" : null;
   }
 
   // Places a ready job (Place, Place unmasked, Open as document, or Place

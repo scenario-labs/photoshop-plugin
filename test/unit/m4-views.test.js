@@ -151,6 +151,9 @@ test("Job cards: upload words, Trained edit, Input reduced, Undo and Place unmas
   const changed = { ...base, state: "ready", error: "The canvas changed since this edit started. Use Place unmasked or Open as document." };
   assert.equal(results.card(changed).actions.place_unmasked, true);
   assert.equal(results.card({ ...changed, lane: "expand" }).actions.place_unmasked, false);
-  const small = { ...applied, placement: { ...applied.placement, badges: [["Result is 512 px for an 1024 px area"], []] } };
+  const small = { ...applied, placement: { ...applied.placement, badges: [["Result is 512 px for the 1024 px area"], []] } };
   assert.deepEqual(results.card(small).actions.upscale_take, [0]);
+  // Records written before 0.7.1 read "for an": still offered the upscale.
+  const older = { ...applied, placement: { ...applied.placement, badges: [[], ["Result is 512 px for an 1024 px area"]] } };
+  assert.deepEqual(results.card(older).actions.upscale_take, [1]);
 });

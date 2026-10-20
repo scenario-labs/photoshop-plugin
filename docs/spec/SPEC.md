@@ -622,7 +622,7 @@ Insert point: with **All visible**, a selection edit goes to the top of the docu
 | `Spills past` (amber) | Bolder only: the growth a take needed was over 60% of the selection, so it landed cut to the selection. Full words: `The result spills past the selection` |
 | `Part unchanged` (amber) | Remove only: 30% or more of the selection's 16 px cells came back as they were (residual under 6 after a blur and after removing the overall tone shift inside), so part of what the person selected may still be there. Full words: `Part of the selection may be unchanged` |
 
-The full check words (`Edge tone differs`, `Unchanged inside`, `Changed outside` with **Undo**, `Input reduced`, `Result is N px for an M px area`) stay in the job's record and in Jobs. A failed check never removes a take.
+The full check words (`Edge tone differs`, `Unchanged inside`, `Changed outside` with **Undo**, `Input reduced`, `Result is N px for the M px area`) stay in the job's record and in Jobs. A failed check never removes a take.
 
 ### 3.10 Details
 

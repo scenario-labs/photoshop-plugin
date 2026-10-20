@@ -63,7 +63,7 @@ function card(rec) {
   var changedOutside = !!(pl && !pl.undone && first.indexOf("Changed outside") >= 0);
   var canvasChanged = !!(rec.error && rec.error.indexOf(TEXT.canvas_changed) >= 0);
   var small = [];
-  for (var i = 0; i < b.length; i++) for (var j = 0; j < b[i].length; j++) if (/^Result is \d+ px for an \d+ px area$/.test(b[i][j])) small.push(i);
+  for (var i = 0; i < b.length; i++) for (var j = 0; j < b[i].length; j++) if (/^Result is \d+ px for (the|an) \d+ px area$/.test(b[i][j])) small.push(i);
   var notes = [];
   if (changedOutside) notes.push(TEXT.changed_outside);
   if (pl && pl.undone) notes.push(TEXT.undone);
