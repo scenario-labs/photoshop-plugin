@@ -232,11 +232,13 @@ function createRunner(o) {
     if (!acc) throw err("NotSignedIn", "No Scenario key is saved in the plugin.");
     var q = a.quote;
     if (!q || typeof q.quote_id !== "string") throw err("QuoteExpired", "No current price. Wait for the price on the button.");
-    var key = q.quote_id;
+    // Agents pass their idempotency key (MCP.md section 3); the person's
+    // runs use the quote id.
+    var key = a.key || q.quote_id;
     var fp = await o.quotes.fingerprintFor(a.req);
     var existing = o.ledger.findByKey(key);
     if (existing) {
-      if (existing.fingerprint !== fp) throw err("IdempotencyConflict", "This price was already used for another request.");
+      if (existing.fingerprint !== fp || (a.request_hash && existing.request_hash && existing.request_hash !== a.request_hash)) throw err("IdempotencyConflict", "This key was already used for another request.");
       return { replayed: true, record: existing, state: existing.state };
     }
     var flying = o.ledger.inFlight(fp);
@@ -250,12 +252,14 @@ function createRunner(o) {
     var capFiles = cap ? cap.files || [] : [];
     var red;
     try {
-      red = await o.quotes.redeem(key, q.cu_cost_exact, a.req);
+      red = await o.quotes.redeem(q.quote_id, q.cu_cost_exact, a.req);
       var body = await o.quotes.bodyFor(a.req);
       rec = await o.ledger.create({
         idempotency_key: key,
         fingerprint: fp,
-        origin: { kind: "person" },
+        request_hash: a.request_hash || null,
+        origin: a.origin || { kind: "person" },
+        approval: a.hold ? { state: "pending" } : a.origin && a.origin.kind === "agent" ? { state: a.allowance ? "none" : "approved" } : { state: "none" },
         project: { name: acc.project_name || null, key_hash: acc.key_hash || null, id_hash: projectHash(acc.project_id) },
         lane: a.req.lane,
         model_id: a.req.model_id,
@@ -276,10 +280,12 @@ function createRunner(o) {
                 })
               }
             : null,
-          asset_ids: []
+          asset_ids: a.input_assets ? a.input_assets.slice() : []
         },
         target: targetRecord(a),
-        state: refs.length || capFiles.length ? "uploading_inputs" : "submitting",
+        state: refs.length || capFiles.length ? "uploading_inputs" : a.hold ? "awaiting_approval" : "submitting",
+        cu_quoted_new: a.hold ? q.cu_cost_exact : null,
+        price_checked_at: a.hold ? new Date(a.priced_at || now()).toISOString() : null,
         job_id: null,
         remote_status: null,
         progress: null,
@@ -305,6 +311,9 @@ function createRunner(o) {
     if (cap && o.capture && typeof o.capture.link === "function") o.capture.link(cap.id, rec.local_id);
     emit({ type: "started", local_id: rec.local_id });
     if (refs.length || capFiles.length) return uploadThenCheck(rec, refs, red, capFiles);
+    // An agent's request under Ask each time waits for the person's
+    // approval card; nothing is sent until Approve.
+    if (a.hold) return { record: rec, state: "awaiting_approval" };
     return send(rec.local_id);
   }
 
@@ -415,7 +424,18 @@ function createRunner(o) {
   // The person's Generate on the "Price changed after upload" card. A
   // price older than 120 s is checked again first; if it moved, the card
   // shows the new one and nothing is sent.
+  var approving = {};
   async function approve(id) {
+    if (approving[id]) throw err("Internal", "This job is being approved.");
+    approving[id] = true;
+    try {
+      return await approveNow(id);
+    } finally {
+      delete approving[id];
+    }
+  }
+
+  async function approveNow(id) {
     var rec = o.ledger.get(id);
     if (!rec || rec.state !== "awaiting_approval") throw err("Internal", "This job is not waiting for approval.");
     if (o.settings && typeof o.settings.noSpend === "function" && o.settings.noSpend()) throw err("NoSpend", "No-spend mode is on. Nothing was sent.");
@@ -429,14 +449,32 @@ function createRunner(o) {
         return { record: r, state: "awaiting_approval", price: price.exactString(again), changed: true };
       }
     }
-    await update(id, { cu_quoted: rec.cu_quoted_new, cu_quoted_new: null });
+    var patch = { cu_quoted: rec.cu_quoted_new, cu_quoted_new: null };
+    if (rec.approval && rec.approval.state === "pending") patch.approval = { state: "approved", at: iso() };
+    await update(id, patch);
     return send(id);
   }
 
-  function decline(id) {
+  // why (agent requests): "declined" (SpendDeclined), "expired" (the card
+  // went unanswered for 10 minutes or its session ended), "withdrawn" (the
+  // agent's cancel_prepared_job).
+  function decline(id, why) {
     var rec = o.ledger.get(id);
-    if (!rec || rec.state !== "awaiting_approval") return Promise.resolve(null);
-    return finish(id, "not_sent", { error: "Not sent: Declined." });
+    if (!rec || rec.state !== "awaiting_approval" || approving[id]) return Promise.resolve(null);
+    var patch = { error: "Not sent: Declined." };
+    if (rec.approval && rec.approval.state === "pending") {
+      if (why === "expired") {
+        patch.approval = { state: "expired", at: iso() };
+        patch.error = "Not sent: the approval card expired.";
+      } else if (why === "withdrawn") {
+        patch.approval = { state: "none", at: iso() };
+        patch.error = "Not sent: withdrawn by the agent.";
+      } else {
+        patch.approval = { state: "declined", at: iso() };
+        patch.error = "SpendDeclined: the person declined the approval card. Nothing was spent.";
+      }
+    }
+    return finish(id, "not_sent", patch);
   }
 
   // 5: the paid request.
@@ -748,7 +786,7 @@ function createRunner(o) {
     var active = o.host.activeDocumentId();
     var memo = memos[rec.local_id] || {};
     var first = (rec.outputs || [])[0] || {};
-    var newDoc = opts.new_document || t.kind === "new_document" || !t.kind || (t.kind === "upscale" && t.lands === "new_document");
+    var newDoc = opts.new_document || t.kind === "new_document" || (!t.kind && !opts.current_document) || (t.kind === "upscale" && t.lands === "new_document" && !opts.current_document);
     if (newDoc) {
       var w = t.kind === "new_document" ? t.width : first.width;
       var h = t.kind === "new_document" ? t.height : first.height;
@@ -1015,7 +1053,7 @@ function createRunner(o) {
       if (e && e.canvasChanged && !opts.auto) await update(id, { error: e.message });
       throw e;
     }
-    var p = planMod.build(rec, { version: o.version, document: where.document, box: where.box, mask: where.mask, restore_active: !!opts.auto, fit: where.fit, insert: where.insert, canvas: where.canvas, duplicate: where.duplicate, reads: where.reads, cutout: where.cutout });
+    var p = planMod.build(rec, { version: o.version, document: where.document, box: opts.box || where.box, mask: where.mask, restore_active: !!opts.auto, fit: opts.fit || where.fit, insert: where.insert, canvas: where.canvas, duplicate: where.duplicate, reads: where.reads, cutout: where.cutout, assets: opts.assets || null });
     var before = rec.state;
     await update(id, { state: "applying", placement_checked: true });
     await hooks.at("place", { local_id: id, document_id: where.document ? where.document.id : null });
@@ -1202,8 +1240,68 @@ function createRunner(o) {
     resume();
   }
 
+  // A finished job of the current project, or a Library asset, added to the
+  // ledger and downloaded (recover_cloud_job, Library placement). Never
+  // submits a generation. fields: { origin, lane, model_id, model_name,
+  // job_id, asset_ids, parameters, cu_charged, created_at }.
+  async function adopt(fields) {
+    var acc = o.account();
+    if (!acc) throw err("NotSignedIn", "No Scenario key is saved in the plugin.");
+    var rec = await o.ledger.create({
+      idempotency_key: "adopt:" + (fields.job_id || fields.asset_ids[0]),
+      fingerprint: null,
+      origin: fields.origin || { kind: "person" },
+      approval: { state: "none" },
+      project: { name: acc.project_name || null, key_hash: acc.key_hash || null, id_hash: projectHash(acc.project_id) },
+      lane: fields.lane,
+      model_id: fields.model_id || null,
+      model_name: fields.model_name || null,
+      trained_model_ids: [],
+      parameters: fields.parameters || {},
+      inputs: { references: [], capture: null, asset_ids: [] },
+      target: { kind: null, session: o.session || null },
+      state: "succeeded",
+      job_id: fields.job_id || null,
+      remote_status: null,
+      progress: null,
+      cu_quoted: null,
+      cu_quoted_max: null,
+      price_kind: null,
+      quote_mode: null,
+      cu_record: fields.cu_charged === undefined ? null : fields.cu_charged,
+      cu_discount: null,
+      cu_charged: fields.cu_charged === undefined ? null : fields.cu_charged,
+      refunded: false,
+      no_refund: false,
+      outputs: fields.asset_ids.map(function (a) {
+        return { asset_id: a, state: "pending", path: null };
+      }),
+      placement: null,
+      error: null,
+      adopted: fields.adopted || "cloud_job",
+      submitted_at: fields.created_at || null,
+      finished_at: iso()
+    });
+    download(rec.local_id);
+    return rec;
+  }
+
+  // What a placement keeps in memory for a job (the capture checks).
+  function memoFor(id) {
+    return memos[id] || null;
+  }
+
+  // An agent's job finds its document again (MCP.md section 2).
+  function docOf(rec) {
+    return homeDoc(rec);
+  }
+
   return {
     start: start,
+    adopt: adopt,
+    docOf: docOf,
+    memoFor: memoFor,
+    placement: placement,
     approve: approve,
     decline: decline,
     place: place,
@@ -1216,6 +1314,7 @@ function createRunner(o) {
     isChecking: resolver.isChecking,
     resumeDownload: resumeDownload,
     stopDownload: stopDownload,
+    download: download,
     resume: resume,
     recover: recover,
     pausedFor: pausedFor,

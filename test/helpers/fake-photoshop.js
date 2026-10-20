@@ -483,6 +483,11 @@ function createFakePhotoshop(opts = {}) {
       layer.xmp = d.to.XMPMetadataAsUTF8;
       return {};
     }
+    // Tests of the agent commands add the descriptors they play.
+    if (opts.extraPlay) {
+      const r = opts.extraPlay(d, { app, doc: doc || app.activeDocument, inModal, findLayer, makeLayer, ps });
+      if (r !== undefined) return r;
+    }
     throw new Error(`fake: unknown descriptor ${d._obj}`);
   }
 
@@ -577,6 +582,9 @@ function createFakePhotoshop(opts = {}) {
     core: {
       async executeAsModal(fn, options) {
         ps.modals.push(options.commandName);
+        // Tests of the agent tools: the person switches documents while a
+        // call waits for the modal scope.
+        if (typeof ps.beforeModal === "function") ps.beforeModal(options.commandName);
         if (inModal || ps.busy > 0) {
           if (ps.busy > 0) ps.busy--;
           throw new Error("host is in a modal state");
@@ -771,6 +779,12 @@ function createFakePhotoshop(opts = {}) {
       const n = name(path);
       if (dirs.has(n)) throw new Error("EEXIST");
       dirs.add(n);
+    },
+    // opts.symlinks: data-folder paths that are symbolic links.
+    async lstat(path) {
+      const n = name(path);
+      if (!files.has(n) && !dirs.has(n)) throw new Error(`ENOENT ${path}`);
+      return { isSymbolicLink: () => !!(opts.symlinks && opts.symlinks.has(n)), isFile: () => files.has(n) };
     },
     async readdir(path) {
       const n = name(path).replace(/\/$/, "");

@@ -25,6 +25,7 @@ var ASPECT_TOLERANCE = 0.01;
 
 function kindOf(lane) {
   if (lane === "remove_background") return "cutout";
+  if (lane === "library") return "library";
   return lane === "image" || lane === "edit" || lane === "upscale" || lane === "expand" ? lane : "image";
 }
 
@@ -75,11 +76,15 @@ function names(kind, prompt, assetIds, leavePrompts) {
 // canvas (Expand), duplicate ({name}: land in a copy), reads (for the
 // checks), cutout (Remove BG: { layer_id, background (the source was the
 // Background), lands, box, mask_box, source_path }) }.
+function agentHistory(rec, name) {
+  return rec.origin && rec.origin.kind === "agent" ? name.replace(/^Scenario: /, "Scenario agent: ") : name;
+}
+
 function build(rec, o) {
   o = o || {};
   var kind = kindOf(rec.lane);
   var outputs = (rec.outputs || []).filter(function (x) {
-    return x && x.path;
+    return x && x.path && (!o.assets || o.assets.indexOf(x.asset_id) >= 0);
   });
   if (!outputs.length) throw new Error("no saved results to place");
   var ids = outputs.map(function (x) {
@@ -144,7 +149,8 @@ function build(rec, o) {
     };
   }
   return {
-    history_name: HISTORY[kind] || "Scenario: Place " + kind,
+    // Agent placements are named "Scenario agent: <action>" (SPEC 6.5).
+    history_name: agentHistory(rec, HISTORY[kind] || "Scenario: Place " + kind),
     kind: kind,
     document_id: doc ? doc.id : null,
     new_document: doc ? null : { width: Math.round(box.width), height: Math.round(box.height), name: n.group || n.layers[0] },

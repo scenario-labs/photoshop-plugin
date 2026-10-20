@@ -3,9 +3,10 @@
 // (MCP.md 4.2). Free: reads, and price checks that create no job. A price
 // check goes through the same quote code as the panel (forms/quotes.js).
 //
-// This build has no captures, so estimate_cost refuses capture_id; a canvas
-// or new_document target is optional, and file inputs the lane fills from
-// the document are priced by the measured stand-in rules.
+// estimate_cost takes one of capture_id (the agent tools' captures, which
+// bind the placement target), a canvas or a new_document target, or none;
+// file inputs the lane fills from the document and the agent has not
+// uploaded yet are priced by the measured stand-in rules.
 
 var errorsMod = require("../scenario/errors.js");
 var map = require("../catalog/map.js");
@@ -38,7 +39,9 @@ function maxOutput(schema) {
   return schema.size_inputs.kind === "grid" ? schema.size_inputs.max : null;
 }
 
-// o: { catalog, quotes, host, settings }
+// o: { catalog, quotes, host, settings, captureRequest(args, schema) -> req
+//      (agent captures), onQuote(quote, req, args) (the agent tools keep
+//      what each quote priced) }
 function createCatalogTools(o) {
   // Schemas already read this session (no new reads for a listing).
   var known = {};
@@ -165,10 +168,11 @@ function createCatalogTools(o) {
   }
 
   async function estimateCost(args) {
-    if (args.capture_id !== undefined && args.capture_id !== null) throw invalid("capture_id is not available in this build: captures come with the Edit lane. Pass canvas or new_document, or no target.");
+    var hasCapture = args.capture_id !== undefined && args.capture_id !== null;
     var hasCanvas = args.canvas !== undefined && args.canvas !== null;
     var hasNew = args.new_document !== undefined && args.new_document !== null;
-    if (hasCanvas && hasNew) throw invalid("Pass one of canvas or new_document.");
+    if ((hasCanvas ? 1 : 0) + (hasNew ? 1 : 0) + (hasCapture ? 1 : 0) > 1) throw invalid("Pass one of capture_id, canvas or new_document.");
+    if (hasCapture && !o.captureRequest) throw invalid("capture_id is not available here.");
     var target = null;
     var sourceSize = null;
     if (hasCanvas) {
@@ -191,8 +195,9 @@ function createCatalogTools(o) {
       }
     }
     var schema = remember(await o.catalog.schema(args.model_id));
-    var req = requests.build(schema, { lane: lane, model_id: args.model_id, parameters: args.parameters || {}, takes: args.takes, target: target, source_size: sourceSize });
+    var req = hasCapture ? await o.captureRequest(args, schema) : requests.build(schema, { lane: lane, model_id: args.model_id, parameters: args.parameters || {}, takes: args.takes, target: target, source_size: sourceSize });
     var q = await o.quotes.estimate(req);
+    if (o.onQuote) o.onQuote(q, req, args);
     return {
       quote_id: q.quote_id,
       cu_cost_exact: q.cu_cost_exact,

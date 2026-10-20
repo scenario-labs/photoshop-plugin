@@ -1193,6 +1193,34 @@ function createHost(hostRequire, g) {
 
     setupEntrypoints: function (def) {
       if (uxp && uxp.entrypoints && typeof uxp.entrypoints.setup === "function") uxp.entrypoints.setup(def);
+    },
+
+    // What the agent tools (agents/ps-host.js) build on: the Photoshop
+    // module, the modal scope, one History state, layer and metadata reads,
+    // and session tokens for files in the data folder.
+    internals: function () {
+      return {
+        ps: ps,
+        fs: fs,
+        modal: modal,
+        play: play,
+        inOneState: inOneState,
+        findDoc: findDoc,
+        findLayer: findLayer,
+        layerInfo: layerInfo,
+        metaOf: metaOf,
+        boundsOf: boundsOf,
+        readArea: readArea,
+        selectLayers: selectLayers,
+        deleteLayer: deleteLayer,
+        dataUrl: function (path) {
+          return DATA + path;
+        },
+        sessionToken: async function (path) {
+          var entry = await entryFor(path);
+          return lfs.createSessionToken(entry);
+        }
+      };
     }
   };
 }

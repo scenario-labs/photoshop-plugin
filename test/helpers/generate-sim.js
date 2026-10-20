@@ -62,7 +62,8 @@ async function bootGenerate(t, opts = {}) {
     doc.byId("signin-save").click();
     await waitFor(() => doc.shown("view-main"), { label: "signed in" });
   }
-  return { app, host, doc, mock, ps, pair, clipboard };
+  // port and token let an agent test start a real helper against this plugin.
+  return { app, host, doc, mock, ps, pair, clipboard, port, token: secure.get("scenario.pairing_token") };
 }
 
 // The ledger records on disk, parsed.

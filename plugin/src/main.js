@@ -45,6 +45,13 @@ var jobsTextMod = require("./ui/jobs-text.js");
 var menuMod = require("./ui/menu.js");
 var thumbsMod = require("./ui/thumbs.js");
 var API = require("../../shared/scenario-api.json");
+var approvalsMod = require("./agents/approvals.js");
+var psHostMod = require("./agents/ps-host.js");
+var inputsMod = require("./agents/inputs.js");
+var agentToolsMod = require("./agents/tools.js");
+var agentCardsMod = require("./ui/agent-cards.js");
+var agentsSettingsMod = require("./ui/agents-settings.js");
+var connectClientMod = require("./ui/connect-client.js");
 
 var VERSION = manifest.version;
 var LOG_FILE = "scenario-link.log";
@@ -105,7 +112,7 @@ function boot(env) {
   var host = env.host || hostMod.createHost(env.hostRequire, env.global);
   var redactor = redactMod.createRedactor();
   var logger = createLogger(host, env.console, redactor);
-  var settings = statusMod.createSettings();
+  var settings = statusMod.createSettings({ host: host, log: logger.log });
   var errors = diagnosticsMod.createErrorLog();
   var accounts = accountsMod.createAccounts(host, redactor);
   var client = clientMod.createClient({
@@ -182,7 +189,9 @@ function boot(env) {
       errors.record("DryRunCreatedJob");
     }
   });
-  var catalogTools = catalogToolsMod.createCatalogTools({ catalog: catalog, quotes: quotes, host: host, settings: settings });
+  // The agent tools (M6) fill captureRequest and onQuote below, once they exist.
+  var catalogToolsOpts = { catalog: catalog, quotes: quotes, host: host, settings: settings };
+  var catalogTools = catalogToolsMod.createCatalogTools(catalogToolsOpts);
   var session = sessionMarker(random, host.timers.now);
   // Paid generation needs a secure random source for the job ids; without
   // one, prices still show and Generate stays off.
@@ -234,6 +243,76 @@ function boot(env) {
     });
     references = referencesMod.createReferences({ host: host, random: random, log: logger.log });
   }
+  // Agents (M6, SPEC 6.6 and 7.3): approval cards, the Photoshop side of the
+  // agent tools, captures and uploads, and the tool handlers. Paid tools
+  // need the ledger, so they exist only with a secure random source.
+  var approvals = approvalsMod.createApprovals({ timers: host.timers, log: logger.log });
+  var agentTools = null;
+  var inputs = null;
+  var psHost = typeof host.internals === "function" ? psHostMod.createPsHost(host) : null;
+  if (random && runner && psHost) {
+    var scopeProxy = {
+      readDoc: function (id) {
+        return agentTools.scope.readDoc(id);
+      },
+      changeDoc: function (id) {
+        return agentTools.scope.changeDoc(id);
+      },
+      jobVisible: function (rec) {
+        return agentTools.scope.jobVisible(rec);
+      }
+    };
+    inputs = inputsMod.createInputs({
+      host: host,
+      catalog: catalog,
+      capture: capture,
+      references: references,
+      client: client,
+      settings: settings,
+      approvals: approvals,
+      scope: scopeProxy,
+      random: random,
+      now: host.timers.now,
+      log: logger.log,
+      session: session,
+      ledger: ledger,
+      account: accounts.current
+    });
+    agentTools = agentToolsMod.createAgentTools({
+      host: host,
+      ps: psHost,
+      settings: settings,
+      approvals: approvals,
+      inputs: inputs,
+      ledger: ledger,
+      runner: runner,
+      quotes: quotes,
+      catalog: catalog,
+      catalogTools: catalogTools,
+      client: client,
+      account: accounts.current,
+      session: session,
+      random: random,
+      timers: host.timers,
+      log: logger.log,
+      version: VERSION
+    });
+    catalogToolsOpts.captureRequest = function (args, schema) {
+      return inputs.captureRequest(args, schema);
+    };
+    catalogToolsOpts.onQuote = function (q, req, args) {
+      return agentTools.onQuote(q, req, args);
+    };
+    // Files the person chooses in the panel can be named by an agent's
+    // upload_reference (MCP.md section 4).
+    var chooseFile = references.chooseFile;
+    references.chooseFile = async function (modelId) {
+      var f = await chooseFile(modelId);
+      if (f) inputs.chose(f.label, f);
+      return f;
+    };
+  }
+
   // The Edit and Enhance lanes' logic (lanes/), drawn by the panel.
   var flow = flowMod.createFlow({ catalog: catalog, quotes: quotes, host: host, runner: runner, capture: capture, account: accounts.current, log: logger.log });
 
@@ -252,6 +331,11 @@ function boot(env) {
       } catch (e) {
         logger.log("pairing token unavailable: " + e.message);
       }
+    }
+    try {
+      await settings.load();
+    } catch (e) {
+      logger.log("agent settings unavailable: " + e.message);
     }
     var jobsRead = false;
     if (ledger) {
@@ -298,22 +382,44 @@ function boot(env) {
       },
       catalogHash: catalogHash(),
       switches: settings.switches,
-      handlers: {
-        scenario_status: statusMod.createStatusHandler(host, settings, VERSION, auth, ledger),
-        list_models: catalogTools.list_models,
-        model_schema: catalogTools.model_schema,
-        estimate_cost: catalogTools.estimate_cost
-      },
+      handlers: (function () {
+        var h = {
+          scenario_status: statusMod.createStatusHandler(host, settings, VERSION, auth, ledger),
+          list_models: catalogTools.list_models,
+          model_schema: catalogTools.model_schema,
+          estimate_cost: catalogTools.estimate_cost
+        };
+        if (agentTools) for (var name in agentTools.handlers) h[name] = agentTools.handlers[name];
+        return h;
+      })(),
       timers: host.timers,
       log: logger.log,
       onState: function (s) {
         if (panel) panel.renderLink(s);
+        if (agentsSettings) agentsSettings.render();
+        if (connectClient && connectClient.isOpen()) connectClient.render();
       },
       onSessionsEnded: function (ids, why) {
         if (settings.endSessions(ids)) logger.log("agent allowance ended (" + why + ")");
+        if (agentTools) agentTools.endSessions(ids);
+        else approvals.endSessions(ids);
       }
     });
 
+    // Copies text that holds the pairing token; cleared from the clipboard
+    // after 60 s if it is still there (SPEC 4.3).
+    function copySecret(text) {
+      return Promise.resolve(host.clipboardWrite(text)).then(function () {
+        host.timers.setTimeout(function () {
+          Promise.resolve(host.clipboardClearIf(text)).then(
+            function (cleared) {
+              if (cleared) logger.log("clipboard cleared (it still held the pairing token)");
+            },
+            function () {}
+          );
+        }, env.clipboardClearMs || CLIPBOARD_CLEAR_MS);
+      });
+    }
     var panelActions = {
       token: function () {
         return pairing ? pairing.current() : null;
@@ -441,9 +547,41 @@ function boot(env) {
     // and reprice the selected action.
     if (typeof host.onDocumentEvents === "function" && !host.onDocumentEvents(function () {
       if (controller) controller.documentChanged();
+      if (agentTools) agentTools.documentChanged();
     })) {
       logger.log("document events unavailable");
     }
+
+    // Agent cards in the creation view, Settings > Agents controls and
+    // Connect a client (M6).
+    var agentCards = agentCardsMod.createAgentCards(env.document, { approvals: approvals, controller: controller, settings: settings, log: logger.log });
+    var linkClients = function () {
+      var st = link.state ? link.state() : null;
+      return (st && st.clients) || [];
+    };
+    var connectClient = connectClientMod.createConnectClient(env.document, {
+      version: VERSION,
+      token: panelActions.token,
+      copySecret: copySecret,
+      copyText: function (text) {
+        return host.clipboardWrite(text);
+      },
+      openExternal: function (url) {
+        return host.openExternal(url);
+      },
+      clients: linkClients,
+      windows: /^win/i.test(String(host.osName() || "")),
+      log: logger.log
+    });
+    var agentsSettings = agentsSettingsMod.createAgentsSettings(env.document, {
+      settings: settings,
+      approvals: approvals,
+      clients: linkClients,
+      openConnect: function () {
+        if (connectClient) connectClient.open();
+      },
+      log: logger.log
+    });
 
     link.start();
     var app = {
@@ -478,6 +616,13 @@ function boot(env) {
       errors: errors,
       redactor: redactor,
       menu: menu,
+      approvals: approvals,
+      agentTools: agentTools,
+      inputs: inputs,
+      psHost: psHost,
+      agentCards: agentCards,
+      agentsSettings: agentsSettings,
+      connectClient: connectClient,
       copyToken: panelActions.copyToken,
       resetToken: panelActions.resetToken
     };
