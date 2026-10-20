@@ -119,16 +119,6 @@
 
         <!-- The composer, pinned: references, prompt, chips, the button. -->
         <div class="composer" id="composer">
-          <div class="agentcard" id="agent-card">
-            <div class="who"><span class="dot on"></span><span id="agent-who"></span></div>
-            <div class="what" id="agent-what"></div>
-            <div class="q" id="agent-q"></div>
-            <div class="meta" id="agent-meta"></div>
-            <div class="btnrow end">
-              <div class="btn" id="agent-decline"><span class="bl">Decline</span></div>
-              <div class="btn blue" id="agent-approve"><span class="bl" id="agent-approve-label">Approve</span></div>
-            </div>
-          </div>
           <!-- F14: an agent's multi-step plan, only while one waits. -->
           <div class="agentcard" id="plan-card">
             <div class="who"><span class="dot on"></span><span id="plan-who"></span></div>
@@ -137,6 +127,16 @@
               <div class="btn" id="plan-decline"><span class="bl">Decline</span></div>
               <div class="btn" id="plan-steps-btn"><span class="bl">Step by step</span></div>
               <div class="btn blue" id="plan-all"><span class="bl" id="plan-all-label">Approve all</span></div>
+            </div>
+          </div>
+          <div class="agentcard" id="agent-card">
+            <div class="who"><span class="dot on"></span><span id="agent-who"></span></div>
+            <div class="what" id="agent-what"></div>
+            <div class="q" id="agent-q"></div>
+            <div class="meta" id="agent-meta"></div>
+            <div class="btnrow end">
+              <div class="btn" id="agent-decline"><span class="bl">Decline</span></div>
+              <div class="btn blue" id="agent-approve"><span class="bl" id="agent-approve-label">Approve</span></div>
             </div>
           </div>
           <div class="declined" id="declined"></div>
