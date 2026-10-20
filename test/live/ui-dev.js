@@ -122,7 +122,7 @@ async function main() {
     console.log(out);
     return;
   }
-  const res = await send(embed({ cmd: what, ...(json ? JSON.parse(json) : {}) }), 20000);
+  const res = await send(embed({ cmd: what, ...(json ? JSON.parse(json) : {}) }), Number(process.env.UI_DEV_WAIT_MS) || 20000);
   console.log(JSON.stringify(res, null, what === "metrics" ? 0 : 2));
   if (!res.ok) process.exitCode = 1;
 }

@@ -91,7 +91,13 @@ async function send(cmd, timeoutMs = 20000) {
     } catch (e) {
       continue;
     }
-    const out = JSON.parse(text);
+    let out;
+    try {
+      out = JSON.parse(text);
+    } catch (e) {
+      // read while the panel was still writing it
+      continue;
+    }
     if (out.id !== id) continue;
     if (!out.ok) throw new Error(cmd.cmd + ": " + out.error);
     return out.result;
@@ -127,17 +133,25 @@ function fixture(w, h) {
 
 async function makeDoc(w, h, selection) {
   const r = await send({ cmd: "makedoc", document: { width: w, height: h, fixture: `dev-live/m7-${w}x${h}.png`, flatten: true }, selection: selection || null, name: "Scenario M7 check" });
+  // Wait for the flatten to finish before anything reads the document.
+  await until(async () => (await send({ cmd: "inspect", document_id: r.document_id })).history === "Flatten Image", "the document ready", 20000).catch(() => null);
   await sleep(800);
   return r.document_id;
 }
 
 async function placeCase(w, h) {
   const docId = await makeDoc(w, h);
-  await send({ cmd: "view", name: "main", action: "library_place" });
+  // The new document's context read can land after the pick and reset the
+  // action to the context's first one: pick again until it holds.
+  await until(async () => {
+    await send({ cmd: "view", name: "main", action: "library_place" });
+    await sleep(1200);
+    return (await state()).state.action === "library_place";
+  }, "Place from Library picked", 30000);
   const L = await until(async () => {
     const x = await lib();
     return x && x.state === "ready" && x.items.length ? x : null;
-  }, "library ready");
+  }, "library ready", 60000);
   const before = await send({ cmd: "inspect", document_id: docId });
   const item = L.items[0];
   await send({ cmd: "click", attr: "data-lib", value: item.asset_id });
@@ -219,7 +233,7 @@ const CASES = [
       const all = await until(async () => {
         const x = await lib();
         return x && x.state === "ready" ? x : null;
-      }, "library ready");
+      }, "library ready", 60000);
       const res = { all: { shown: all.items.length, more: all.more, empty: all.empty }, filters: {} };
       let ok = all.items.length > 0;
       const WANT = { generated: "txt2img", edited: "img2img", uploaded: "uploaded" };
@@ -258,7 +272,7 @@ const CASES = [
       const L = await until(async () => {
         const x = await lib();
         return x && x.state === "ready" && x.items.length ? x : null;
-      }, "library ready");
+      }, "library ready", 60000);
       const word = (L.items[0].title.replace(/^Open /, "").match(/[A-Za-z]{4,}/) || [null])[0];
       if (!word) return { ok: false, res: { reason: "no word to search in the first image's name" } };
       const hit = (await send({ cmd: "library", search: word })).library;
@@ -333,7 +347,8 @@ const CASES = [
   },
   ...Object.keys(BASES).map((k) => ({
     id: "trained-edit-" + k,
-    max_cu: 20,
+    // FLUX.2 Dev on the reference route priced 32 CU live (2026-10-20).
+    max_cu: 35,
     run: async () => {
       const b = BASES[k];
       if (!b.lora) return { skip: `no ${k} trained model given (--${k} <id>)` };
@@ -341,7 +356,7 @@ const CASES = [
       await send({ cmd: "view", name: "main", action: "replace" });
       await send({ cmd: "runwith", model_id: b.lora });
       await send({ cmd: "prompt", text: "a brass lantern" });
-      const r = await runComposer({ max_cu: 20 }, docId);
+      const r = await runComposer({ max_cu: 35 }, docId);
       if (!r.ok || PRICE_ONLY) return { ok: r.ok, res: { route: b.route, ...r.out } };
       return { ok: !!r.layer && trainedFieldsOk(r.layer.fields, b.base, [b.lora]), res: { route: b.route, ...r.out } };
     }

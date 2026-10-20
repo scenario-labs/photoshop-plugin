@@ -231,7 +231,8 @@ function start(o) {
       case "pop":
         if (cmd.close) app.createView.closePop();
         else await app.createView.openPop(cmd.kind);
-        return { pop: app.createView.popKind() };
+        // menu: what the open menu lists (cmd.menu), as the controller gives it.
+        return { pop: app.createView.popKind(), menu: cmd.menu && app.controller.menu ? await app.controller.menu(cmd.kind) : undefined };
       case "adopt": {
         // Only a document that a job created after the loop started opened
         // as its result (a new-document target), never one the person opened.
@@ -241,7 +242,8 @@ function start(o) {
         for (var i = 0; i < recs.length; i++) {
           var r = recs[i];
           var t = r.target || {};
-          var opened = t.kind === "new_document" || (t.kind === "upscale" && t.lands === "new_document");
+          var landed = (r.placement && r.placement.landed) || {};
+          var opened = t.kind === "new_document" || (t.kind === "upscale" && t.lands === "new_document") || landed.new_document === true || (landed.kind === "video" && landed.document_id === want);
           if (opened && r.created_at >= startedAt && r.placement && r.placement.document_id === want) ok = true;
         }
         if (!ok) throw new Error("not a document opened by a run of this loop");
