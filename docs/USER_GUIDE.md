@@ -158,7 +158,7 @@ Tips:
 
 - A feathered selection blends the edge. Leave some margin around the object.
 - With Inside selection, an object taller than the selection is cut at its edge: draw the selection to the size of the new object, or use Bolder.
-- A take can carry a check badge: **Edges ok**, **May not line up**, **Part unchanged** or **Spills past**. The checks look at tone and alignment around the edge; they do not catch every visible patch, so look at the result.
+- A take can carry a check badge: **Edges ok**, **Edge may show** (a lighter or darker patch at the selection edge, or on Extend canvas a step or a repeated detail at the old edge), **May not line up**, **Part unchanged** or **Spills past**. The checks look at tone and alignment around the edge; they do not catch every visible patch, so look at the result.
 
 ![Replace inside with Bolder, from selection to result](media/video/selection-edit.gif)
 
