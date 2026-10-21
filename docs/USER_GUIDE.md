@@ -63,6 +63,8 @@ Draw a selection with any Photoshop tool. The context card reads "Selection W ×
 
 **Cut out subject**: the subject inside the selection, on a new layer with a transparent background. The layer stays as it was and the selection is dropped in the same History state.
 
+![A man with wind-blown copper curls in front of a busy tile wall, then cut out and shown on a flat color; at 100% the flyaway strands are kept with no tile left between them](media/before-after/cut-out-portrait-hair.jpg)
+
 **Select by description**: type what to select in the context card's **Select…** field ("all the sailboats"), click **Select**. The masks the model finds become a Photoshop selection, ready for the next action.
 
 **Make versions** also works on a selection.
