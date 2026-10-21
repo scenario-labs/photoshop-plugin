@@ -4,9 +4,9 @@ Generate, edit, upscale and cut out with [Scenario](https://www.scenario.com) mo
 
 ![Photoshop with the Scenario panel docked: a giant koi kite has just landed in the sky of a painted cliff town, and the panel shows its two takes](docs/media/hero.jpg)
 
-![A selection edit from the panel: select the cup, describe the change, see the price, click](docs/media/video/selection-edit.gif)
+![A selection edit from the panel: three distractions selected on a harbor stairway, Remove priced at 24 CU, two takes land and the street is clean](docs/media/video/selection-edit.gif)
 
-*A selection edit recorded in Photoshop 27.11 (sped up 2x). [MP4](docs/media/video/selection-edit.mp4).*
+*Remove on a selection, recorded in Photoshop 27.11 (3x speed). [MP4](docs/media/video/selection-edit.mp4).*
 
 > **Development build 0.7.1.** Not yet on the Adobe Marketplace, and the agent helper is not on npm yet. You install it from a `.ccx` file built from this repository.
 
@@ -51,8 +51,6 @@ You need Photoshop 2026 (27.x; tested on 27.11 on macOS) and a Scenario account 
 1. On [app.scenario.com](https://app.scenario.com), open your project's API keys and create a **Project key** with the **Editor** role. Copy the key and its secret.
 2. In the panel, paste them (pasting `key:secret` fills both fields) and click **Save and test**.
 3. Open or create a document, click **New layer**, type what you want, and click the blue button. It shows the price, for example `New layer · 3 CU`.
-
-![Sign-in to a first image in the panel](docs/media/video/sign-in-to-first-generation.gif)
 
 The full walkthrough, with every action, is in the [User Guide](docs/USER_GUIDE.md#quick-start).
 

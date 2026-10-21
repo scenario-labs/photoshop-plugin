@@ -6,10 +6,6 @@ The server runs on this computer only. It talks to the panel over a local link (
 
 The full tool reference is [spec/MCP.md](spec/MCP.md). Claims carry how they were checked: *verified live* (in Photoshop 27.11 on macOS), *tested automated* or *not tested*.
 
-![Claude Code creates a poster image; the spend card and the proposal card are approved in the panel](media/video/agent-scenario-mcp.gif)
-
-*Claude Code 2.1.304 run headless with this helper over stdio, asked to make a travel poster image in the open document. Both cards were approved in the panel. [MP4](media/video/agent-scenario-mcp.mp4). Verified live.*
-
 | Client | How it was checked |
 |---|---|
 | Claude Code | *Verified live*: setup command, then real Claude Code sessions that read the document, priced, spent through the approval card and landed through the proposal card. The `claude mcp add` registration step is *tested automated* (stand-in CLI); the live runs used `--config` with a temporary file |
