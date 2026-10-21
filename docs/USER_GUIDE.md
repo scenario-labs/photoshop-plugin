@@ -89,7 +89,7 @@ With no selection, the panel works on the active layer, or the whole image for a
 
 **Render sketch** (More > Make variants): turns a line drawing into a finished image from your prompt (GPT Image 2.5 Sunburst).
 
-![A pencil storyboard sketch of a cliff-side town with kites and a figure on a roof, rendered as painted animation concept art at sunset; at 100% the rooftops, figure and goat keep their places](media/before-after/render-sketch-kite-town.jpg)
+![A pencil storyboard sketch of a cliff-side town with kites and a figure on a roof, rendered as painted animation concept art at sunset; at 100% the rooftops, the keeper in her indigo coat and the goat keep their places](media/before-after/render-sketch-kite-town.jpg)
 
 **New angle** (More > Make variants): Turn left 45°, Turn right 45°, Side view, Back view or From above. No prompt.
 
