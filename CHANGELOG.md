@@ -25,6 +25,7 @@ Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures).
 
 - The single result card (Extend canvas, Upscale, Remove background) shows the badge the checks gave and each check in words. It showed none, so the step and the repeated detail recorded on the live Extend run were not visible.
 - The composer button shows the price after the upload for the same action and settings (New angle, 1 CU to 14 CU live), where it kept the first quote during the approval and the run.
+- Extend canvas: the step limit is 22 (was 10), calibrated on 14 labelled real takes; at 10 it flagged clean takes. The measured scores are a fixture test.
 
 ### Documentation
 

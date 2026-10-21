@@ -1,0 +1,159 @@
+{
+ "$comment": "Edge check scores measured on 14 real Extend canvas takes of one picture (2026-10-21): a 1024 x 1536 painted poster of a hillside town above the sea, extended to 16:9 (2731 x 1536) with the original centered, two takes per model and prompt. Mask-route takes were made on the canvas and mask the plugin builds and measured after its tone match, as the runner reads them; position and exact-size takes were measured as they came. Scores come from checks.bandCheck (bias, residual) and checks.expandEdges (step, repeats) at the check scale (the original at 341 x 512). Labels were given by eye at 100%: clean (no second figure, no step, the scene continues), stepped (a horizon step or a pale band at the old edge), repeated (the main figure drawn a second time); null is not labelled. The pictures are not in the repository; these are the measured numbers.",
+ "takes": [
+  {
+   "id": "position-1",
+   "label": "clean",
+   "model": "model_scenario-gemini-reframe",
+   "route": "position",
+   "prompt": "built-in",
+   "bias": 3.15,
+   "residual": 5.16,
+   "step": 11.23,
+   "repeats": 1
+  },
+  {
+   "id": "position-2",
+   "label": "clean",
+   "model": "model_scenario-gemini-reframe",
+   "route": "position",
+   "prompt": "built-in",
+   "bias": 3.32,
+   "residual": 5.31,
+   "step": 12.23,
+   "repeats": 0
+  },
+  {
+   "id": "position-3",
+   "label": "stepped",
+   "model": "model_scenario-gemini-reframe",
+   "route": "position",
+   "prompt": "built-in + no-repeat line",
+   "bias": 4.23,
+   "residual": 5.93,
+   "step": 41.88,
+   "repeats": 1
+  },
+  {
+   "id": "position-4",
+   "label": null,
+   "model": "model_scenario-gemini-reframe",
+   "route": "position",
+   "prompt": "built-in + no-repeat line",
+   "bias": 3.24,
+   "residual": 5.12,
+   "step": 15.29,
+   "repeats": 5
+  },
+  {
+   "id": "mask-b-1",
+   "label": "stepped",
+   "model": "model_openai-gpt-image-2-5-sunburst",
+   "route": "mask",
+   "prompt": "built-in",
+   "bias": 0.59,
+   "residual": 11.39,
+   "step": 4.17,
+   "repeats": 0
+  },
+  {
+   "id": "mask-b-2",
+   "label": "stepped",
+   "model": "model_openai-gpt-image-2-5-sunburst",
+   "route": "mask",
+   "prompt": "built-in",
+   "bias": 0.52,
+   "residual": 9.12,
+   "step": 11.73,
+   "repeats": 2
+  },
+  {
+   "id": "mask-b-3",
+   "label": "stepped",
+   "model": "model_openai-gpt-image-2-5-sunburst",
+   "route": "mask",
+   "prompt": "built-in + no-repeat line",
+   "bias": 1.83,
+   "residual": 20.38,
+   "step": 10.1,
+   "repeats": 50
+  },
+  {
+   "id": "mask-b-4",
+   "label": "stepped",
+   "model": "model_openai-gpt-image-2-5-sunburst",
+   "route": "mask",
+   "prompt": "built-in + no-repeat line",
+   "bias": 0.38,
+   "residual": 15.61,
+   "step": 0,
+   "repeats": 0
+  },
+  {
+   "id": "mask-a-1",
+   "label": "repeated",
+   "model": "model_openai-gpt-image-2-5-flare",
+   "route": "mask",
+   "prompt": "built-in",
+   "bias": 0.81,
+   "residual": 24.19,
+   "step": 11.4,
+   "repeats": 4
+  },
+  {
+   "id": "mask-a-2",
+   "label": "repeated",
+   "model": "model_openai-gpt-image-2-5-flare",
+   "route": "mask",
+   "prompt": "built-in",
+   "bias": 0.62,
+   "residual": 24.23,
+   "step": 15.6,
+   "repeats": 32
+  },
+  {
+   "id": "mask-a-3",
+   "label": "repeated",
+   "model": "model_openai-gpt-image-2-5-flare",
+   "route": "mask",
+   "prompt": "built-in + no-repeat line",
+   "bias": 0.62,
+   "residual": 19.99,
+   "step": 7.48,
+   "repeats": 3
+  },
+  {
+   "id": "mask-a-4",
+   "label": "repeated",
+   "model": "model_openai-gpt-image-2-5-flare",
+   "route": "mask",
+   "prompt": "built-in + no-repeat line",
+   "bias": 0.46,
+   "residual": 20.86,
+   "step": 19.02,
+   "repeats": 9
+  },
+  {
+   "id": "exact-1",
+   "label": null,
+   "model": "model_photoroom-expand",
+   "route": "exact_size",
+   "prompt": "none",
+   "bias": 0.23,
+   "residual": 0.78,
+   "step": 15.15,
+   "repeats": 1
+  },
+  {
+   "id": "exact-2",
+   "label": null,
+   "model": "model_photoroom-expand",
+   "route": "exact_size",
+   "prompt": "none",
+   "bias": 0.16,
+   "residual": 0.76,
+   "step": 20.67,
+   "repeats": 0
+  }
+ ]
+}
