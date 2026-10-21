@@ -1204,9 +1204,14 @@ function createCreateView(doc, ctl, o) {
     }), squeezed: lastFold.sig === fit.sig && lastFold.squeezed };
     return true;
   }
+  // The top's class changes only when it differs: each change lays the
+  // panel out again.
+  function setTop(top, squeezed) {
+    var want = squeezed ? "sc-top squeezed" : "sc-top";
+    if (top && top.className !== want) top.className = want;
+  }
   function fitTop(chips, more, ctx) {
     var top = byId("sc-top");
-    if (top) top.className = "sc-top";
     var v = rect(byId("view-main"));
     var sig = JSON.stringify([chips.map(function (c) {
       return c.id + (c.on ? "*" : "");
@@ -1222,11 +1227,12 @@ function createCreateView(doc, ctl, o) {
       });
       renderActs(fit.keep, fit.more, fit.fold);
     } else if (!same) lastFold = { sig: sig, ids: [], squeezed: false };
-    // The squeeze comes back at once too: the measures below can read UXP's
-    // old layout, and the top would jump and lose its scroll on each redraw.
-    if (same && lastFold.squeezed && top) top.className = "sc-top squeezed";
+    // The squeeze comes back at once too, set once (no flip within a
+    // redraw): the measures below can read UXP's old layout, and the top
+    // would jump and lose its scroll on each redraw.
+    setTop(top, same && lastFold.squeezed);
     while (!composerFits() && foldOne(false)) {}
-    if (!composerFits() && top) top.className = "sc-top squeezed";
+    if (!composerFits()) setTop(top, true);
     if (fitTimer) clearTimeout(fitTimer);
     fitTimer = setTimeout(lateFit, FIT_DELAYS[0]);
   }
@@ -1254,7 +1260,7 @@ function createCreateView(doc, ctl, o) {
     // top holds more than it shows, by over 6 px (a third of a chip row, so
     // the 2 px of slack seen live on some cards folds nothing).
     if (!composerFits() && top && !squeezed) {
-      top.className = "sc-top squeezed";
+      setTop(top, true);
       lastFold.squeezed = true;
     }
     var over = !!top && top.scrollHeight > top.clientHeight + 6;
@@ -1267,8 +1273,10 @@ function createCreateView(doc, ctl, o) {
 
   // ---- drawing ----
 
+  var renders = 0;
   function render() {
     if (drawing) return;
+    renders++;
     drawing = true;
     try {
       var m = ctl.model();
@@ -1420,9 +1428,18 @@ function createCreateView(doc, ctl, o) {
     });
 
   ctl.onChange(render);
-  // A resized panel or dock fits the middle again.
+  // A resized panel or dock fits the middle again. Only a real change of
+  // size: UXP also sends "resize" when the layout inside changes, and a
+  // redraw on each one looped (live 2026-10-21: dozens of redraws a second,
+  // every button replaced under the pointer, so no click landed).
+  var lastSize = null;
   if (o.global && typeof o.global.addEventListener === "function") {
     o.global.addEventListener("resize", function () {
+      var g = o.global;
+      var a = rect(byId("app"));
+      var size = [g.innerWidth, g.innerHeight, a ? Math.round(a.width) : 0, a ? Math.round(a.height) : 0].join("x");
+      if (size === lastSize) return;
+      lastSize = size;
       if (!drawing) render();
     });
   }
@@ -1431,6 +1448,10 @@ function createCreateView(doc, ctl, o) {
 
   return {
     render: render,
+    // How many times the view was drawn (the dev loop's metrics).
+    renders: function () {
+      return renders;
+    },
     closePop: closePop,
     openPop: function (kind) {
       var a = findAnchor(kind);

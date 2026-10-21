@@ -132,6 +132,7 @@ function start(o) {
     }
     var top = doc.getElementById("sc-top");
     out.top_class = top ? String(top.className) : null;
+    out.renders = o.app && o.app.createView && typeof o.app.createView.renders === "function" ? o.app.createView.renders() : null;
     return out;
   }
 

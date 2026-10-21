@@ -49,7 +49,16 @@ async function bootGenerate(t, opts = {}) {
   const doc = createFakeDocument();
   const pollMs = opts.pollMs || 20;
   // URL and Blob as UXP 9.4 has them: reference chips show blob links.
-  const global = { URL: globalThis.URL, Blob: globalThis.Blob };
+  // A window that takes listeners, so a test can send it "resize".
+  const listeners = {};
+  const global = {
+    URL: globalThis.URL,
+    Blob: globalThis.Blob,
+    innerWidth: 320,
+    innerHeight: 600,
+    addEventListener: (type, fn) => (listeners[type] = listeners[type] || []).push(fn),
+    dispatch: (type) => (listeners[type] || []).forEach((fn) => fn({ type }))
+  };
   const app = await main.boot({ host, document: doc, console: null, global, apiBaseUrl: mock.url, downloadOrigins: [mock.origin], pollDelay: () => pollMs });
   t.after(async () => {
     stopped = true;
@@ -63,7 +72,7 @@ async function bootGenerate(t, opts = {}) {
     await waitFor(() => doc.shown("view-main"), { label: "signed in" });
   }
   // port and token let an agent test start a real helper against this plugin.
-  return { app, host, doc, mock, ps, pair, clipboard, port, token: secure.get("scenario.pairing_token") };
+  return { app, host, doc, mock, ps, pair, clipboard, port, global, token: secure.get("scenario.pairing_token") };
 }
 
 // The ledger records on disk, parsed.

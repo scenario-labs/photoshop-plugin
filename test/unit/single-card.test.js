@@ -109,3 +109,16 @@ test("a price change after the upload: the composer's button shows the new price
   await waitFor(() => app.ledger.all()[0] && app.ledger.all()[0].state === "applied", { label: "applied", timeout: 8000 });
   assert.equal(mock.paidCalls.length, 1);
 });
+
+test("a resize with the same panel size draws nothing (live 2026-10-21: redraws looped and no click landed)", async (t) => {
+  const { app, ps, global } = await bootGenerate(t, { docs: [] });
+  await show(app, ps);
+  const v = app.createView;
+  global.dispatch("resize");
+  const once = v.renders();
+  for (let i = 0; i < 5; i++) global.dispatch("resize");
+  assert.equal(v.renders(), once, "the same size: no redraw");
+  global.innerHeight = 420;
+  global.dispatch("resize");
+  assert.equal(v.renders(), once + 1, "a new size: one redraw");
+});
