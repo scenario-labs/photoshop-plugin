@@ -79,3 +79,12 @@ Photoshop 27.11 on macOS, plugin 0.7.1 development build, panel docked at 320 px
 - The Model menu showed each model's picture, and prices for the rows whose price check came back (Make versions: the recommended model and three catalog rows priced, five without a price).
 - *Not verified live* in this pass: the reference note under the refs row on Replace inside (*tested automated*), and the error screens, which were drawn from the panel's own failure copy rather than from real failures.
 
+## Fix re-test
+
+Photoshop 27.11 on macOS, plugin 0.7.1 development build with the fixes listed under Unreleased in the [changelog](../CHANGELOG.md), 2026-10-21. One run per fix at the panel's default model, driven through the development UI loop; each result read at 100%. Details in [Known limitations](KNOWN_LIMITATIONS.md).
+
+- Extend canvas (a 2:3 poster to 16:9, GPT Image 2.5 Flare): *verified live: still broken*. The horizon steps at the right old edge and the main figure is drawn a second time in the new area. The checks recorded Step at the old edge and Repeated detail past the old edge, but the single result card showed "Placed" with no badge.
+- Replace inside, Inside selection, a feathered ellipse on a sky (Ideogram 4.5 Precise Edit, two takes): *verified live*: no patch at the selection edge in either take, both **Edges ok**. The badge on a real patch was not seen live, since none appeared.
+- Run card price after a price change on upload (New angle, 1 CU to 14 CU): *verified live: fixed*. The card read 14 CU while waiting for approval and after the run; the composer button kept "1 CU" meanwhile.
+- Jobs label for a video (Animate 5 s, Minimax H3 Fast): *verified live: fixed*. "Video" in the popover and in Jobs.
+

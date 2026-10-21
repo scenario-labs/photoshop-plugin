@@ -6,14 +6,14 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ### Fixed
 
-Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures), *not verified live*.
+Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures). Re-tested live on 2026-10-21 (development build, one run each at the default model); the result ends each line.
 
-- Extend canvas: the new frame shows through an eased band inside the original (6% of its short side, at least the overlap) instead of a 32 px ramp, and on models that take a mask the frame's tone along the old edge is matched to the original's (a `-landed.png` copy lands; the downloaded take is kept). Past the band the original is untouched.
-- Extend canvas checks read across the old edge: **Step at the old edge** and **Repeated detail past the old edge** (a feature of the original drawn again, as the doubled sun of a live run).
-- Replace inside: a lighter or darker patch just inside the selection edge is flagged (**Lighter patch at the selection edge**, **Darker patch at the selection edge**). The seam ring outside the selection could not see it.
-- The Takes card shows **Edge may show** for those badges; before, a take with a visible edge showed no badge.
-- The run card shows the charged price, else the price waiting for approval after a price change on upload, else the quote. It kept the first quote.
-- Jobs and its popover name video jobs (Animate, Frame to layer) "Video", not "Image".
+- Extend canvas: the new frame shows through an eased band inside the original (6% of its short side, at least the overlap) instead of a 32 px ramp, and on models that take a mask the frame's tone along the old edge is matched to the original's (a `-landed.png` copy lands; the downloaded take is kept). Past the band the original is untouched. *Verified live: still broken*: a horizon step at the old edge and a figure drawn twice in the new area still show.
+- Extend canvas checks read across the old edge: **Step at the old edge** and **Repeated detail past the old edge** (a feature of the original drawn again, as the doubled sun of a live run). *Verified live*: both were recorded on the live run, but Extend canvas lands as a single result card that shows no badge, so the person does not see them.
+- Replace inside: a lighter or darker patch just inside the selection edge is flagged (**Lighter patch at the selection edge**, **Darker patch at the selection edge**). The seam ring outside the selection could not see it. *Verified live*: no patch appeared on a feathered ellipse in a sky (two takes, both Edges ok); the badge on a real patch was not seen live.
+- The Takes card shows **Edge may show** for those badges; before, a take with a visible edge showed no badge. *Not seen live* (no take had a patch).
+- The run card shows the charged price, else the price waiting for approval after a price change on upload, else the quote. It kept the first quote. *Verified live: fixed* (New angle, 1 CU to 14 CU); the composer button still shows the first quote during the approval.
+- Jobs and its popover name video jobs (Animate, Frame to layer) "Video", not "Image". *Verified live: fixed* on Animate 5 s.
 
 ### Documentation
 

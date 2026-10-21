@@ -63,6 +63,8 @@ Draw a selection with any Photoshop tool. The context card reads "Selection W ×
 
 **Cut out subject**: the subject inside the selection, on a new layer with a transparent background. The layer stays as it was and the selection is dropped in the same History state.
 
+![A man with wind-blown copper curls in front of a busy tile wall, then cut out and shown on a flat color; at 100% the flyaway strands are kept with no tile left between them](media/before-after/cut-out-portrait-hair.jpg)
+
 **Select by description**: type what to select in the context card's **Select…** field ("all the sailboats"), click **Select**. The masks the model finds become a Photoshop selection, ready for the next action.
 
 **Make versions** also works on a selection.
@@ -73,9 +75,13 @@ With no selection, the panel works on the active layer, or the whole image for a
 
 **Make versions**: variations of the layer, or the change you describe, as takes to compare.
 
+![A painted poster for The Kite Keeper and four versions of it with the same keeper, goat and title and new flowers, banners and boats; at 100% the details differ](media/before-after/make-versions-poster.jpg)
+
 **New layer**: a new image on a layer above, from a prompt.
 
 **Upscale**: 2x or the other factors the model offers (Topaz Image Upscale), from all visible layers, opened as a new document at the larger size. The result card compares the same region at 100%.
+
+![The poster's goggles and coat stitching: the original at 400% looks soft and blocky, the 4x upscale at 100% shows clean brass, hair and stitches](media/before-after/upscale-poster-detail.jpg)
 
 **Remove background**: one click (851 Labs Background Remover); lands as a mask on the layer, so the hidden pixels stay. **Cut out to a new layer** (More) keeps the layer as it is and puts the subject on a masked copy above.
 
@@ -86,6 +92,8 @@ With no selection, the panel works on the active layer, or the whole image for a
 ![A pencil storyboard sketch of a cliff-side town with kites and a figure on a roof, rendered as painted animation concept art at sunset; at 100% the rooftops, figure and goat keep their places](media/before-after/render-sketch-kite-town.jpg)
 
 **New angle** (More > Make variants): Turn left 45°, Turn right 45°, Side view, Back view or From above. No prompt.
+
+![A character sheet of the kite keeper made with New layer, then her front figure cut out and turned to a side view and a back view with New angle; coat, braid, goggles and red kite string stay the same](media/before-after/new-layer-angles-turnaround.jpg)
 
 **Split into layers**: rebuilds the image as a group: a clean background and one layer per element, each placed where it was.
 
@@ -108,7 +116,9 @@ Replace inside has an **Edit** chip with two modes, each with its price:
 <img src="media/screens/edit-inside-or-bolder.png" width="320" alt="The Edit menu: Inside selection and Bolder, each with a description and a price">
 
 - **Inside selection** (Ideogram 4.5 Precise Edit): changes only what is inside the selection; everything outside stays as it is. Good for a change that fits the shape you drew.
-- **Bolder** (GPT Image 2.5 Flare): a stronger change. The new subject may reach past the selection, and the layer mask grows to keep it whole. Good when the new object is taller or wider than the old one, as with the glass of lemonade above.
+- **Bolder** (GPT Image 2.5 Flare): a stronger change. The new subject may reach past the selection, and the layer mask grows to keep it whole. Good when the new object is taller or wider than the old one, as with the dragon below.
+
+![A goat selected on a painted rooftop, then a sleepy red dragon in its place; at 100% the dragon reaches past the selection and blends into the roof](media/before-after/bolder-goat-to-dragon.jpg)
 
 <img src="media/screens/selection-replace-priced.png" width="260" alt="Replace inside with Edit Inside selection, Ideogram 4.5 Precise Edit, 12 CU"> <img src="media/screens/selection-bolder-priced.png" width="260" alt="Replace inside with Edit Bolder, GPT Image 2.5 Flare, 4 CU">
 
