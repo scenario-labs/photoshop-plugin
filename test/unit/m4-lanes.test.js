@@ -275,7 +275,9 @@ test("Expand, mask route on Flare: the new canvas at its own size, original at t
   });
   ps = sim.ps;
   const { app, mock } = sim;
-  const a = { tool: "expand", prompt: PROMPT, options: { ratio: "1:1" } };
+  // Flare is no longer the Extend default (Reframe, 2026-10-21); its mask
+  // route is still offered, picked here by model.
+  const a = { tool: "expand", model_id: FLARE, prompt: PROMPT, options: { ratio: "1:1", quality: "low" } };
   const p = await app.flow.price(a);
   assert.equal(p.state, "ready", p.reason);
   assert.equal(p.quote.label, "2 CU", "measured: 1024 x 1024, 1 take, low");
@@ -316,7 +318,9 @@ test("Expand, mask route on Flare: a redrawn frame 30 levels lighter is tone mat
   });
   ps = sim.ps;
   const { app } = sim;
-  const a = { tool: "expand", prompt: PROMPT, options: { ratio: "1:1" } };
+  // Flare is no longer the Extend default (Reframe, 2026-10-21); its mask
+  // route is still offered, picked here by model.
+  const a = { tool: "expand", model_id: FLARE, prompt: PROMPT, options: { ratio: "1:1", quality: "low" } };
   const p = await app.flow.price(a);
   const out = await app.flow.generate(a, p.quote);
   const rec = await doneRec(app, out.record.local_id);
@@ -328,26 +332,7 @@ test("Expand, mask route on Flare: a redrawn frame 30 levels lighter is tone mat
   assert.equal(rec.placement.verify.untouched, true, "the original stays untouched past the band");
 });
 
-const REFRAME = {
-  // Constructed from Reframe's schema as hosted Scenario MCP showed it (an
-  // image, a prompt, an aspectRatio enum, a resolution enum and a 9-value
-  // position preset); not a recorded answer. Position names are a guess the
-  // plugin matches loosely.
-  id: "model_scenario-gemini-reframe",
-  name: "Reframe",
-  type: "custom",
-  privacy: "public",
-  status: "trained",
-  capabilities: ["img2img"],
-  tags: ["Image", "Outpaint", "Post Processing", "expand", "reframe", "tool"],
-  inputs: [
-    { name: "image", type: "file", kind: "image", costImpact: false, required: { always: true } },
-    { name: "prompt", type: "string", maxLength: 4096, costImpact: false },
-    { name: "aspectRatio", type: "string", allowedValues: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "auto"], default: "auto", costImpact: true },
-    { name: "resolution", type: "string", allowedValues: ["1K", "2K", "4K"], default: "1K", costImpact: true },
-    { name: "position", type: "string", allowedValues: ["top_left", "top", "top_right", "left", "center", "right", "bottom_left", "bottom", "bottom_right"], default: "center", costImpact: false }
-  ]
-};
+const { REFRAME } = require("../helpers/reframe-record.js");
 
 test("Expand, position route (Reframe): the original and the anchor as position; a result that lines up lands masked, one that does not lands unmasked for manual alignment", async (t) => {
   const DOC = { id: 7, title: "poster.psd", width: 1024, height: 768 };
@@ -364,7 +349,8 @@ test("Expand, position route (Reframe): the original and the anchor as position;
   const a = { tool: "expand", model_id: REFRAME.id, prompt: PROMPT, options: { ratio: "1:1", anchor: "top" } };
   const p = await app.flow.price(a);
   assert.equal(p.state, "ready", p.reason);
-  assert.deepEqual(p.req.parameters, { aspectRatio: "1:1", resolution: "1K", position: "top", prompt: PROMPT });
+  // Reframe is the Extend default: its preset pins 2K (the measured price).
+  assert.deepEqual(p.req.parameters, { aspectRatio: "1:1", resolution: "2K", position: "top", prompt: PROMPT });
   assert.equal(p.view.controls.sides_enabled, false);
   const out = await app.flow.generate(a, p.quote);
   const rec = await doneRec(app, out.record.local_id);

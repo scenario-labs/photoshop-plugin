@@ -255,7 +255,11 @@ function expandView(schema, ctx, o) {
     for (var k2 in shaped.params) params[k2] = shaped.params[k2];
   } else {
     var resP = common.param(schema, "resolution");
-    shaped = shapeMod.shape(whole, newCanvas, { kind: "ratio_enum", ratios: [ratio] }, { max_long: 4096, resolutions: resP && resP.enum ? resP.enum : [] });
+    var resList = resP && resP.enum ? resP.enum : [];
+    // A lane preset that names a resolution pins it: the default's price
+    // and look are the ones measured (Reframe at 2K, 2026-10-21).
+    if (params.resolution && resList.indexOf(params.resolution) >= 0) resList = [params.resolution];
+    shaped = shapeMod.shape(whole, newCanvas, { kind: "ratio_enum", ratios: [ratio] }, { max_long: 4096, resolutions: resList });
     params.aspectRatio = ratio;
     if (shaped.params.resolution) params.resolution = shaped.params.resolution;
     params.position = position;
