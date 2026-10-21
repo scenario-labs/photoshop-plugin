@@ -110,7 +110,17 @@ function createFakeDocument({ html = fs.readFileSync(INDEX, "utf8"), macPassword
   }
 
   doc.getElementById = (id) => els.get(id) || null;
-  doc.querySelectorAll = (sel) => (sel === "[data-lane]" ? lanes.slice() : []);
+  // "[attr]": the elements in the page (attached under an element of
+  // index.html) that carry the attribute, in creation order.
+  const inPage = (el) => {
+    for (let n = el; n; n = n.parentNode) if (n.id && els.get(n.id) === n) return true;
+    return false;
+  };
+  doc.querySelectorAll = (sel) => {
+    if (sel === "[data-lane]") return lanes.slice();
+    const m = /^\[([a-z-]+)\]$/.exec(sel);
+    return m ? all.filter((e) => e.getAttribute(m[1]) !== null && inPage(e)) : [];
+  };
   doc.createElement = (tag) => makeEl(tag);
   doc.byId = (id) => {
     const el = els.get(id);
