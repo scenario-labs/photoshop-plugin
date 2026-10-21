@@ -713,12 +713,20 @@ body {
 }
 
 /* The main view (AGENTS.md, Panel UI, "Short panels"): the context card
-   and the action chips on top never scroll, so every chip row shows whole;
-   the composer is pinned at the bottom; only the middle (Takes, Recent)
-   scrolls, with the height left between them (flex basis 0, so it gives
-   up its room first). The top shrinks only when nothing is left for the
-   middle, below about 400 px; then it scrolls instead of the composer
-   being cut. */
+   and the action chips on top never scroll and never shrink, so every chip
+   row shows whole; the composer is pinned at the bottom; only the middle
+   (#sc-body: Takes, Recent) scrolls, with the height left between them
+   (flex basis 0, so it gives up its room first). The top sits outside
+   #sc-body: inside it, #sc-body shrank below the top's height when the top
+   and the composer did not fit, and clipped the second chip row at the
+   composer's edge (live 2026-10-21: a layer card with its Select field and
+   two chip rows at about 300 px). When even an empty middle leaves too
+   little room, the view scrolls as a whole; nothing is cut. */
+.view.cp {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 .cp .sc-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -2256,11 +2264,4 @@ body {
   }
 }
 
-@media (max-height: 399px) {
-  .cp .sc-top {
-    flex: 0 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-  }
-}
 

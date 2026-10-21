@@ -139,7 +139,7 @@ function createCreateView(doc, ctl, o) {
     }
     setText("ctx-title", c.title);
     var ct = byId("ctx-title");
-    if (ct) ct.setAttribute("title", c.title || "");
+    if (ct) ct.setAttribute("title", c.tip || c.title || "");
     var d = byId("ctx-detail");
     if (d) {
       d.textContent = c.detail || "";

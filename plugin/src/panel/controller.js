@@ -15,6 +15,7 @@
 
 var builtinMod = require("../util/builtin.js");
 var clipMod = require("../util/clip.js");
+var slugMod = require("../util/slug.js");
 var actionsMod = require("./actions.js");
 var imageMod = require("./image.js");
 var docRefsMod = require("./doc-refs.js");
@@ -116,6 +117,22 @@ function runName(prompt, kind) {
   if (p) return clipMod.clip(p, 60);
   var KINDS = { edit: "Edit", cutout: "Cut out", upscale: "Upscale", expand: "Extend canvas", video: "Animate" };
   return KINDS[kind] || "Image";
+}
+
+// The context title of a layer: its own name, except a Scenario result
+// still under the name the plugin gave it ("Take 1 NfpUm8", "Scenario image
+// kite NfpUm8"), which reads in plain words ("Take 1 of A paper kite"); the
+// id tail stays in the tooltip. A layer the person renamed keeps its name.
+function layerTitle(name, fields) {
+  var n = String(name || "");
+  if (!fields || !fields.assetId) return n;
+  var t = slugMod.tail(fields.assetId);
+  if (!t || n.slice(-t.length - 1) !== " " + t) return n;
+  var run = runName(fields.runName || fields.prompt, fields.kind);
+  var take = /^Take (\d+) /.exec(n);
+  if (take) return "Take " + take[1] + " of " + run;
+  if (/^Scenario /.test(n)) return run;
+  return n;
 }
 
 // The takes a layer's metadata describes (the results model): a Scenario
@@ -1969,6 +1986,11 @@ function createController(o) {
       out.icon = "layer";
       out.checker = c.kind === "cutout";
       out.title = lay ? lay.name + " · Layer " + times(lw, lh) : (raw.doc.title || "Document") + " · Canvas " + times(raw.doc.width, raw.doc.height);
+      var plain = lay ? layerTitle(lay.name, st.meta && st.meta.fields) : null;
+      if (plain && plain !== lay.name) {
+        out.tip = out.title;
+        out.title = plain;
+      }
       if (st.startFrom && st.action === "versions") out.detail = "Starting from take " + st.startFrom.n + " · " + land.charAt(0).toLowerCase() + land.slice(1);
       var mf = st.meta && st.meta.fields;
       if (mf && mf.assetId && mf.jobId && o.ledger && typeof o.ledger.findByJobId === "function") {
@@ -2843,4 +2865,4 @@ function createController(o) {
   };
 }
 
-module.exports = { createController: createController, errText: errText, classify: classify, takesOf: takesOf, isCutout: isCutout, badgeOf: badgeOf, cuOf: cuOf, needsConfirm: needsConfirm, TEXT: TEXT, DEBOUNCE_MS: DEBOUNCE_MS, TARGETS: TARGETS, CHANGE: CHANGE };
+module.exports = { createController: createController, errText: errText, layerTitle: layerTitle, classify: classify, takesOf: takesOf, isCutout: isCutout, badgeOf: badgeOf, cuOf: cuOf, needsConfirm: needsConfirm, TEXT: TEXT, DEBOUNCE_MS: DEBOUNCE_MS, TARGETS: TARGETS, CHANGE: CHANGE };

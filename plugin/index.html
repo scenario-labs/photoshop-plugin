@@ -76,9 +76,6 @@
 
       <!-- Main: lane tabs, a body that scrolls, the tray and the prompt bar pinned at the bottom. -->
       <section class="view cp" id="view-main">
-        <!-- The context, the chips and the middle; on a short panel they
-             scroll together above the pinned composer. -->
-        <div class="sc-body" id="sc-body">
         <!-- What Photoshop has now, and the actions that fit it (FLOWS v2). -->
         <div class="sc-top" id="sc-top">
           <div class="ctx" id="ctx">
@@ -96,6 +93,9 @@
           <div class="acts" id="acts"></div>
         </div>
 
+        <!-- The middle: the only part that gives way when the panel is
+             short. The context and the chips above keep their full height. -->
+        <div class="sc-body" id="sc-body">
         <!-- The run's takes and the document's recent runs scroll here. -->
         <div class="sc-mid" id="mid">
           <div class="banner" id="account-banner">
