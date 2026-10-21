@@ -70,6 +70,7 @@ npm ci
 npm test          # unit and integration tests (Node's built-in test runner)
 npm run lint      # syntax, typography and public-content checks
 npm run package   # build/scenario-photoshop-0.7.1.ccx
+npm run handbook  # build/handbook/: the handbook as a web page, one HTML file and a PDF
 ```
 
 Contributors and coding agents: [AGENTS.md](AGENTS.md). Design: [docs/spec/SPEC.md](docs/spec/SPEC.md) and the tool reference [docs/spec/MCP.md](docs/spec/MCP.md).
