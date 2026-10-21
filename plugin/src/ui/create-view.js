@@ -1201,7 +1201,7 @@ function createCreateView(doc, ctl, o) {
     renderActs(fit.keep, fit.more, fit.fold);
     lastFold = { sig: fit.sig, ids: fit.fold.map(function (c) {
       return c.id;
-    }), squeezed: false };
+    }), squeezed: lastFold.sig === fit.sig && lastFold.squeezed };
     return true;
   }
   function fitTop(chips, more, ctx) {
@@ -1248,19 +1248,19 @@ function createCreateView(doc, ctl, o) {
     var sizes = [top ? top.scrollHeight : 0, top ? top.clientHeight : 0, c ? Math.round(c.bottom) : 0, a ? Math.round(a.height) : 0].join(",");
     var fresh = fit.after !== sizes || fit.same >= 1;
     fit.same = fit.after === sizes ? fit.same + 1 : 0;
-    // Live, the top could scroll with its class unsqueezed (UXP had not laid
-    // it out again), so a top that scrolls counts as well as a composer out
-    // of view.
-    var bad = !composerFits() || (!!top && top.scrollHeight > top.clientHeight + 1);
-    if (bad && (fit.after === null || fresh)) {
-      if (foldOne(true)) {
-        if (top) top.className = "sc-top";
-        fit.after = sizes;
-        fit.same = 0;
-      } else if (top && !squeezed) {
-        top.className = "sc-top squeezed";
-        lastFold.squeezed = true;
-      }
+    // The composer stays in view first: a composer pushed out squeezes the
+    // top at once (seen live: a fold that cleared the squeeze let the full
+    // top push the button out while UXP caught up). Then chips fold while the
+    // top holds more than it shows, by over 6 px (a third of a chip row, so
+    // the 2 px of slack seen live on some cards folds nothing).
+    if (!composerFits() && top && !squeezed) {
+      top.className = "sc-top squeezed";
+      lastFold.squeezed = true;
+    }
+    var over = !!top && top.scrollHeight > top.clientHeight + 6;
+    if (over && (fit.after === null || fresh) && foldOne(true)) {
+      fit.after = sizes;
+      fit.same = 0;
     }
     fitTimer = setTimeout(lateFit, next);
   }
