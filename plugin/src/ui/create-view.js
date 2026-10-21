@@ -318,7 +318,19 @@ function createCreateView(doc, ctl, o) {
         one.appendChild(tb);
       }
       var txt = el("div", "txt");
-      if (card.line) txt.appendChild(el("span", card.tone === "warn" ? "warn" : null, card.line));
+      if (card.badge) {
+        var sb = el("span", "chk-b" + (card.badge.tone === "warn" ? " warn" : ""));
+        sb.setAttribute("data-badge", "single");
+        sb.appendChild(icons.icon(doc, card.badge.tone === "warn" ? "warning" : "check", null, 12));
+        sb.appendChild(el("span", "bt", card.badge.text));
+        var brow = el("div", "brow");
+        brow.appendChild(sb);
+        txt.appendChild(brow);
+      }
+      if (card.line) txt.appendChild(el("span", card.tone === "warn" && !card.badge ? "warn" : null, card.line));
+      // Every check the result got, in words (a Takes card's badge sums
+      // them up per take; a single result has room for all of them).
+      if (card.badge && card.badge.tone === "warn" && card.checks && card.checks.length) txt.appendChild(el("div", "warn checks", card.checks.join(" · ")));
       one.appendChild(txt);
       sec.appendChild(one);
       var r2 = el("div", "btnrow");

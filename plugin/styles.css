@@ -1294,6 +1294,20 @@ body {
   color: #f2b45a;
 }
 
+.cp .single .txt .brow {
+  display: flex;
+  flex-direction: row;
+  margin-bottom: 3px;
+}
+
+.cp .single .txt .brow .chk-b {
+  position: static;
+}
+
+.cp .single .txt .checks {
+  margin-top: 2px;
+}
+
 .cp .recent {
   display: none;
 }

@@ -236,6 +236,7 @@ function createController(o) {
     confirm: null,
     note: "",
     latest: {},
+    repriced: null,
     done: {},
     // Runs an earlier panel session placed in a document, found again by
     // their layers' metadata: { <document id>: { <local id>: true|false } }.
@@ -1065,6 +1066,24 @@ function createController(o) {
     return true;
   }
 
+  // A price that changed after the upload (live 2026-10-21: New angle, 1 CU
+  // before the upload, 14 CU after it): the composer's button shows it for
+  // the same action and settings, since the stand-in quote it re-checks
+  // would read the old price again. Any change of settings drops it.
+  function noteRepriced(id, cu, localId) {
+    st.repriced = { action: id, key: settingsKey(id), price: String(cu), local_id: localId };
+  }
+
+  function repricedFor(id) {
+    var r = st.repriced;
+    if (!r || r.action !== id) return null;
+    if (r.key !== settingsKey(id)) {
+      st.repriced = null;
+      return null;
+    }
+    return r.price;
+  }
+
   function go() {
     if (st.sending || st.confirm || st.price.state !== "ready" || st.price.action !== st.action) return Promise.resolve(null);
     if (!o.runner) return Promise.resolve(null);
@@ -1113,8 +1132,10 @@ function createController(o) {
       if (out.record && id === "select_desc") st.selectText = "";
       if (out.record && d === null) st.latest.none = out.record.local_id;
       if (out.replayed) st.note = TEXT.replayed;
-      else if (out.state === "awaiting_approval") st.confirm = { kind: "changed", local_id: out.record.local_id, text: "Price changed after upload. Now " + out.price + " CU (was " + out.was + " CU). Nothing was spent.", ok: "Approve · " + out.price + " CU" };
-      else if (out.state !== "queued" && out.record && out.record.error) st.note = out.record.error;
+      else if (out.state === "awaiting_approval") {
+        st.confirm = { kind: "changed", local_id: out.record.local_id, text: "Price changed after upload. Now " + out.price + " CU (was " + out.was + " CU). Nothing was spent.", ok: "Approve · " + out.price + " CU" };
+        noteRepriced(id, out.price, out.record.local_id);
+      } else if (out.state !== "queued" && out.record && out.record.error) st.note = out.record.error;
       if (id === "more_like") st.keepAction = false;
     } catch (e) {
       var type = e && e.type;
@@ -1141,7 +1162,10 @@ function createController(o) {
       return o.runner.approve(c.local_id).then(
         function (out) {
           st.sending = false;
-          if (out && out.state === "awaiting_approval" && out.changed) st.confirm = { kind: "changed", local_id: c.local_id, text: "Price changed again. Now " + out.price + " CU. Nothing was spent.", ok: "Approve · " + out.price + " CU" };
+          if (out && out.state === "awaiting_approval" && out.changed) {
+            st.confirm = { kind: "changed", local_id: c.local_id, text: "Price changed again. Now " + out.price + " CU. Nothing was spent.", ok: "Approve · " + out.price + " CU" };
+            if (st.repriced && st.repriced.local_id === c.local_id) st.repriced.price = String(out.price);
+          }
           else st.note = out && out.state !== "queued" && out.record ? out.record.error || "" : "";
           changed();
         },
@@ -1988,6 +2012,13 @@ function createController(o) {
       var words = { ready: "Ready to place", awaiting_approval: "Waiting for your approval", applied: "Placed" };
       var line = words[rec.state] || (FAILED.indexOf(rec.state) >= 0 ? rec.error || "Did not finish" : "");
       var first = shownOutput(rec);
+      // The checks' badges for the shown output, as a Takes card shows them
+      // for each take (live 2026-10-21: Extend recorded a step and a repeated
+      // detail, and its single card showed neither).
+      var all = rec.placement && rec.placement.badges ? rec.placement.badges : [];
+      var at = Math.max(0, (rec.outputs || []).indexOf(first));
+      var checks = (all[at] || []).slice();
+      var badge = badgeOf(checks);
       return {
         kind: "single",
         local_id: rec.local_id,
@@ -1997,7 +2028,9 @@ function createController(o) {
         thumb: first && first.state === "saved" ? thumbs.resultThumb(first.path) || posterOf(rec) : null,
         thumb_size: sizeOfOut(first),
         line: rec.placement && rec.placement.notes && rec.placement.notes.length ? rec.placement.notes.join(" ") : line,
-        tone: FAILED.indexOf(rec.state) >= 0 ? "warn" : "ok",
+        tone: FAILED.indexOf(rec.state) >= 0 || (badge && badge.tone === "warn") ? "warn" : "ok",
+        badge: badge,
+        checks: checks,
         place: rec.state === "ready",
         actions: cardActions(rec),
         compare: compareOf(rec),
@@ -2145,9 +2178,11 @@ function createController(o) {
       return g;
     }
     if (p.state === "ready") {
-      g.cu = "· " + p.label;
+      var after = repricedFor(st.action);
+      var shownLabel = after !== null ? after + " CU" : p.label;
+      g.cu = "· " + shownLabel;
       g.enabled = !st.confirm && !!o.runner && !(o.runner.pausedFor && o.runner.pausedFor() > 0);
-      g.title = g.label + " · " + p.label;
+      g.title = g.label + " · " + shownLabel + (after !== null ? " (the price after the upload)" : "");
       if (o.runner && o.runner.pausedFor && o.runner.pausedFor() > 0) g.reason = "Not sent: Scenario asked to wait " + o.runner.pausedFor() + " s.";
       if (p.quote && p.quote.no_refund) g.reason = g.reason || "No refund if it fails.";
       return g;
