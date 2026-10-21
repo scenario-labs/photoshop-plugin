@@ -136,8 +136,14 @@ test("short panels: the chip rows stay whole and the button visible from about 3
   assert.equal(R[".cp .sug"]["height"], R[".cp .cc"]["height"], "Suggest is as tall as the composer chips");
   assert.equal(R[".cp .sug"]["font-size"], R[".cp .cc"]["font-size"]);
   assert.equal(M["(max-height: 439px)"][".cp .sug"]["height"], M["(max-height: 439px)"][".cp .cc"]["height"], "and in short docks");
-  assert.ok(!M["(max-height: 399px)"], "the top never scrolls, at any height");
-  assert.equal(R[".view.cp"]["overflow-y"], "auto", "with too little room even for an empty middle, the view scrolls as a whole");
+  assert.ok(!M["(max-height: 399px)"], "no height makes the top scroll by itself");
+  assert.ok(!R[".view.cp"] || !/auto|scroll/.test(R[".view.cp"]["overflow-y"] || ""), "the view never scrolls: the composer and its button stay in view");
+  // With the middle at nothing, the last chips go into More (fitTop() in
+  // create-view.js) down to one row; only then does the top scroll.
+  assert.equal(R[".cp .sc-top.squeezed"]["overflow-y"], "auto");
+  assert.equal(R[".cp .sc-top.squeezed"]["flex"], "0 1 auto");
+  const cv = fs.readFileSync(path.join(PLUGIN, "src/ui/create-view.js"), "utf8");
+  assert.ok(/fitMid\(\);\s*fitTop\(/.test(cv), "the chips fold after the middle has given its room");
   assert.equal(R[".cp .recent.compact .rthumb"]["width"], "28px", "Recent collapses to one row of small thumbnails");
   assert.equal(R[".cp .recent.compact .rrow"]["flex-wrap"], "nowrap");
 });

@@ -721,11 +721,9 @@ body {
    and the composer did not fit, and clipped the second chip row at the
    composer's edge (live 2026-10-21: a layer card with its Select field and
    two chip rows at about 300 px). When even an empty middle leaves too
-   little room, the view scrolls as a whole; nothing is cut. */
-.view.cp {
-  overflow-x: hidden;
-  overflow-y: auto;
-}
+   little room, the last chips go into More (fitTop() in create-view.js),
+   down to one row; only then does the top scroll (.squeezed), never the
+   composer. */
 
 .cp .sc-body {
   flex: 1 1 auto;
@@ -2192,6 +2190,12 @@ body {
    only below about 400 px. */
 .cp .sc-top > * {
   flex-shrink: 0;
+}
+
+.cp .sc-top.squeezed {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Short panels (Photoshop docks the panel at 420 px): a tighter context
