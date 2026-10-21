@@ -15,6 +15,17 @@ Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures).
 - The run card shows the charged price, else the price waiting for approval after a price change on upload, else the quote. It kept the first quote. *Verified live: fixed* (New angle, 1 CU to 14 CU); the composer button still shows the first quote during the approval.
 - Jobs and its popover name video jobs (Animate, Frame to layer) "Video", not "Image". *Verified live: fixed* on Animate 5 s.
 
+### Changed
+
+- Extend canvas defaults to Reframe at 2K, with the resolution pinned by the lane preset; GPT Image 2.5 Sunburst at Medium was the runner-up of a two-take comparison per model on the same poster and canvas, and GPT Image 2.5 Flare stays in the Model menu (it drew the main figure a second time in 3 of 4 takes). The built-in Extend prompt is unchanged: a line asking not to repeat anything from the center did not help. *Tested automated*; *not tested live*.
+
+### Fixed after the re-test
+
+*Tested automated*; *not tested live*.
+
+- The single result card (Extend canvas, Upscale, Remove background) shows the badge the checks gave and each check in words. It showed none, so the step and the repeated detail recorded on the live Extend run were not visible.
+- The composer button shows the price after the upload for the same action and settings (New angle, 1 CU to 14 CU live), where it kept the first quote during the approval and the run.
+
 ### Documentation
 
 - README rewritten for people installing the plugin: what it does, install from a built `.ccx`, a first generation, and links to the guides. The build-by-build technical status moved to `docs/STATUS.md`.
