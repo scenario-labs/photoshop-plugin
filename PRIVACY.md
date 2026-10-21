@@ -85,7 +85,7 @@ Layer metadata travels with the PSD when you share it. It never contains your ke
 ## Deleting your data
 
 - **On this computer:** sign out, reset the pairing token, and delete the plugin data folder and any Output Folder you chose (paths above).
-- **On Scenario:** delete uploaded images and results from your project in the Scenario web app. For anything else Scenario holds about you, including deletion of your account data, write to privacy@scenario.com as Scenario's Privacy Policy describes.
+- **On Scenario:** delete uploaded images and results from your project in the Scenario web app. For anything else Scenario holds about you, including deletion of your account data, write to support@scenario.com as Scenario's Privacy Policy describes.
 - **API keys:** delete them on app.scenario.com. Signing out of the plugin does not revoke a key.
 - **Agent providers:** what an agent read is held under your agreement with that provider.
 
@@ -112,6 +112,6 @@ Layer metadata travels with the PSD when you share it. It never contains your ke
 - Scenario's [Privacy Policy](https://www.scenario.com/privacy-policy) and Terms: linked from [scenario.com](https://www.scenario.com).
 - Scenario Trust Portal: [trust.scenario.com](https://trust.scenario.com).
 - Scenario documentation: [docs.scenario.com](https://docs.scenario.com).
-- Privacy requests to Scenario: privacy@scenario.com.
+- Privacy requests to Scenario: support@scenario.com.
 - Photoshop is covered by Adobe's terms.
 - The plugin is open source under the MIT license; its network calls can be checked in this repository. Report security issues privately as described in [SECURITY.md](SECURITY.md), and never paste keys or secrets in issues.

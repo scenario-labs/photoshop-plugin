@@ -9,7 +9,7 @@ var slugMod = require("../util/slug.js");
 var LABELS = {};
 for (var i = 0; i < enums.job_status.length; i++) LABELS[enums.job_status[i].value] = enums.job_status[i].label;
 
-var KIND_NAMES = { image: "Image", edit: "Edit", upscale: "Upscale", expand: "Expand", remove_background: "Remove BG" };
+var KIND_NAMES = { image: "Image", edit: "Edit", upscale: "Upscale", expand: "Expand", remove_background: "Remove BG", video: "Video" };
 
 var TEXT = {
   empty: "No jobs yet. What you generate here, or an AI agent generates for you, shows up here.",

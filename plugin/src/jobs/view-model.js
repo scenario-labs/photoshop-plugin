@@ -24,7 +24,7 @@ var slugMod = require("../util/slug.js");
 var LABELS = {};
 for (var i = 0; i < enums.job_status.length; i++) LABELS[enums.job_status[i].value] = enums.job_status[i].label;
 
-var KIND_NAMES = { image: "Image", edit: "Edit", upscale: "Upscale", expand: "Expand", remove_background: "Remove BG" };
+var KIND_NAMES = { image: "Image", edit: "Edit", upscale: "Upscale", expand: "Expand", remove_background: "Remove BG", video: "Video" };
 var FILTERS = ["all", "attention", "agents", "document"];
 var RUNNING = ["uploading_inputs", "submitting", "queued", "generating", "cancel_requested", "succeeded", "downloading", "applying"];
 var ATTENTION = ["awaiting_approval", "uncertain", "download_failed", "apply_failed"];

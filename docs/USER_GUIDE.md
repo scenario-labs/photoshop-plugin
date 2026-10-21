@@ -20,7 +20,7 @@ Scenario for Photoshop, development build 0.7.1. Pictures and recordings in this
 
 ## Quick start
 
-From install to a first image in about two minutes, once the package is built (see the [README](../README.md#install)).
+From install to a first image in a few steps, once the package is built (the time was not measured live yet) (see the [README](../README.md#install)).
 
 1. **Install** the `.ccx` and restart Photoshop, then open **Plugins > Scenario**. The panel opens on **Connect your Scenario account**.
 
@@ -120,7 +120,7 @@ Tips:
 
 - A feathered selection blends the edge. Leave some margin around the object.
 - With Inside selection, an object taller than the selection is cut at its edge: draw the selection to the size of the new object, or use Bolder.
-- A take can carry a check badge: **Edges ok**, **May not line up**, **Part unchanged** or **Spills past**. The checks look at tone and alignment around the edge; they do not catch every visible patch, so look at the result.
+- A take can carry a check badge: **Edges ok**, **Edge may show** (a lighter or darker patch at the selection edge, or on Extend canvas a step or a repeated detail at the old edge), **May not line up**, **Part unchanged** or **Spills past**. The checks look at tone and alignment around the edge; they do not catch every visible patch, so look at the result.
 
 ![Remove from the panel, from the selections to the clean street](media/video/selection-edit.gif)
 
