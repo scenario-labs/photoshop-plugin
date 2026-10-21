@@ -73,6 +73,8 @@ With no selection, the panel works on the active layer, or the whole image for a
 
 **Make versions**: variations of the layer, or the change you describe, as takes to compare.
 
+![A painted poster for The Kite Keeper and four versions of it with the same keeper, goat and title and new flowers, banners and boats; at 100% the details differ](media/before-after/make-versions-poster.jpg)
+
 **New layer**: a new image on a layer above, from a prompt.
 
 **Upscale**: 2x or the other factors the model offers (Topaz Image Upscale), from all visible layers, opened as a new document at the larger size. The result card compares the same region at 100%.
