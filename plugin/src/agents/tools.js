@@ -388,10 +388,16 @@ function createAgentTools(o) {
     var rec = jobFor({ local_id: args.local_id });
     if (!own(rec, ctx)) throw fail("NotYourJob", "Only jobs this client session started can be withdrawn.");
     if (rec.state !== "awaiting_approval") throw invalid("This job is " + rec.state + ", not awaiting approval.");
+    // decline() does nothing while the person's approval is going through:
+    // the request may be sent, so the agent is not told it was withdrawn.
+    var done = await o.runner.decline(rec.local_id, "withdrawn");
+    if (!done) {
+      var now = o.ledger.get(rec.local_id);
+      throw invalid("This job is being approved in the panel (now " + (now ? now.state : "gone") + "), so it may be sent. Call job_status.");
+    }
     o.approvals.drop(function (c) {
       return c.kind === "spend" && c.data && c.data.local_id === rec.local_id;
     });
-    await o.runner.decline(rec.local_id, "withdrawn");
     record(ctx, "Withdrew a spend request", null);
     return { status: "not_sent" };
   }

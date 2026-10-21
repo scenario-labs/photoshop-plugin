@@ -170,17 +170,28 @@ test("F3 Create image with no document: Size and Takes chips, the price on the b
   // alone (a second function named cover once hid the prompt instead).
   for (const tile of tiles(doc)) assert.ok(tile.children.some((c) => c.tagName === "IMG" || (c.children || []).some((k) => k.tagName === "IMG")), "the tile has its picture");
   assert.equal(doc.byId("composer").className, "composer", "no popover open, the composer is not covered");
+  // A layer the person put in the takes group is not a take, nor is a
+  // Scenario layer of another run dragged into it: Show take and Keep leave
+  // them as they are.
+  const mine = { ...group.layers[0], id: 990001, name: "My shadow", xmp: null, visible: true, parent: group };
+  assert.ok(group.layers[0].xmp.includes(rec.job_id), "the take's metadata names its job");
+  const other = { ...group.layers[0], id: 990002, name: "Scenario image other run", xmp: group.layers[0].xmp.split(rec.job_id).join("job_otherrun0001"), visible: true, parent: group };
+  group.layers.push(mine, other);
   const before = ps.history.length;
   tiles(doc)[1].click();
   await waitFor(() => group.layers[1].visible && !group.layers[0].visible, { label: "take 2 shows" });
+  assert.equal(mine.visible, true, "Show take leaves the person's layer visible");
+  assert.equal(other.visible, true, "Show take leaves another run's layer visible");
   assert.equal(ps.history.length, before + 1, "Show take is one History state");
   assert.equal(ps.history.at(-1).name, "Scenario: Show take");
   await waitFor(() => /\bon\b/.test(tiles(doc)[1].className), { label: "tile 2 marked" });
   const keepBtn = find(doc, "data-btn", "keep");
   assert.equal(keepBtn.textContent, "Keep take 2");
   keepBtn.click();
-  await waitFor(() => group.layers.length === 1, { label: "kept" });
+  await waitFor(() => group.layers.length === 3, { label: "kept" });
   assert.equal(xmp.parse(group.layers[0].xmp).take, "2");
+  assert.equal(group.layers[1].name, "My shadow", "the person's own layer stays");
+  assert.equal(group.layers[2].name, "Scenario image other run", "another run's layer stays");
   assert.equal(ps.history.length, before + 2, "Keep is one History state");
   await ctxTitle(doc, "Kept take · A lighthouse on a rocky coast");
 });
@@ -817,8 +828,9 @@ test("view-model helpers: classify, takesOf, isCutout, badgeOf, needsConfirm; th
   assert.equal(ctlMod.classify({ doc: D, layer: { ...L, bounds: { left: 0, top: 0, width: 500, height: 1000 } } }, null).kind, "cutout");
   assert.equal(ctlMod.classify({ doc: D, layer: { ...L, background: true, has_mask: true } }, null).kind, "layer");
   assert.equal(ctlMod.classify({ doc: D, layer: { ...L, kind: "text", has_mask: true } }, null).kind, "layer");
-  const group = { id: 9, group: true, name: "G", fields: { jobId: "j", kind: "image", prompt: "p" }, children: [{ id: 10, name: "Take 1", visible: true, fields: { assetId: "a", take: "1" } }] };
+  const group = { id: 9, group: true, name: "G", fields: { jobId: "j", kind: "image", prompt: "p" }, children: [{ id: 10, name: "Take 1", visible: true, fields: { jobId: "j", assetId: "a", take: "1" } }] };
   assert.equal(ctlMod.classify({ doc: D, layer: L }, group).kind, "takes");
+  assert.equal(ctlMod.takesOf({ ...group, children: [{ id: 11, name: "Scenario image other", visible: true, fields: { jobId: "k", assetId: "b", take: "1" } }] }), null, "another run's layer in the group is not one of its takes");
   assert.equal(ctlMod.takesOf({ ...group, fields: { jobId: "j", kind: "cutout" } }), null, "a cut-out is no takes run");
   assert.equal(ctlMod.takesOf({ ...group, children: [] }), null);
   const single = ctlMod.takesOf({ id: 3, name: "Scenario image x", fields: { jobId: "j", assetId: "a", kind: "image" } });

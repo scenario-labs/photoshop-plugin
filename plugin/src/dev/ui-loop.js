@@ -122,6 +122,16 @@ function start(o) {
         out.elements[el.id].img = [el.naturalWidth || 0, el.naturalHeight || 0, el.complete === true, src.slice(0, src.indexOf(":") + 1)];
       }
     }
+    // The action chips one by one, and the top's class, for the short-panel
+    // fold (create-view.js fitTop).
+    var acts = doc.getElementById("acts");
+    out.chips = [];
+    for (var c = 0; acts && c < (acts.children || []).length; c++) {
+      var ch = acts.children[c];
+      out.chips.push({ act: ch.getAttribute("data-act"), r: rect(ch), o: [ch.offsetLeft, ch.offsetTop, ch.offsetWidth, ch.offsetHeight], c: [ch.clientWidth, ch.clientHeight] });
+    }
+    var top = doc.getElementById("sc-top");
+    out.top_class = top ? String(top.className) : null;
     return out;
   }
 

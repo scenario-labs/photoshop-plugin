@@ -105,7 +105,7 @@ With no selection, the panel works on the active layer, or the whole image for a
 
 **Relight to scene** (More > Make variants): relights a cut-out or split element to match the visible image. *Verified live* on 0.6.2; no picture in this guide.
 
-**Extend canvas** (More > Finish): grows the canvas to a ratio and fills the new area. In this build the result can show seams where the original meets the new area; see [Known limitations](KNOWN_LIMITATIONS.md).
+**Extend canvas** (More > Finish): grows the canvas to a ratio and fills the new area. The default model is Reframe at 2K, which redraws the frame around the original; it costs more than the earlier default (the button shows the price), and it has no per-side growth (pick GPT Image 2.5 Flare for **+20% each side**). Look at the old edge at 100% before keeping the result; see [Known limitations](KNOWN_LIMITATIONS.md).
 
 **Place from Library** (More > Layers): see [Library](#library).
 

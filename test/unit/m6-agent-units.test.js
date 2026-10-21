@@ -103,6 +103,22 @@ test("settings: the allowance is one client session, per-call and total limits i
   s.grant(A, "5", "5");
   assert.equal(s.tryDeduct(A.session, 5000), true);
   assert.equal(s.spending().mode, "ask", "the total used up ends it");
+  // The request that used up the total was never sent: its amount comes back
+  // with the allowance (Bugbot, PR 2).
+  s.refund(A.session, 5000);
+  assert.equal(s.spending().mode, "allow", "a refund of the last deduction brings the allowance back");
+  assert.equal(s.spending().remaining, "5");
+  assert.equal(s.tryDeduct(A.session, 5000), true);
+  s.refund(B.session, 5000);
+  assert.equal(s.spending().mode, "ask", "another session's refund does not");
+  assert.equal(s.endSessions([A.session]), false);
+  s.refund(A.session, 5000);
+  assert.equal(s.spending().mode, "ask", "once its session ended, a refund does not bring it back");
+  s.grant(A, "5", "5");
+  assert.equal(s.tryDeduct(A.session, 5000), true);
+  s.end();
+  s.refund(A.session, 5000);
+  assert.equal(s.spending().mode, "ask", "nor once the person ended it");
 });
 
 test("approvals: one card per session at a time, the next shows after; 10-minute expiry; Decline all; session end; activity log", async () => {

@@ -8,7 +8,8 @@
 //   npm run handbook -- --out <dir>  write somewhere other than build/handbook
 //
 // Outputs: <out>/index.html with its media under <out>/media/, a
-// self-contained <out>/scenario-photoshop-handbook-<version>.html, and
+// single-file <out>/scenario-photoshop-handbook-<version>.html (pictures
+// embedded; its fonts load from Google Fonts), and
 // <out>/scenario-photoshop-handbook-<version>.pdf printed by headless Google
 // Chrome (CHROME_PATH, or the default install location). The PDF contents
 // carry page numbers when Poppler's pdftotext is on the PATH.
@@ -768,6 +769,7 @@ function build(opts) {
     fs.writeFileSync(printFile, printHtml);
     printPdf(chrome, printFile, pdfFile, path.join(tmp, "profile"));
     const first = chapterPages(pdfFile, chapters);
+    if (!first) result.problems.push("pdftotext not found (Poppler): the PDF contents has no page numbers");
     if (first && Object.keys(first.found).length === chapters.length) {
       fs.writeFileSync(printFile, page(meta, chapters, docs, "print", { pages: first.found }));
       printPdf(chrome, printFile, pdfFile, path.join(tmp, "profile"));
@@ -779,6 +781,8 @@ function build(opts) {
       result.problems.push(`PDF contents: page numbers not found for ${chapters.filter((c) => !first.found[c.id]).map((c) => c.title).join(", ")}`);
     }
     result.pdf = pdfFile;
+    // The print page and the Chrome profile are scratch.
+    fs.rmSync(tmp, { recursive: true, force: true });
     check(web, opts.out, "index.html", result.problems);
   }
   return result;

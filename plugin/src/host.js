@@ -191,6 +191,13 @@ function createHost(hostRequire, g) {
     }
   }
 
+  // One of a takes group's own takes: Scenario layer metadata with an asset
+  // id and the group's job (each placement makes its own group). The same
+  // test as the Takes card's (panel/controller.js takesOf).
+  function isTakeOf(f, gf) {
+    return !!(f && gf && f.schema && f.assetId && f.jobId && f.jobId === gf.jobId);
+  }
+
   // The document, which must be the active one (changes go to the front
   // document only).
   function activeDoc(docId) {
@@ -877,17 +884,25 @@ function createHost(hostRequire, g) {
       }
     },
     // Shows one take of a Scenario group in the document and hides the
-    // others (the Takes card), as one History state.
+    // other takes (the Takes card), as one History state. Layers the person
+    // added to the group, a Scenario layer of another run among them, keep
+    // their visibility.
     showTake: function (docId, groupId, layerId) {
       return modal("Scenario: Show take", async function (ctx) {
         var doc = activeDoc(docId);
         var group = findLayer(doc, groupId);
         if (!group || !group.layers) throw new Error("the takes group is gone");
+        var gf = await metaOf(doc.id, group.id);
+        var takes = [];
+        for (var j = 0; j < group.layers.length; j++) {
+          var x = group.layers[j];
+          if (x.id === layerId || isTakeOf(await metaOf(doc.id, x.id), gf)) takes.push(x);
+        }
         await inOneState(ctx, doc, "Scenario: Show take", async function () {
           if (group.visible === false) group.visible = true;
-          for (var i = 0; i < group.layers.length; i++) {
-            var on = group.layers[i].id === layerId;
-            if ((group.layers[i].visible !== false) !== on) group.layers[i].visible = on;
+          for (var i = 0; i < takes.length; i++) {
+            var on = takes[i].id === layerId;
+            if ((takes[i].visible !== false) !== on) takes[i].visible = on;
           }
         });
         return true;
@@ -895,6 +910,9 @@ function createHost(hostRequire, g) {
     },
     // Keeps one take of a Scenario group and removes the other take layers
     // from it, as one History state. Their files stay in the data folder.
+    // Only the group's own takes (layer metadata of the group's job, with an
+    // asset id) are removed: a layer the person added to the group stays,
+    // also a Scenario layer of another run.
     keepTake: function (docId, groupId, layerId) {
       return modal("Scenario: Keep take", async function (ctx) {
         var doc = activeDoc(docId);
@@ -903,11 +921,15 @@ function createHost(hostRequire, g) {
         var keep = null;
         for (var k = 0; k < group.layers.length; k++) if (group.layers[k].id === layerId) keep = group.layers[k];
         if (!keep) throw new Error("this take is no longer in the group");
+        var gf = await metaOf(doc.id, group.id);
+        var others = [];
+        for (var j = 0; j < group.layers.length; j++) {
+          var x = group.layers[j];
+          if (x.id === layerId) continue;
+          if (isTakeOf(await metaOf(doc.id, x.id), gf)) others.push(x);
+        }
         var removed = 0;
         await inOneState(ctx, doc, "Scenario: Keep take", async function () {
-          var others = group.layers.filter(function (x) {
-            return x.id !== layerId;
-          });
           for (var i = 0; i < others.length; i++) {
             await deleteLayer(doc, others[i]);
             removed++;

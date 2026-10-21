@@ -2,7 +2,7 @@
   "name": "scenario-photoshop-plugin",
   "private": true,
   "version": "0.7.1",
-  "description": "Scenario for Adobe Photoshop: UXP plugin and local MCP server (early skeleton)",
+  "description": "Scenario for Adobe Photoshop: UXP plugin and local Scenario MCP server",
   "license": "MIT",
   "workspaces": [
     "helper",

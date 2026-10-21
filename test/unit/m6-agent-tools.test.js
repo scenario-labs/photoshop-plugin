@@ -197,6 +197,19 @@ test("cancel_prepared_job: only the session that asked; NotYourJob for others", 
   assert.equal(app.approvals.showing().length, 0);
 });
 
+test("cancel_prepared_job while the person's approval goes through: refused, the request is not reported withdrawn (Bugbot, PR 2)", async (t) => {
+  const { app, h, mock } = await boot(t);
+  const q = await quote(h, A);
+  const r = await gen(h, A, q, { idempotency_key: "cancel-race-1" });
+  assert.equal(app.ledger.get(r.local_id).state, "awaiting_approval");
+  const approving = app.runner.approve(r.local_id);
+  await rejects(() => h.cancel_prepared_job({ local_id: r.local_id }, A), "InvalidParameter");
+  await approving;
+  await waitFor(() => app.ledger.get(r.local_id).state !== "awaiting_approval", { label: "sent" });
+  assert.notEqual(app.ledger.get(r.local_id).state, "not_sent");
+  assert.equal(mock.paidCalls.length, 1);
+});
+
 test("document changes: SwitchOff, DocumentNotActive, a switch between the call start and the modal scope; set_selection is one History state", async (t) => {
   const { app, h, ps } = await boot(t);
   await rejects(() => h.set_selection({ rect: [0, 0, 100, 100] }, A), "SwitchOff");

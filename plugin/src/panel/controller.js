@@ -145,8 +145,10 @@ function takesOf(meta) {
     return k === "image" || k === "edit";
   };
   if (meta.group) {
+    // The group's own takes: a Scenario layer of another run dropped into
+    // the group is not one (host.js isTakeOf).
     var kids = (meta.children || []).filter(function (c) {
-      return c.fields && c.fields.assetId;
+      return c.fields && c.fields.assetId && c.fields.jobId === f.jobId;
     });
     if (!f.jobId || !gen(f.kind) || !kids.length) return null;
     return { group_id: meta.id, layer_id: null, job_id: f.jobId, kind: f.kind, name: meta.name, prompt: f.runName || f.prompt || null, model_name: f.modelName || null, children: kids };
@@ -553,7 +555,10 @@ function createController(o) {
   function keyOf(raw, ctx) {
     if (!raw || !raw.doc) return "none";
     var s = raw.selection || raw.selection_raw;
-    return [raw.doc.id, ctx.kind, raw.layer ? raw.layer.id : "-", ctx.run ? maskLayerOf(ctx.run) : "-", s ? [s.left, s.top, s.width, s.height].join(",") : "-", raw.doc.width, raw.doc.height].join("|");
+    // The layer's size is in the key: a resized layer can price differently,
+    // and an after-upload price for the old size must not stay on the button.
+    var lb = raw.layer && raw.layer.bounds;
+    return [raw.doc.id, ctx.kind, raw.layer ? raw.layer.id : "-", lb ? Math.round(lb.width) + "x" + Math.round(lb.height) : "-", ctx.run ? maskLayerOf(ctx.run) : "-", s ? [s.left, s.top, s.width, s.height].join(",") : "-", raw.doc.width, raw.doc.height].join("|");
   }
 
   function contextKind(raw, ctx) {
