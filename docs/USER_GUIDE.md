@@ -108,7 +108,9 @@ Replace inside has an **Edit** chip with two modes, each with its price:
 <img src="media/screens/edit-inside-or-bolder.png" width="320" alt="The Edit menu: Inside selection and Bolder, each with a description and a price">
 
 - **Inside selection** (Ideogram 4.5 Precise Edit): changes only what is inside the selection; everything outside stays as it is. Good for a change that fits the shape you drew.
-- **Bolder** (GPT Image 2.5 Flare): a stronger change. The new subject may reach past the selection, and the layer mask grows to keep it whole. Good when the new object is taller or wider than the old one, as with the glass of lemonade above.
+- **Bolder** (GPT Image 2.5 Flare): a stronger change. The new subject may reach past the selection, and the layer mask grows to keep it whole. Good when the new object is taller or wider than the old one, as with the dragon below.
+
+![A goat selected on a painted rooftop, then a sleepy red dragon in its place; at 100% the dragon reaches past the selection and blends into the roof](media/before-after/bolder-goat-to-dragon.jpg)
 
 <img src="media/screens/selection-replace-priced.png" width="260" alt="Replace inside with Edit Inside selection, Ideogram 4.5 Precise Edit, 12 CU"> <img src="media/screens/selection-bolder-priced.png" width="260" alt="Replace inside with Edit Bolder, GPT Image 2.5 Flare, 4 CU">
 
