@@ -79,6 +79,8 @@ With no selection, the panel works on the active layer, or the whole image for a
 
 **Upscale**: 2x or the other factors the model offers (Topaz Image Upscale), from all visible layers, opened as a new document at the larger size. The result card compares the same region at 100%.
 
+![The poster's goggles and coat stitching: the original at 400% looks soft and blocky, the 4x upscale at 100% shows clean brass, hair and stitches](media/before-after/upscale-poster-detail.jpg)
+
 **Remove background**: one click (851 Labs Background Remover); lands as a mask on the layer, so the hidden pixels stay. **Cut out to a new layer** (More) keeps the layer as it is and puts the subject on a masked copy above.
 
 **Add background**: on a cut-out layer, describe the scene; it lands below the layer at canvas size.
