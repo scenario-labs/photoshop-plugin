@@ -171,6 +171,16 @@ function classify(raw, meta) {
   return { kind: "layer", run: null };
 }
 
+// The text of a failure for the panel. Photoshop's own refusal while
+// another modal operation runs ("host is in a modal state", live
+// 2026-10-21) reads as one plain line.
+var BUSY_LINE = "Photoshop is busy. Try again in a moment.";
+function errText(e) {
+  var m = (e && e.message) || String(e);
+  if ((e && e.busy) || /modal state/i.test(m)) return BUSY_LINE;
+  return m;
+}
+
 function badgeOf(list) {
   list = list || [];
   for (var i = 0; i < list.length; i++) if (/misaligned|Changed outside|Unchanged inside/.test(list[i])) return { tone: "warn", text: "May not line up" };
@@ -831,7 +841,7 @@ function createController(o) {
         out = { state: p.state, quote: p.quote, reason: p.reason, view: p.view, schema: p.schema };
       }
     } catch (e) {
-      out = { state: e && e.afterUpload ? "after_upload" : "unavailable", reason: (e && e.message) || String(e) };
+      out = { state: e && e.afterUpload ? "after_upload" : "unavailable", reason: errText(e) };
       log("panel: price check " + ((e && e.type) || "error"));
     }
     if (seq !== st.seq) return;
@@ -851,7 +861,7 @@ function createController(o) {
     try {
       req = requests.build(schema, v.request);
     } catch (e) {
-      return { state: "blocked", reason: (e && e.message) || String(e), view: v, schema: schema };
+      return { state: "blocked", reason: errText(e), view: v, schema: schema };
     }
     try {
       var q = await o.quotes.estimate(req);
@@ -859,7 +869,7 @@ function createController(o) {
     } catch (e) {
       if (e && e.afterUpload) return { state: "after_upload", view: v, schema: schema };
       if (e && e.type === "DryRunCreatedJob") return { state: "alarm" };
-      return { state: "unavailable", reason: (e && e.message) || String(e), view: v, schema: schema };
+      return { state: "unavailable", reason: errText(e), view: v, schema: schema };
     }
   }
 
@@ -1139,7 +1149,7 @@ function createController(o) {
       if (id === "more_like") st.keepAction = false;
     } catch (e) {
       var type = e && e.type;
-      st.note = type === "QuoteMismatch" || type === "QuoteExpired" || type === "QuoteUsed" ? TEXT.changed : (e && e.message) || String(e);
+      st.note = type === "QuoteMismatch" || type === "QuoteExpired" || type === "QuoteUsed" ? TEXT.changed : errText(e);
       log("panel: generate " + (type || "error"));
     } finally {
       st.sending = false;
@@ -1171,7 +1181,7 @@ function createController(o) {
         },
         function (e) {
           st.sending = false;
-          st.note = (e && e.message) || String(e);
+          st.note = errText(e);
           changed();
         }
       );
@@ -1196,7 +1206,7 @@ function createController(o) {
     try {
       await o.host.showTake(d, run.group_id, run.children[i].id);
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     await refresh();
   }
@@ -1208,7 +1218,7 @@ function createController(o) {
     try {
       await o.host.keepTake(docId(), run.group_id, shown.child.id);
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     await refresh();
   }
@@ -1237,7 +1247,7 @@ function createController(o) {
       }
     } catch (e) {
       st.keepAction = false;
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     await refresh();
     changed();
@@ -1256,7 +1266,7 @@ function createController(o) {
     try {
       await o.runner.place(c.local_id, {});
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     await refresh();
   }
@@ -1352,7 +1362,7 @@ function createController(o) {
       try {
         await o.runner.place(rec.local_id, {});
       } catch (e) {
-        st.note = (e && e.message) || String(e);
+        st.note = errText(e);
       }
       await refresh();
     }
@@ -1473,7 +1483,7 @@ function createController(o) {
       }
       st.lib = { state: "ready", rows: got.rows, more: !!got.more, error: null };
     } catch (e) {
-      st.lib = { state: "error", rows: [], more: false, error: (e && e.message) || String(e) };
+      st.lib = { state: "error", rows: [], more: false, error: errText(e) };
     }
     emit();
   }
@@ -1553,7 +1563,7 @@ function createController(o) {
         }
       }
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     } finally {
       st.sending = false;
     }
@@ -1592,7 +1602,7 @@ function createController(o) {
       var got = await o.library.more(f);
       if (f === st.libFilter) st.lib = { state: "ready", rows: got.rows, more: !!got.more, error: null };
     } catch (e) {
-      st.lib = { state: "ready", rows: st.lib.rows, more: st.lib.more, error: (e && e.message) || String(e) };
+      st.lib = { state: "ready", rows: st.lib.rows, more: st.lib.more, error: errText(e) };
     }
     emit();
   }
@@ -1619,7 +1629,7 @@ function createController(o) {
         st.refs.push(r);
       }
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     changed();
   }
@@ -1645,7 +1655,7 @@ function createController(o) {
         st.style = { match: true, name: "Match an image" };
       }
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     changed();
   }
@@ -1677,7 +1687,7 @@ function createController(o) {
     try {
       st.drefs = await o.host.setDocumentReferences(d, list);
     } catch (e) {
-      st.note = "Document references could not be saved in this document: " + ((e && e.message) || e);
+      st.note = "Document references could not be saved in this document: " + errText(e);
     }
     changed();
   }
@@ -1691,7 +1701,7 @@ function createController(o) {
     try {
       st.drefs = await o.host.setDocumentReferences(d, list);
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     changed();
   }
@@ -1756,13 +1766,13 @@ function createController(o) {
         try {
           image = await o.references.capture("layer", raw.doc.id, entry.model, 512, raw.layer.id);
         } catch (e) {
-          return { state: "failed", reason: (e && e.message) || String(e) };
+          return { state: "failed", reason: errText(e) };
         }
       }
       try {
         return await sparkMod.suggest({ client: o.client, quotes: o.quotes, settings: o.settings }, { model_id: entry.model, prompt: prompt, image: image, n: 3, constraints: sparkConstraints(id) });
       } catch (e) {
-        return { state: "failed", reason: (e && e.message) || String(e) };
+        return { state: "failed", reason: errText(e) };
       }
     })().then(function (r) {
       entry.state = r.state;
@@ -2833,4 +2843,4 @@ function createController(o) {
   };
 }
 
-module.exports = { createController: createController, classify: classify, takesOf: takesOf, isCutout: isCutout, badgeOf: badgeOf, cuOf: cuOf, needsConfirm: needsConfirm, TEXT: TEXT, DEBOUNCE_MS: DEBOUNCE_MS, TARGETS: TARGETS, CHANGE: CHANGE };
+module.exports = { createController: createController, errText: errText, classify: classify, takesOf: takesOf, isCutout: isCutout, badgeOf: badgeOf, cuOf: cuOf, needsConfirm: needsConfirm, TEXT: TEXT, DEBOUNCE_MS: DEBOUNCE_MS, TARGETS: TARGETS, CHANGE: CHANGE };

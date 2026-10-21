@@ -29,8 +29,22 @@ function px(v) {
 
 // A failure that means Photoshop was busy (another modal operation), so a
 // Place when ready waits and tries again.
+var BUSY_RE = /modal|busy|is in use|not available/i;
 function markBusy(e) {
-  if (e && /modal|busy|is in use|not available/i.test(String(e.message || e))) e.busy = true;
+  if (e && BUSY_RE.test(String(e.message || e))) e.busy = true;
+  return e;
+}
+
+// What the person reads when Photoshop stays busy: never the host's own
+// text ("host is in a modal state", live 2026-10-21).
+var BUSY_TEXT = "Photoshop is busy. Try again in a moment.";
+// Waits before each new try of a modal scope Photoshop refused as busy.
+var BUSY_RETRY_MS = [150, 300, 600];
+function busyError(cause) {
+  var e = new Error(BUSY_TEXT);
+  e.type = "PhotoshopBusy";
+  e.busy = true;
+  e.cause_text = String((cause && cause.message) || cause || "");
   return e;
 }
 
@@ -53,21 +67,61 @@ function createHost(hostRequire, g) {
   var SRGB = "sRGB IEC61966-2.1";
   var EVENT_COALESCE_MS = 80;
 
+  // One modal scope (SPEC 2.4): fn holds only the document read or change
+  // itself, never a network wait, an upload, a poll, a download or a price
+  // check (test/unit/modal-scope.test.js). A scope Photoshop refuses
+  // because another modal operation runs is tried again a few times; then
+  // the failure reads BUSY_TEXT, typed PhotoshopBusy.
+  // The plugin's own scopes run one after the other: a Keep take clicked
+  // while the context thumbnail is read waits for that read instead of
+  // being refused (live 2026-10-21: the first Keep after a placement did
+  // nothing). A scope never waits more than MODAL_QUEUE_MAX_MS for the one
+  // before it.
+  var modalTail = Promise.resolve();
+  var MODAL_QUEUE_MAX_MS = 30000;
   function modal(name, fn, opts) {
+    var prev = modalTail;
+    var run = new Promise(function (resolve) {
+      var timer = g && typeof g.setTimeout === "function" ? g.setTimeout(resolve, MODAL_QUEUE_MAX_MS) : null;
+      prev.then(function () {
+        if (timer !== null && g && typeof g.clearTimeout === "function") g.clearTimeout(timer);
+        resolve();
+      });
+    }).then(function () {
+      return modalOnce(name, fn, opts);
+    });
+    modalTail = run.then(
+      function () {},
+      function () {}
+    );
+    return run;
+  }
+  function modalOnce(name, fn, opts) {
     if (!ps || !ps.core || typeof ps.core.executeAsModal !== "function") return Promise.reject(new Error("this Photoshop offers no modal scope"));
     var options = { commandName: name };
     if (opts && opts.timeOut) options.timeOut = opts.timeOut;
-    var inside = false;
-    return Promise.resolve()
-      .then(function () {
-        return ps.core.executeAsModal(function (ctx) {
-          inside = true;
-          return fn(ctx);
-        }, options);
-      })
-      .catch(function (e) {
-        throw inside ? e : markBusy(e);
-      });
+    var retries = opts && opts.retries === 0 ? [] : BUSY_RETRY_MS;
+    function attempt(n) {
+      var inside = false;
+      return Promise.resolve()
+        .then(function () {
+          return ps.core.executeAsModal(function (ctx) {
+            inside = true;
+            return fn(ctx);
+          }, options);
+        })
+        .catch(function (e) {
+          if (inside || !markBusy(e).busy) throw e;
+          if (n >= retries.length) throw busyError(e);
+          return new Promise(function (resolve) {
+            if (g && typeof g.setTimeout === "function") g.setTimeout(resolve, retries[n]);
+            else resolve();
+          }).then(function () {
+            return attempt(n + 1);
+          });
+        });
+    }
+    return attempt(0);
   }
 
   function findDoc(id) {
@@ -1184,7 +1238,8 @@ function createHost(hostRequire, g) {
             masked: masked
           };
         },
-        opts.auto ? { timeOut: 1000 } : null
+        // Place when ready tries again on its own, later (jobs/runner.js).
+        opts.auto ? { timeOut: 1000, retries: 0 } : null
       );
     },
 
