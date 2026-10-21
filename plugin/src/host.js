@@ -877,17 +877,24 @@ function createHost(hostRequire, g) {
       }
     },
     // Shows one take of a Scenario group in the document and hides the
-    // others (the Takes card), as one History state.
+    // other takes (the Takes card), as one History state. Layers the person
+    // added to the group keep their visibility.
     showTake: function (docId, groupId, layerId) {
       return modal("Scenario: Show take", async function (ctx) {
         var doc = activeDoc(docId);
         var group = findLayer(doc, groupId);
         if (!group || !group.layers) throw new Error("the takes group is gone");
+        var takes = [];
+        for (var j = 0; j < group.layers.length; j++) {
+          var x = group.layers[j];
+          var f = x.id === layerId ? { take: true } : await metaOf(doc.id, x.id);
+          if (x.id === layerId || (f.schema && f.jobId && f.take)) takes.push(x);
+        }
         await inOneState(ctx, doc, "Scenario: Show take", async function () {
           if (group.visible === false) group.visible = true;
-          for (var i = 0; i < group.layers.length; i++) {
-            var on = group.layers[i].id === layerId;
-            if ((group.layers[i].visible !== false) !== on) group.layers[i].visible = on;
+          for (var i = 0; i < takes.length; i++) {
+            var on = takes[i].id === layerId;
+            if ((takes[i].visible !== false) !== on) takes[i].visible = on;
           }
         });
         return true;
@@ -895,6 +902,8 @@ function createHost(hostRequire, g) {
     },
     // Keeps one take of a Scenario group and removes the other take layers
     // from it, as one History state. Their files stay in the data folder.
+    // Only Scenario take layers (layer metadata with a take number) are
+    // removed: a layer the person added to the group stays.
     keepTake: function (docId, groupId, layerId) {
       return modal("Scenario: Keep take", async function (ctx) {
         var doc = activeDoc(docId);
@@ -903,11 +912,15 @@ function createHost(hostRequire, g) {
         var keep = null;
         for (var k = 0; k < group.layers.length; k++) if (group.layers[k].id === layerId) keep = group.layers[k];
         if (!keep) throw new Error("this take is no longer in the group");
+        var others = [];
+        for (var j = 0; j < group.layers.length; j++) {
+          var x = group.layers[j];
+          if (x.id === layerId) continue;
+          var f = await metaOf(doc.id, x.id);
+          if (f.schema && f.jobId && f.take) others.push(x);
+        }
         var removed = 0;
         await inOneState(ctx, doc, "Scenario: Keep take", async function () {
-          var others = group.layers.filter(function (x) {
-            return x.id !== layerId;
-          });
           for (var i = 0; i < others.length; i++) {
             await deleteLayer(doc, others[i]);
             removed++;

@@ -170,17 +170,23 @@ test("F3 Create image with no document: Size and Takes chips, the price on the b
   // alone (a second function named cover once hid the prompt instead).
   for (const tile of tiles(doc)) assert.ok(tile.children.some((c) => c.tagName === "IMG" || (c.children || []).some((k) => k.tagName === "IMG")), "the tile has its picture");
   assert.equal(doc.byId("composer").className, "composer", "no popover open, the composer is not covered");
+  // A layer the person put in the takes group is not a take: Show take and
+  // Keep leave it as it is.
+  const mine = { ...group.layers[0], id: 990001, name: "My shadow", xmp: null, visible: true, parent: group };
+  group.layers.push(mine);
   const before = ps.history.length;
   tiles(doc)[1].click();
   await waitFor(() => group.layers[1].visible && !group.layers[0].visible, { label: "take 2 shows" });
+  assert.equal(mine.visible, true, "Show take leaves the person's layer visible");
   assert.equal(ps.history.length, before + 1, "Show take is one History state");
   assert.equal(ps.history.at(-1).name, "Scenario: Show take");
   await waitFor(() => /\bon\b/.test(tiles(doc)[1].className), { label: "tile 2 marked" });
   const keepBtn = find(doc, "data-btn", "keep");
   assert.equal(keepBtn.textContent, "Keep take 2");
   keepBtn.click();
-  await waitFor(() => group.layers.length === 1, { label: "kept" });
+  await waitFor(() => group.layers.length === 2, { label: "kept" });
   assert.equal(xmp.parse(group.layers[0].xmp).take, "2");
+  assert.equal(group.layers[1].name, "My shadow", "the person's own layer stays");
   assert.equal(ps.history.length, before + 2, "Keep is one History state");
   await ctxTitle(doc, "Kept take · A lighthouse on a rocky coast");
 });
