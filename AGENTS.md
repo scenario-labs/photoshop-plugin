@@ -45,7 +45,10 @@ npm run build          # plugin/dist/main.js (release bundle)
 npm run build:dev      # development bundle (adds the dev token import, below)
 npm run package        # build/scenario-photoshop-0.7.1.ccx
 npm run package:dev    # build/scenario-photoshop-0.7.1-dev.ccx
+npm run handbook       # build/handbook/ from the docs (PDF through headless Chrome; --no-pdf skips it)
 ```
+
+**The handbook** (`tools/handbook/`) is generated from README.md, docs/USER_GUIDE.md, docs/MCP.md, docs/KNOWN_LIMITATIONS.md, PRIVACY.md, SECURITY.md and CHANGELOG.md; the chapter list is at the top of `tools/handbook/build.js`. Edit the docs, never the output. The build fails on a link or picture it cannot resolve, an em dash, an address other than support@scenario.com, a machine path or a bare "MCP". The site is meant for photoshop.scenario.com (the build writes `CNAME`); the Pages workflow waits, disabled, in `tools/handbook/pages.yml`, with the steps to turn it on.
 
 `npm test` and `npm run lint` pass on Node 20 and 22 on macOS (*tested automated*). CI runs them on Node 20 and 22, on Ubuntu and macOS.
 

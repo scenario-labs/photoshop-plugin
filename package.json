@@ -17,6 +17,7 @@
     "build": "node plugin/scripts/build.js",
     "build:dev": "node plugin/scripts/build.js --dev",
     "package": "node plugin/scripts/package.js",
-    "package:dev": "node plugin/scripts/package.js --dev"
+    "package:dev": "node plugin/scripts/package.js --dev",
+    "handbook": "node tools/handbook/build.js"
   }
 }
