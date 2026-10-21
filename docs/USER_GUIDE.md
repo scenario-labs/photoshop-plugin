@@ -93,6 +93,8 @@ With no selection, the panel works on the active layer, or the whole image for a
 
 **New angle** (More > Make variants): Turn left 45°, Turn right 45°, Side view, Back view or From above. No prompt.
 
+![A character sheet of the kite keeper made with New layer, then her front figure cut out and turned to a side view and a back view with New angle; coat, braid, goggles and red kite string stay the same](media/before-after/new-layer-angles-turnaround.jpg)
+
 **Split into layers**: rebuilds the image as a group: a clean background and one layer per element, each placed where it was.
 
 **Remove text** (More > Finish): the same image without its text, as a new layer above. **Split text** (More > Layers) gives the clean base and the text on its own layer instead.
