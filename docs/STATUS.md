@@ -96,3 +96,12 @@ Changes made after the re-test above, 2026-10-21. *Tested automated* (Node suite
 - The single result card (Extend canvas, Upscale, Remove background) shows the badge its checks gave, as a Takes card does per take, and lists each check in words.
 - The composer button shows the price after the upload for the same action and settings, where it showed the stand-in quote again.
 - Extend canvas edge limits calibrated on the 14 takes of that comparison, labelled by eye (clean, stepped, figure drawn twice): with the step limit raised from 10 to 22, both clean takes read **Edges ok** and every stepped or doubled take gets a warning. The step score alone does not separate the labels; the band residual catches the stepped mask-route takes, the step check a tone band past the edge, the repeat check (limit unchanged) the doubled figure. *Tested automated* on the measured scores.
+
+## Fix live check
+
+Photoshop 27.11 on macOS, plugin 0.7.1 development build at 137fd42 (the changes above plus the modal queue, the chip-row fold, plain names in the context card and the New angle stand-in price), 2026-10-21 evening. One run per item at the panel's default settings, driven through the development UI loop, panel docked at 280 x 420 px; each result read at 100%. Details in [Known limitations](KNOWN_LIMITATIONS.md).
+
+- Keep right after a landing (Replace inside, two takes, Ideogram 4.5 Precise Edit): *verified live*. Keep sent about 3 s after the run landed, then Refine: Keep worked on the first command, no host text and no busy line. A click within the first second after a placement was not reproduced.
+- Extend canvas on the new default (a 2:3 poster to 16:9, Reframe at 2K): *verified live*. One figure, no step at either old edge, and the single result card read **Edges ok**, as the record holds.
+- New angle price before the upload: *verified live*. 17 CU on the button, no approval card after the upload, charged 17. The card title still reads "Edit".
+- Chip rows and titles: *verified live* for the selection and takes contexts and a plain layer card (whose top overflows by about 4 px). *Verified live: not fixed* with an Extend canvas result layer active: the third chip row is cut in half and nothing folds into More. The context detail and a selection on a result group still name the raw layer.
