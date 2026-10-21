@@ -18,7 +18,7 @@ Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures).
 
 ### Changed
 
-- Extend canvas defaults to Reframe at 2K, with the resolution pinned by the lane preset; GPT Image 2.5 Sunburst at Medium was the runner-up of a two-take comparison per model on the same poster and canvas, and GPT Image 2.5 Flare stays in the Model menu (it drew the main figure a second time in 3 of 4 takes). The built-in Extend prompt is unchanged: a line asking not to repeat anything from the center did not help. *Tested automated*; *not tested live*.
+- Extend canvas defaults to Reframe at 2K, with the resolution pinned by the lane preset; GPT Image 2.5 Sunburst at Medium was the runner-up of a two-take comparison per model on the same poster and canvas, and GPT Image 2.5 Flare stays in the Model menu (it drew the main figure a second time in 3 of 4 takes). The built-in Extend prompt is unchanged: a line asking not to repeat anything from the center did not help. Reframe at 2K costs more than Flare at Low (about seven times as much at 16:9); the button shows the price before the run. *Tested automated*; *not tested live*.
 
 ### Fixed after the re-test
 
@@ -39,7 +39,7 @@ Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures).
 - `docs/USER_GUIDE.md`: quick start, every action with before and after pictures from live runs, selection edits (Inside selection or Bolder), takes, references, styles and trained models, Library, prices and approval, Jobs and recovery, settings, agents, troubleshooting.
 - `docs/MCP.md`: real screenshots and a recording of an agent run, how each client was checked, and the from-checkout setup command while the helper is not on npm.
 - New `docs/KNOWN_LIMITATIONS.md` and `SECURITY.md`; `PRIVACY.md` brought current for 0.7.1.
-- The handbook: `npm run handbook` builds the docs into one web page with contents, search, light and dark themes and pictures that enlarge, a self-contained HTML file and an A4 PDF with a cover and page numbers (`build/handbook/`). Made for photoshop.scenario.com; not published yet.
+- The handbook: `npm run handbook` builds the docs into one web page with contents, search, light and dark themes and pictures that enlarge, a single HTML file with the pictures embedded (its fonts load from Google Fonts) and an A4 PDF with a cover and page numbers (`build/handbook/`). Made for photoshop.scenario.com; not published yet.
 - Panel screenshots under `docs/media/screens/`, captured in Photoshop 27.11. The before and after pictures and the recordings the guides link to follow in a later pass.
 
 ## 0.7.1 - 2026-10-20

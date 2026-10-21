@@ -59,7 +59,9 @@ const SCRIPT = String.raw`
   data.forEach(function(d){d.lt=d.t.toLowerCase();d.lx=d.x.toLowerCase();});
   var sel=-1,hits=[];
   function escH(s){return s.replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
-  function hl(s,words){var out=escH(s);words.forEach(function(w){if(w.length<2)return;out=out.replace(new RegExp("("+w.replace(/[.*+?^$()|[\]\\{}]/g,"\\$&")+")","ig"),"<mark>$1</mark>");});return out;}
+  // Marks the query words on the raw text, then escapes each piece, so a word
+  // such as "amp" or "mark" never matches inside an entity or a tag.
+  function hl(s,words){var ws=words.filter(function(w){return w.length>=2;}).map(function(w){return w.replace(/[.*+?^$()|[\]\\{}]/g,"\\$&");});if(!ws.length)return escH(s);return s.split(new RegExp("("+ws.join("|")+")","ig")).map(function(part,i){return i%2?"<mark>"+escH(part)+"</mark>":escH(part);}).join("");}
   function snippet(d,words){var i=-1;for(var k=0;k<words.length&&i<0;k++)i=d.lx.indexOf(words[k]);if(i<0)return d.x.slice(0,140);var s=Math.max(0,i-50);return (s?"\u2026":"")+d.x.slice(s,s+150)+"\u2026";}
   function run(){
     var q=input.value.trim().toLowerCase();
