@@ -8,6 +8,7 @@ var b64 = require("./util/base64url.js");
 var pixelsMod = require("./capture/pixels.js");
 var sha = require("./util/sha256.js");
 var xmpMod = require("./util/xmp.js");
+var slugMod = require("./util/slug.js");
 var docRefsMod = require("./panel/doc-refs.js");
 
 function toBytes(v) {
@@ -191,11 +192,25 @@ function createHost(hostRequire, g) {
     }
   }
 
-  // One of a takes group's own takes: Scenario layer metadata with an asset
-  // id and the group's job (each placement makes its own group). The same
-  // test as the Takes card's (panel/controller.js takesOf).
-  function isTakeOf(f, gf) {
-    return !!(f && gf && f.schema && f.assetId && f.jobId && f.jobId === gf.jobId);
+  // A takes group's own takes: Scenario layer metadata with an asset id and
+  // the group's job (each placement makes its own group), and of layers with
+  // the same asset id only the lowest layer id: a copy the person made
+  // (Layer > Duplicate keeps the metadata) gets a higher id and stays theirs,
+  // as does one named as a copy of its take (slug.isTakeCopy), which still
+  // holds once the take itself is gone.
+  // The same test as the Takes card's (panel/controller.js takesOf).
+  async function takeIdsOf(doc, group) {
+    var gf = await metaOf(doc.id, group.id);
+    var first = {};
+    for (var j = 0; j < group.layers.length; j++) {
+      var x = group.layers[j];
+      var f = await metaOf(doc.id, x.id);
+      if (!(f.assetId && f.jobId && gf.jobId && f.jobId === gf.jobId) || slugMod.isTakeCopy(x.name, f)) continue;
+      if (!first[f.assetId] || x.id < first[f.assetId]) first[f.assetId] = x.id;
+    }
+    var ids = {};
+    for (var a in first) ids[first[a]] = true;
+    return ids;
   }
 
   // The document, which must be the active one (changes go to the front
@@ -892,11 +907,11 @@ function createHost(hostRequire, g) {
         var doc = activeDoc(docId);
         var group = findLayer(doc, groupId);
         if (!group || !group.layers) throw new Error("the takes group is gone");
-        var gf = await metaOf(doc.id, group.id);
+        var own = await takeIdsOf(doc, group);
         var takes = [];
         for (var j = 0; j < group.layers.length; j++) {
           var x = group.layers[j];
-          if (x.id === layerId || isTakeOf(await metaOf(doc.id, x.id), gf)) takes.push(x);
+          if (x.id === layerId || own[x.id]) takes.push(x);
         }
         await inOneState(ctx, doc, "Scenario: Show take", async function () {
           if (group.visible === false) group.visible = true;
@@ -910,9 +925,9 @@ function createHost(hostRequire, g) {
     },
     // Keeps one take of a Scenario group and removes the other take layers
     // from it, as one History state. Their files stay in the data folder.
-    // Only the group's own takes (layer metadata of the group's job, with an
-    // asset id) are removed: a layer the person added to the group stays,
-    // also a Scenario layer of another run.
+    // Only the group's own takes (takeIdsOf) are removed: a layer the person
+    // added to the group stays, also a Scenario layer of another run or a
+    // copy of a take.
     keepTake: function (docId, groupId, layerId) {
       return modal("Scenario: Keep take", async function (ctx) {
         var doc = activeDoc(docId);
@@ -921,12 +936,11 @@ function createHost(hostRequire, g) {
         var keep = null;
         for (var k = 0; k < group.layers.length; k++) if (group.layers[k].id === layerId) keep = group.layers[k];
         if (!keep) throw new Error("this take is no longer in the group");
-        var gf = await metaOf(doc.id, group.id);
+        var own = await takeIdsOf(doc, group);
         var others = [];
         for (var j = 0; j < group.layers.length; j++) {
           var x = group.layers[j];
-          if (x.id === layerId) continue;
-          if (isTakeOf(await metaOf(doc.id, x.id), gf)) others.push(x);
+          if (x.id !== layerId && own[x.id]) others.push(x);
         }
         var removed = 0;
         await inOneState(ctx, doc, "Scenario: Keep take", async function () {

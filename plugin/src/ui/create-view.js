@@ -1185,7 +1185,7 @@ function createCreateView(doc, ctl, o) {
   // The last fit's chips, context text and panel size, and what it folded:
   // a render with the same ones folds the same chips at once, so the chips
   // do not jump back and fold again on every redraw.
-  var lastFold = { sig: null, ids: [] };
+  var lastFold = { sig: null, ids: [], squeezed: false };
   // blind: UXP gave the chips no box (seen live on 27.11: every chip read
   // 0 x 0 while its row showed), so rows cannot be counted; one chip goes
   // per pass, measured again in between, and two stay beside More.
@@ -1201,7 +1201,7 @@ function createCreateView(doc, ctl, o) {
     renderActs(fit.keep, fit.more, fit.fold);
     lastFold = { sig: fit.sig, ids: fit.fold.map(function (c) {
       return c.id;
-    }) };
+    }), squeezed: false };
     return true;
   }
   function fitTop(chips, more, ctx) {
@@ -1212,7 +1212,8 @@ function createCreateView(doc, ctl, o) {
       return c.id + (c.on ? "*" : "");
     }), ctx ? [ctx.title, ctx.detail, !!ctx.select] : null, v ? [Math.round(v.width), Math.round(v.height)] : null]);
     fit = { keep: chips.slice(), fold: [], more: more, tries: 0, sig: sig, after: null, same: 0 };
-    if (lastFold.sig === sig && lastFold.ids.length) {
+    var same = lastFold.sig === sig;
+    if (same && lastFold.ids.length) {
       fit.keep = chips.filter(function (c) {
         return lastFold.ids.indexOf(c.id) < 0;
       });
@@ -1220,7 +1221,10 @@ function createCreateView(doc, ctl, o) {
         return lastFold.ids.indexOf(c.id) >= 0;
       });
       renderActs(fit.keep, fit.more, fit.fold);
-    } else lastFold = { sig: sig, ids: [] };
+    } else if (!same) lastFold = { sig: sig, ids: [], squeezed: false };
+    // The squeeze comes back at once too: the measures below can read UXP's
+    // old layout, and the top would jump and lose its scroll on each redraw.
+    if (same && lastFold.squeezed && top) top.className = "sc-top squeezed";
     while (!composerFits() && foldOne(false)) {}
     if (!composerFits() && top) top.className = "sc-top squeezed";
     if (fitTimer) clearTimeout(fitTimer);
@@ -1253,7 +1257,10 @@ function createCreateView(doc, ctl, o) {
         if (top) top.className = "sc-top";
         fit.after = sizes;
         fit.same = 0;
-      } else if (top && !squeezed) top.className = "sc-top squeezed";
+      } else if (top && !squeezed) {
+        top.className = "sc-top squeezed";
+        lastFold.squeezed = true;
+      }
     }
     fitTimer = setTimeout(lateFit, next);
   }

@@ -119,6 +119,11 @@ test("settings: the allowance is one client session, per-call and total limits i
   s.end();
   s.refund(A.session, 5000);
   assert.equal(s.spending().mode, "ask", "nor once the person ended it");
+  s.grant(A, "5", "5");
+  assert.equal(s.tryDeduct(A.session, 5000), true);
+  assert.equal(s.settle(A.session, 2000, 3000), "above", "a charge above its quote while used up");
+  s.refund(A.session, 5000);
+  assert.equal(s.spending().mode, "ask", "after a charge above its quote, a refund does not bring it back");
 });
 
 test("approvals: one card per session at a time, the next shows after; 10-minute expiry; Decline all; session end; activity log", async () => {

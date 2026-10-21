@@ -203,6 +203,13 @@ function createSettings(o) {
     // and the charge; a refund gives nothing back; a charge above its quote
     // ends the allowance. Returns "above" in that case.
     settle: function (session, quoted, charged) {
+      // A charge above its quote after the total was used up: the allowance
+      // does not come back with a later refund.
+      if (!allowance && usedUp && usedUp.client.session === session && charged > quoted) {
+        usedUp = null;
+        log("agent allowance stays ended (charged above the quote)");
+        return "above";
+      }
       if (!allowance || allowance.client.session !== session) return null;
       if (!(charged > quoted)) return null;
       allowance.remaining = Math.max(0, allowance.remaining - (charged - quoted));

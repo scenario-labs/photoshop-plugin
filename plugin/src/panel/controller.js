@@ -146,9 +146,16 @@ function takesOf(meta) {
   };
   if (meta.group) {
     // The group's own takes: a Scenario layer of another run dropped into
-    // the group is not one (host.js isTakeOf).
+    // the group is not one, nor is a copy of a take (the higher layer id of
+    // two with one asset id; host.js takeIdsOf).
+    var first = {};
+    (meta.children || []).forEach(function (c) {
+      if (!c.fields || !c.fields.assetId || c.fields.jobId !== f.jobId || slugMod.isTakeCopy(c.name, c.fields)) return;
+      var a = c.fields.assetId;
+      if (!first[a] || c.id < first[a].id) first[a] = c;
+    });
     var kids = (meta.children || []).filter(function (c) {
-      return c.fields && c.fields.assetId && c.fields.jobId === f.jobId;
+      return c.fields && first[c.fields.assetId] === c;
     });
     if (!f.jobId || !gen(f.kind) || !kids.length) return null;
     return { group_id: meta.id, layer_id: null, job_id: f.jobId, kind: f.kind, name: meta.name, prompt: f.runName || f.prompt || null, model_name: f.modelName || null, children: kids };

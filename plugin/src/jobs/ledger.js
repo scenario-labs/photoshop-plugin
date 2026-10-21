@@ -240,6 +240,11 @@ function createLedger(o) {
     // A record that cannot be written is dropped: nothing is sent for it.
     var done = write(rec).catch(function (e) {
       delete records[rec.local_id];
+      // Its temporary copy would load as a claimed request after a restart
+      // and block the same request as Unknown.
+      if (o.host && typeof o.host.removeData === "function") {
+        Promise.resolve(o.host.removeData(DIR + "/" + rec.local_id + ".json.tmp")).catch(function () {});
+      }
       throw e;
     });
     notify(rec);

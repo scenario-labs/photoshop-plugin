@@ -60,6 +60,14 @@ test("ledger: records written atomically (temporary file then rename), revisions
   await l2.load();
   await assert.rejects(l2.create({ state: "submitting", idempotency_key: "quote_b", fingerprint: "g" }));
   assert.equal(l2.all().length, 0, "a record that cannot be written is dropped, so nothing is sent for it");
+
+  // Its temporary copy written, every way to put it in place refused: the
+  // copy goes, so it does not load as a claimed request after a restart.
+  const half = createFakePhotoshop({ noRename: true, failWrite: (n) => n.startsWith("jobs/") && !n.endsWith(".tmp") });
+  const l4 = ledgerMod.createLedger({ host: hostOn(half), random });
+  await l4.load();
+  await assert.rejects(l4.create({ state: "submitting", idempotency_key: "quote_d", fingerprint: "k" }));
+  await waitFor(() => ![...half.files.keys()].some((k) => k.startsWith("jobs/") && k.endsWith(".tmp") && half.files.get(k).length), { label: "temporary copy removed" });
 });
 
 test("runner: a record that cannot be written gives its quote back, so the same price can be sent once the disk works (Bugbot, PR 2)", async (t) => {

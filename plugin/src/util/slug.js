@@ -43,4 +43,13 @@ function tail(assetId) {
   return s.length > 6 ? s.slice(-6) : s;
 }
 
-module.exports = { slug: slug, tail: tail, MAX: MAX };
+// A copy the person made of a take: Photoshop names it after the take plus a
+// word ("Take 2 NfpUm8 copy", "Take 2 NfpUm8 copie 2"), and it keeps the
+// take's metadata. A take the person renamed otherwise is still a take.
+function isTakeCopy(name, fields) {
+  if (!fields || !fields.take || !fields.assetId) return false;
+  var own = "Take " + fields.take + " " + tail(fields.assetId) + " ";
+  return String(name || "").indexOf(own) === 0;
+}
+
+module.exports = { slug: slug, tail: tail, isTakeCopy: isTakeCopy, MAX: MAX };
