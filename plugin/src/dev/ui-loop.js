@@ -24,7 +24,9 @@
 // selection's bounds), state (the controller's state and the model the view
 // draws), click (an element by id, or by a data attribute and its value, as
 // a person would), prompt (types into the prompt), pop (opens a chip menu by
-// kind, or closes it), inspect (its document's layers, masks, Scenario
+// kind, or closes it; "stylesrc" opens Match an image from the Style menu),
+// stylesrc (picks Match an image's picture: selection, layer, visible, or a
+// file read from the data folder in place of the dialog), inspect (its document's layers, masks, Scenario
 // metadata and History state), adopt (takes on a document that a run
 // started from this loop opened, such as Create image's new document, so it
 // can be inspected and closed), closedoc (closes the documents it made,
@@ -186,6 +188,30 @@ function start(o) {
     return null;
   }
 
+  // The Match an image menu has no chip of its own: it opens from the
+  // Style menu's Match an image row, as a person reaches it.
+  async function openStyleSource() {
+    await app0().createView.openPop("style");
+    var pop = doc.getElementById("pop");
+    var rows = doc.querySelectorAll("[data-value]");
+    var match = null;
+    for (var i = 0; i < rows.length && !match; i++) {
+      if (rows[i].getAttribute("data-value") !== "match") continue;
+      for (var n = rows[i]; n && !match; n = n.parentNode) if (n === pop) match = rows[i];
+    }
+    if (!match) throw new Error("no Match an image row in the Style menu");
+    match.click();
+    for (var w = 0; w < 60 && app0().createView.popKind() !== "stylesrc"; w++) {
+      await new Promise(function (r) {
+        host.timers.setTimeout(r, 50);
+      });
+    }
+    if (app0().createView.popKind() !== "stylesrc") throw new Error("the Match an image menu did not open");
+  }
+  function app0() {
+    return o.app;
+  }
+
   async function drive(cmd) {
     var app = o.app;
     switch (cmd.cmd) {
@@ -216,6 +242,30 @@ function start(o) {
         el.click();
         return { clicked: true };
       }
+      case "stylesrc": {
+        // Style > Match an image, its picture: selection, layer, visible,
+        // or file, which is read from cmd.path in the data folder in place
+        // of the file dialog the loop cannot answer.
+        var sv = String(cmd.value || "");
+        if (["selection", "layer", "visible", "file"].indexOf(sv) < 0) throw new Error("not a Match an image source");
+        if (sv !== "file") {
+          await app.controller.choose("stylesrc", sv);
+          return { stylesrc: sv, style: app.controller.state().style, note: app.controller.state().note };
+        }
+        if (!cmd.path) throw new Error("file: give path, a PNG or JPEG in the data folder");
+        var sb = await host.readDataBinary(String(cmd.path));
+        if (!sb) throw new Error("no such file in the data folder");
+        var chooser = host.chooseImageFile;
+        host.chooseImageFile = function () {
+          return Promise.resolve({ name: String(cmd.path).split("/").pop(), bytes: sb });
+        };
+        try {
+          await app.controller.choose("stylesrc", "file");
+        } finally {
+          host.chooseImageFile = chooser;
+        }
+        return { stylesrc: sv, style: app.controller.state().style, note: app.controller.state().note };
+      }
       case "prompt": {
         var p = doc.getElementById("prompt");
         if (p) p.value = String(cmd.text || "");
@@ -230,6 +280,7 @@ function start(o) {
       }
       case "pop":
         if (cmd.close) app.createView.closePop();
+        else if (cmd.kind === "stylesrc") await openStyleSource();
         else await app.createView.openPop(cmd.kind);
         // menu: what the open menu lists (cmd.menu), as the controller gives it.
         return { pop: app.createView.popKind(), menu: cmd.menu && app.controller.menu ? await app.controller.menu(cmd.kind) : undefined };

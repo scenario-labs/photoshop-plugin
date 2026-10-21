@@ -136,10 +136,47 @@ test("short panels: the chip rows stay whole and the button visible from about 3
   assert.equal(R[".cp .sug"]["height"], R[".cp .cc"]["height"], "Suggest is as tall as the composer chips");
   assert.equal(R[".cp .sug"]["font-size"], R[".cp .cc"]["font-size"]);
   assert.equal(M["(max-height: 439px)"][".cp .sug"]["height"], M["(max-height: 439px)"][".cp .cc"]["height"], "and in short docks");
-  assert.equal(M["(max-height: 399px)"][".cp .sc-top"]["overflow-y"], "auto", "only below about 400 px does the top scroll, never the composer");
-  assert.equal(M["(max-height: 399px)"][".cp .sc-top"]["flex"], "0 1 auto");
+  assert.ok(!M["(max-height: 399px)"], "no height makes the top scroll by itself");
+  assert.ok(!R[".view.cp"] || !/auto|scroll/.test(R[".view.cp"]["overflow-y"] || ""), "the view never scrolls: the composer and its button stay in view");
+  // With the middle at nothing, the last chips go into More (fitTop() in
+  // create-view.js) down to one row; only then does the top scroll.
+  assert.equal(R[".cp .sc-top.squeezed"]["overflow-y"], "auto");
+  assert.equal(R[".cp .sc-top.squeezed"]["flex"], "0 1 auto");
+  const cv = fs.readFileSync(path.join(PLUGIN, "src/ui/create-view.js"), "utf8");
+  assert.ok(/fitMid\(\);\s*fitTop\(/.test(cv), "the chips fold after the middle has given its room");
   assert.equal(R[".cp .recent.compact .rthumb"]["width"], "28px", "Recent collapses to one row of small thumbnails");
   assert.equal(R[".cp .recent.compact .rrow"]["flex-wrap"], "nowrap");
+});
+
+// Live 2026-10-21, panel docked at about 300 px: a take layer with Make
+// versions on, the card's Select field and two chip rows; the second row
+// was cut in half at the composer's edge. The top was inside #sc-body,
+// which shrinks (min-height 0, overflow hidden) when the top and the
+// composer do not fit, so it clipped the top.
+test("a layer card with its Select field and two chip rows: no box between the chips and the view can shrink or clip them", () => {
+  const main = section("view-main");
+  // The elements open around #acts, from the view down.
+  const upTo = main.slice(0, main.indexOf('id="acts"'));
+  const stack = [];
+  for (const m of upTo.matchAll(/<(\/?)div\b([^>]*)>/g)) {
+    if (m[1]) stack.pop();
+    else stack.push(((/\bclass="([^"]*)"/.exec(m[2]) || [])[1] || "").split(/\s+/)[0]);
+  }
+  assert.deepEqual(stack, ["sc-top"], "the chips sit in the top, and the top is a child of the view, outside #sc-body");
+  assert.equal(R[".cp .sc-top"]["flex"], "0 0 auto");
+  assert.equal(R[".cp .sc-top > *"]["flex-shrink"], "0", "the context card, its Select field and the chip rows keep their height");
+  assert.equal(R[".cp .ctx-sel"]["height"], "26px");
+  for (const cond of Object.keys(M)) {
+    const top = M[cond][".cp .sc-top"] || {};
+    assert.ok(!top.flex && !top["flex-shrink"] && !/overflow/.test(JSON.stringify(top)), `${cond}: the top neither shrinks nor scrolls`);
+  }
+  // #sc-body now holds the middle only; it is what gives way.
+  const body = main.slice(main.indexOf('id="sc-body"'), main.indexOf('id="composer"'));
+  assert.ok(body.includes('id="mid"') && !body.includes('id="acts"') && !body.includes('id="ctx"'));
+  // The context the person had: the controller gives a layer card a Select
+  // field and the chips that wrap onto a second row at 300 px.
+  const fields = { assetId: "asset_abcdefNfpUm8", take: "1", prompt: "A paper kite over the dunes", kind: "image" };
+  assert.equal(ctl.layerTitle("Take 1 NfpUm8", fields), "Take 1 of A paper kite over the dunes");
 });
 
 test("the creation panel's controls are plain elements: no sp-picker or sp-action-button outside the model list", () => {

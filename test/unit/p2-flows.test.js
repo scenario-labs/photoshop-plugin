@@ -6,6 +6,7 @@
 // contexts and the actions table.
 
 const test = require("node:test");
+const MAP = require("../../shared/catalog-map.json");
 const assert = require("node:assert/strict");
 const schemaMod = require("../../plugin/src/forms/schema.js");
 const requests = require("../../plugin/src/forms/requests.js");
@@ -107,6 +108,12 @@ test("New angle sends the preset's turn, tilt and zoom to the model's own inputs
   assert.equal(v.request.parameters.prompt, undefined);
   assert.equal(v.capture.spec.capture_input, "images");
   assert.equal(v.capture.spec.matte, undefined, "an opaque layer goes as it is");
+  // Priced before the upload with a blank stand-in at the capture's size:
+  // a 256 px stand-in quoted 1 CU where the real capture cost 5 to 14 CU
+  // (live 2026-10-21).
+  assert.deepEqual(MAP.models["model_qwen-edit-multiangle-2511"].price_inputs.images, { rule: "size" });
+  assert.ok(v.request.source_size && v.request.source_size.width > 256 && v.request.source_size.height > 256, JSON.stringify(v.request.source_size));
+  assert.deepEqual(requests.build(schemaOf("angle"), v.request).pending, { images: 1 });
 });
 
 test("New angle on a cut-out or a split element: the transparent parts go to the model as gray, with a note", () => {

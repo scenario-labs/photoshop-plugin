@@ -853,7 +853,7 @@ function createAgentTools(o) {
         if (e.type === "CommandRefused") record(ctx, "Command refused", e.message);
         throw e;
       }
-      if (e && e.busy) throw fail("PhotoshopBusy", "Another plugin or a dialog holds Photoshop's modal state.");
+      if (e && e.busy) throw fail("PhotoshopBusy", "Photoshop is busy: another plugin, a dialog or the person holds its modal state. Try again in a moment.");
       record(ctx, "Commands rolled back", label);
       return { outcome: "rolled_back", history_state: null, results: [], truncated: false, error: "Photoshop refused a command: " + ((e && e.message) || e) + ". Nothing changed." };
     }
@@ -1010,7 +1010,7 @@ function createAgentTools(o) {
     } catch (e) {
       if (e && (e.type === "DocumentNotActive" || e.type === "DocumentClosed")) throw e;
       if (e && e.canvasChanged) throw fail("DocumentChanged", "The canvas changed since the capture.");
-      if (e && e.busy) throw fail("PhotoshopBusy", "Another plugin or a dialog holds Photoshop's modal state.");
+      if (e && e.busy) throw fail("PhotoshopBusy", "Photoshop is busy: another plugin, a dialog or the person holds its modal state. Try again in a moment.");
       await setApplication(a.local_id, { state: "rolled_back", history_state: null, layer_ids: [] });
       return { outcome: "rolled_back", layer_ids: [], group_id: null, names: null, history_state: null, outside_check: null, error: "Place failed: " + ((e && e.message) || e) };
     }

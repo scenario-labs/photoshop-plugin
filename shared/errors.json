@@ -89,7 +89,7 @@
     "SwitchOff": "A tool that needs a switch was called while it is off (except `apply_result_application`, which returns a proposal)",
     "CommandRefused": "`execute_batchplay` hit a descriptor outside the allow-list; the message gives its index and the reason",
     "NotScenarioLayer": "The layer carries no Scenario metadata",
-    "PhotoshopBusy": "Another plugin or a dialog holds Photoshop's modal state for more than 10 s",
+    "PhotoshopBusy": "Another plugin, a dialog or the person's own action holds Photoshop's modal state after the plugin tried again; the panel reads \"Photoshop is busy. Try again in a moment.\"",
     "Timeout": "The tool call exceeded 120 s; the work continues and `job_status` reports it. For `generate`, call it again with the same `idempotency_key`",
     "Internal": "An unexpected error in the helper or the plugin; the message says what failed"
   }

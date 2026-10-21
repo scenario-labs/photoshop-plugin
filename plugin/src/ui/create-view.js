@@ -139,7 +139,7 @@ function createCreateView(doc, ctl, o) {
     }
     setText("ctx-title", c.title);
     var ct = byId("ctx-title");
-    if (ct) ct.setAttribute("title", c.title || "");
+    if (ct) ct.setAttribute("title", c.tip || c.title || "");
     var d = byId("ctx-detail");
     if (d) {
       d.textContent = c.detail || "";
@@ -161,10 +161,19 @@ function createCreateView(doc, ctl, o) {
 
   // ---- action chips ----
 
-  function renderActs(chips, more) {
+  // Chips folded into More by fitTop() on a short panel, listed first in
+  // the More menu.
+  var folded = [];
+
+  function renderActs(chips, more, fold) {
     var box = byId("acts");
     if (!box) return;
     clear(box);
+    folded = fold || [];
+    if (folded.length && !more) more = { label: "More", on: false };
+    if (folded.length && more) {
+      for (var f = 0; f < folded.length; f++) if (folded[f].on) more = { label: more.label, on: true };
+    }
     for (var i = 0; i < chips.length; i++) {
       (function (c) {
         var b = el("div", c.on ? "chip on" : "chip");
@@ -318,7 +327,19 @@ function createCreateView(doc, ctl, o) {
         one.appendChild(tb);
       }
       var txt = el("div", "txt");
-      if (card.line) txt.appendChild(el("span", card.tone === "warn" ? "warn" : null, card.line));
+      if (card.badge) {
+        var sb = el("span", "chk-b" + (card.badge.tone === "warn" ? " warn" : ""));
+        sb.setAttribute("data-badge", "single");
+        sb.appendChild(icons.icon(doc, card.badge.tone === "warn" ? "warning" : "check", null, 12));
+        sb.appendChild(el("span", "bt", card.badge.text));
+        var brow = el("div", "brow");
+        brow.appendChild(sb);
+        txt.appendChild(brow);
+      }
+      if (card.line) txt.appendChild(el("span", card.tone === "warn" && !card.badge ? "warn" : null, card.line));
+      // Every check the result got, in words (a Takes card's badge sums
+      // them up per take; a single result has room for all of them).
+      if (card.badge && card.badge.tone === "warn" && card.checks && card.checks.length) txt.appendChild(el("div", "warn checks", card.checks.join(" · ")));
       one.appendChild(txt);
       sec.appendChild(one);
       var r2 = el("div", "btnrow");
@@ -902,6 +923,20 @@ function createCreateView(doc, ctl, o) {
   function fillPop(p, kind, m) {
     p.setAttribute("data-menu", kind);
     if (kind === "more") {
+      for (var fi = 0; fi < folded.length; fi++) {
+        (function (c) {
+          var row = el("div", "mrow");
+          row.setAttribute("data-pick", c.id);
+          row.appendChild(
+            mi({ label: c.label, checked: c.on }, function () {
+              closePop();
+              ctl.selectAction(c.id);
+            })
+          );
+          p.appendChild(row);
+        })(folded[fi]);
+      }
+      if (folded.length && (m.groups || []).length) p.appendChild(el("div", "sep"));
       for (var g = 0; g < (m.groups || []).length; g++) {
         h5(p, m.groups[g].title);
         for (var i = 0; i < m.groups[g].items.length; i++) {
@@ -1118,6 +1153,48 @@ function createCreateView(doc, ctl, o) {
     }
   }
 
+  // The composer and its button stay in view (AGENTS.md, Short panels).
+  // When the context card, the chips and the composer still do not fit with
+  // the middle at nothing, the last chips go into More, one at a time,
+  // down to one row (the chosen action stays a chip). Only then does the
+  // top scroll on its own (.sc-top.squeezed), never the composer.
+  function composerFits() {
+    var v = rect(byId("view-main"));
+    var c = rect(byId("composer"));
+    if (!v || !c || !(v.height > 0)) return true;
+    return c.bottom <= v.bottom + 0.5;
+  }
+  function chipRows(box) {
+    var tops = {};
+    var n = 0;
+    var kids = box ? box.children || [] : [];
+    for (var i = 0; i < kids.length; i++) {
+      var r = rect(kids[i]);
+      if (r && !tops[Math.round(r.top)]) {
+        tops[Math.round(r.top)] = true;
+        n++;
+      }
+    }
+    return n;
+  }
+  function fitTop(chips, more) {
+    var top = byId("sc-top");
+    if (top) top.className = "sc-top";
+    if (composerFits()) return;
+    var box = byId("acts");
+    var keep = chips.slice();
+    var fold = [];
+    while (!composerFits() && chipRows(box) > 1) {
+      var at = -1;
+      for (var i = keep.length - 1; i >= 0 && at < 0; i--) if (!keep[i].on) at = i;
+      if (at < 0) break;
+      fold.unshift(keep[at]);
+      keep.splice(at, 1);
+      renderActs(keep, more, fold);
+    }
+    if (!composerFits() && top) top.className = "sc-top squeezed";
+  }
+
   // ---- drawing ----
 
   function render() {
@@ -1138,6 +1215,7 @@ function createCreateView(doc, ctl, o) {
       }
       renderComposer(m.composer);
       fitMid();
+      fitTop(m.chips || [], m.more);
       // An open chip menu follows its chip (the composer was drawn again).
       if (pop.kind && pop.anchor && !pop.anchor.parentNode) {
         var a = findAnchor(pop.kind);

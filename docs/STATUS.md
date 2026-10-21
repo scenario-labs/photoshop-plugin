@@ -88,3 +88,11 @@ Photoshop 27.11 on macOS, plugin 0.7.1 development build with the fixes listed u
 - Run card price after a price change on upload (New angle, 1 CU to 14 CU): *verified live: fixed*. The card read 14 CU while waiting for approval and after the run; the composer button kept "1 CU" meanwhile.
 - Jobs label for a video (Animate 5 s, Minimax H3 Fast): *verified live: fixed*. "Video" in the popover and in Jobs.
 
+## After the fix re-test
+
+Changes made after the re-test above, 2026-10-21. *Tested automated* (Node suite, fake Photoshop); *not tested live*.
+
+- Extend canvas defaults to Reframe at 2K (position route, original at the anchor) instead of GPT Image 2.5 Flare at Low. Chosen from a comparison on the same 2:3 poster grown to 16:9, two takes per model, judged at 100% for a second figure, a step at the old edge and whether the town and sea continue: Reframe was clean in both takes; GPT Image 2.5 Sunburst at Medium is the runner-up (no second figure without the extra prompt line, a horizon step at the old edge in each take); Flare at Medium drew the figure twice in 3 of 4 takes; Photoroom Expand copied the cut title and blurred the fill. A prompt line asking not to repeat anything from the center did not help, so the built-in prompt is unchanged. The lane preset pins 2K. Per-side growth (+20% each side) needs a mask-route model such as Flare.
+- The single result card (Extend canvas, Upscale, Remove background) shows the badge its checks gave, as a Takes card does per take, and lists each check in words.
+- The composer button shows the price after the upload for the same action and settings, where it showed the stand-in quote again.
+- Extend canvas edge limits calibrated on the 14 takes of that comparison, labelled by eye (clean, stepped, figure drawn twice): with the step limit raised from 10 to 22, both clean takes read **Edges ok** and every stepped or doubled take gets a warning. The step score alone does not separate the labels; the band residual catches the stepped mask-route takes, the step check a tone band past the edge, the repeat check (limit unchanged) the doubled figure. *Tested automated* on the measured scores.

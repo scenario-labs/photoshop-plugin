@@ -15,6 +15,7 @@
 
 var builtinMod = require("../util/builtin.js");
 var clipMod = require("../util/clip.js");
+var slugMod = require("../util/slug.js");
 var actionsMod = require("./actions.js");
 var imageMod = require("./image.js");
 var docRefsMod = require("./doc-refs.js");
@@ -118,6 +119,22 @@ function runName(prompt, kind) {
   return KINDS[kind] || "Image";
 }
 
+// The context title of a layer: its own name, except a Scenario result
+// still under the name the plugin gave it ("Take 1 NfpUm8", "Scenario image
+// kite NfpUm8"), which reads in plain words ("Take 1 of A paper kite"); the
+// id tail stays in the tooltip. A layer the person renamed keeps its name.
+function layerTitle(name, fields) {
+  var n = String(name || "");
+  if (!fields || !fields.assetId) return n;
+  var t = slugMod.tail(fields.assetId);
+  if (!t || n.slice(-t.length - 1) !== " " + t) return n;
+  var run = runName(fields.runName || fields.prompt, fields.kind);
+  var take = /^Take (\d+) /.exec(n);
+  if (take) return "Take " + take[1] + " of " + run;
+  if (/^Scenario /.test(n)) return run;
+  return n;
+}
+
 // The takes a layer's metadata describes (the results model): a Scenario
 // group holding takes, or one Scenario result layer outside a group.
 // meta: host.scenarioLayer(). Returns null for anything else.
@@ -169,6 +186,16 @@ function classify(raw, meta) {
   // PNG, opened as it is.
   if (raw.layer && raw.layer.background && raw.doc.layers === 1) return { kind: "flat", run: null };
   return { kind: "layer", run: null };
+}
+
+// The text of a failure for the panel. Photoshop's own refusal while
+// another modal operation runs ("host is in a modal state", live
+// 2026-10-21) reads as one plain line.
+var BUSY_LINE = "Photoshop is busy. Try again in a moment.";
+function errText(e) {
+  var m = (e && e.message) || String(e);
+  if ((e && e.busy) || /modal state/i.test(m)) return BUSY_LINE;
+  return m;
 }
 
 function badgeOf(list) {
@@ -236,6 +263,7 @@ function createController(o) {
     confirm: null,
     note: "",
     latest: {},
+    repriced: null,
     done: {},
     // Runs an earlier panel session placed in a document, found again by
     // their layers' metadata: { <document id>: { <local id>: true|false } }.
@@ -830,7 +858,7 @@ function createController(o) {
         out = { state: p.state, quote: p.quote, reason: p.reason, view: p.view, schema: p.schema };
       }
     } catch (e) {
-      out = { state: e && e.afterUpload ? "after_upload" : "unavailable", reason: (e && e.message) || String(e) };
+      out = { state: e && e.afterUpload ? "after_upload" : "unavailable", reason: errText(e) };
       log("panel: price check " + ((e && e.type) || "error"));
     }
     if (seq !== st.seq) return;
@@ -850,7 +878,7 @@ function createController(o) {
     try {
       req = requests.build(schema, v.request);
     } catch (e) {
-      return { state: "blocked", reason: (e && e.message) || String(e), view: v, schema: schema };
+      return { state: "blocked", reason: errText(e), view: v, schema: schema };
     }
     try {
       var q = await o.quotes.estimate(req);
@@ -858,7 +886,7 @@ function createController(o) {
     } catch (e) {
       if (e && e.afterUpload) return { state: "after_upload", view: v, schema: schema };
       if (e && e.type === "DryRunCreatedJob") return { state: "alarm" };
-      return { state: "unavailable", reason: (e && e.message) || String(e), view: v, schema: schema };
+      return { state: "unavailable", reason: errText(e), view: v, schema: schema };
     }
   }
 
@@ -1065,6 +1093,24 @@ function createController(o) {
     return true;
   }
 
+  // A price that changed after the upload (live 2026-10-21: New angle, 1 CU
+  // before the upload, 14 CU after it): the composer's button shows it for
+  // the same action and settings, since the stand-in quote it re-checks
+  // would read the old price again. Any change of settings drops it.
+  function noteRepriced(id, cu, localId) {
+    st.repriced = { action: id, key: settingsKey(id), price: String(cu), local_id: localId };
+  }
+
+  function repricedFor(id) {
+    var r = st.repriced;
+    if (!r || r.action !== id) return null;
+    if (r.key !== settingsKey(id)) {
+      st.repriced = null;
+      return null;
+    }
+    return r.price;
+  }
+
   function go() {
     if (st.sending || st.confirm || st.price.state !== "ready" || st.price.action !== st.action) return Promise.resolve(null);
     if (!o.runner) return Promise.resolve(null);
@@ -1113,12 +1159,14 @@ function createController(o) {
       if (out.record && id === "select_desc") st.selectText = "";
       if (out.record && d === null) st.latest.none = out.record.local_id;
       if (out.replayed) st.note = TEXT.replayed;
-      else if (out.state === "awaiting_approval") st.confirm = { kind: "changed", local_id: out.record.local_id, text: "Price changed after upload. Now " + out.price + " CU (was " + out.was + " CU). Nothing was spent.", ok: "Approve · " + out.price + " CU" };
-      else if (out.state !== "queued" && out.record && out.record.error) st.note = out.record.error;
+      else if (out.state === "awaiting_approval") {
+        st.confirm = { kind: "changed", local_id: out.record.local_id, text: "Price changed after upload. Now " + out.price + " CU (was " + out.was + " CU). Nothing was spent.", ok: "Approve · " + out.price + " CU" };
+        noteRepriced(id, out.price, out.record.local_id);
+      } else if (out.state !== "queued" && out.record && out.record.error) st.note = out.record.error;
       if (id === "more_like") st.keepAction = false;
     } catch (e) {
       var type = e && e.type;
-      st.note = type === "QuoteMismatch" || type === "QuoteExpired" || type === "QuoteUsed" ? TEXT.changed : (e && e.message) || String(e);
+      st.note = type === "QuoteMismatch" || type === "QuoteExpired" || type === "QuoteUsed" ? TEXT.changed : errText(e);
       log("panel: generate " + (type || "error"));
     } finally {
       st.sending = false;
@@ -1141,13 +1189,16 @@ function createController(o) {
       return o.runner.approve(c.local_id).then(
         function (out) {
           st.sending = false;
-          if (out && out.state === "awaiting_approval" && out.changed) st.confirm = { kind: "changed", local_id: c.local_id, text: "Price changed again. Now " + out.price + " CU. Nothing was spent.", ok: "Approve · " + out.price + " CU" };
+          if (out && out.state === "awaiting_approval" && out.changed) {
+            st.confirm = { kind: "changed", local_id: c.local_id, text: "Price changed again. Now " + out.price + " CU. Nothing was spent.", ok: "Approve · " + out.price + " CU" };
+            if (st.repriced && st.repriced.local_id === c.local_id) st.repriced.price = String(out.price);
+          }
           else st.note = out && out.state !== "queued" && out.record ? out.record.error || "" : "";
           changed();
         },
         function (e) {
           st.sending = false;
-          st.note = (e && e.message) || String(e);
+          st.note = errText(e);
           changed();
         }
       );
@@ -1172,7 +1223,7 @@ function createController(o) {
     try {
       await o.host.showTake(d, run.group_id, run.children[i].id);
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     await refresh();
   }
@@ -1184,7 +1235,7 @@ function createController(o) {
     try {
       await o.host.keepTake(docId(), run.group_id, shown.child.id);
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     await refresh();
   }
@@ -1213,7 +1264,7 @@ function createController(o) {
       }
     } catch (e) {
       st.keepAction = false;
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     await refresh();
     changed();
@@ -1232,7 +1283,7 @@ function createController(o) {
     try {
       await o.runner.place(c.local_id, {});
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     await refresh();
   }
@@ -1328,7 +1379,7 @@ function createController(o) {
       try {
         await o.runner.place(rec.local_id, {});
       } catch (e) {
-        st.note = (e && e.message) || String(e);
+        st.note = errText(e);
       }
       await refresh();
     }
@@ -1449,7 +1500,7 @@ function createController(o) {
       }
       st.lib = { state: "ready", rows: got.rows, more: !!got.more, error: null };
     } catch (e) {
-      st.lib = { state: "error", rows: [], more: false, error: (e && e.message) || String(e) };
+      st.lib = { state: "error", rows: [], more: false, error: errText(e) };
     }
     emit();
   }
@@ -1529,7 +1580,7 @@ function createController(o) {
         }
       }
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     } finally {
       st.sending = false;
     }
@@ -1568,7 +1619,7 @@ function createController(o) {
       var got = await o.library.more(f);
       if (f === st.libFilter) st.lib = { state: "ready", rows: got.rows, more: !!got.more, error: null };
     } catch (e) {
-      st.lib = { state: "ready", rows: st.lib.rows, more: st.lib.more, error: (e && e.message) || String(e) };
+      st.lib = { state: "ready", rows: st.lib.rows, more: st.lib.more, error: errText(e) };
     }
     emit();
   }
@@ -1595,7 +1646,7 @@ function createController(o) {
         st.refs.push(r);
       }
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     changed();
   }
@@ -1621,7 +1672,7 @@ function createController(o) {
         st.style = { match: true, name: "Match an image" };
       }
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     changed();
   }
@@ -1653,7 +1704,7 @@ function createController(o) {
     try {
       st.drefs = await o.host.setDocumentReferences(d, list);
     } catch (e) {
-      st.note = "Document references could not be saved in this document: " + ((e && e.message) || e);
+      st.note = "Document references could not be saved in this document: " + errText(e);
     }
     changed();
   }
@@ -1667,7 +1718,7 @@ function createController(o) {
     try {
       st.drefs = await o.host.setDocumentReferences(d, list);
     } catch (e) {
-      st.note = (e && e.message) || String(e);
+      st.note = errText(e);
     }
     changed();
   }
@@ -1732,13 +1783,13 @@ function createController(o) {
         try {
           image = await o.references.capture("layer", raw.doc.id, entry.model, 512, raw.layer.id);
         } catch (e) {
-          return { state: "failed", reason: (e && e.message) || String(e) };
+          return { state: "failed", reason: errText(e) };
         }
       }
       try {
         return await sparkMod.suggest({ client: o.client, quotes: o.quotes, settings: o.settings }, { model_id: entry.model, prompt: prompt, image: image, n: 3, constraints: sparkConstraints(id) });
       } catch (e) {
-        return { state: "failed", reason: (e && e.message) || String(e) };
+        return { state: "failed", reason: errText(e) };
       }
     })().then(function (r) {
       entry.state = r.state;
@@ -1935,6 +1986,11 @@ function createController(o) {
       out.icon = "layer";
       out.checker = c.kind === "cutout";
       out.title = lay ? lay.name + " · Layer " + times(lw, lh) : (raw.doc.title || "Document") + " · Canvas " + times(raw.doc.width, raw.doc.height);
+      var plain = lay ? layerTitle(lay.name, st.meta && st.meta.fields) : null;
+      if (plain && plain !== lay.name) {
+        out.tip = out.title;
+        out.title = plain;
+      }
       if (st.startFrom && st.action === "versions") out.detail = "Starting from take " + st.startFrom.n + " · " + land.charAt(0).toLowerCase() + land.slice(1);
       var mf = st.meta && st.meta.fields;
       if (mf && mf.assetId && mf.jobId && o.ledger && typeof o.ledger.findByJobId === "function") {
@@ -1988,6 +2044,13 @@ function createController(o) {
       var words = { ready: "Ready to place", awaiting_approval: "Waiting for your approval", applied: "Placed" };
       var line = words[rec.state] || (FAILED.indexOf(rec.state) >= 0 ? rec.error || "Did not finish" : "");
       var first = shownOutput(rec);
+      // The checks' badges for the shown output, as a Takes card shows them
+      // for each take (live 2026-10-21: Extend recorded a step and a repeated
+      // detail, and its single card showed neither).
+      var all = rec.placement && rec.placement.badges ? rec.placement.badges : [];
+      var at = Math.max(0, (rec.outputs || []).indexOf(first));
+      var checks = (all[at] || []).slice();
+      var badge = badgeOf(checks);
       return {
         kind: "single",
         local_id: rec.local_id,
@@ -1997,7 +2060,9 @@ function createController(o) {
         thumb: first && first.state === "saved" ? thumbs.resultThumb(first.path) || posterOf(rec) : null,
         thumb_size: sizeOfOut(first),
         line: rec.placement && rec.placement.notes && rec.placement.notes.length ? rec.placement.notes.join(" ") : line,
-        tone: FAILED.indexOf(rec.state) >= 0 ? "warn" : "ok",
+        tone: FAILED.indexOf(rec.state) >= 0 || (badge && badge.tone === "warn") ? "warn" : "ok",
+        badge: badge,
+        checks: checks,
         place: rec.state === "ready",
         actions: cardActions(rec),
         compare: compareOf(rec),
@@ -2145,9 +2210,11 @@ function createController(o) {
       return g;
     }
     if (p.state === "ready") {
-      g.cu = "· " + p.label;
+      var after = repricedFor(st.action);
+      var shownLabel = after !== null ? after + " CU" : p.label;
+      g.cu = "· " + shownLabel;
       g.enabled = !st.confirm && !!o.runner && !(o.runner.pausedFor && o.runner.pausedFor() > 0);
-      g.title = g.label + " · " + p.label;
+      g.title = g.label + " · " + shownLabel + (after !== null ? " (the price after the upload)" : "");
       if (o.runner && o.runner.pausedFor && o.runner.pausedFor() > 0) g.reason = "Not sent: Scenario asked to wait " + o.runner.pausedFor() + " s.";
       if (p.quote && p.quote.no_refund) g.reason = g.reason || "No refund if it fails.";
       return g;
@@ -2798,4 +2865,4 @@ function createController(o) {
   };
 }
 
-module.exports = { createController: createController, classify: classify, takesOf: takesOf, isCutout: isCutout, badgeOf: badgeOf, cuOf: cuOf, needsConfirm: needsConfirm, TEXT: TEXT, DEBOUNCE_MS: DEBOUNCE_MS, TARGETS: TARGETS, CHANGE: CHANGE };
+module.exports = { createController: createController, errText: errText, layerTitle: layerTitle, classify: classify, takesOf: takesOf, isCutout: isCutout, badgeOf: badgeOf, cuOf: cuOf, needsConfirm: needsConfirm, TEXT: TEXT, DEBOUNCE_MS: DEBOUNCE_MS, TARGETS: TARGETS, CHANGE: CHANGE };

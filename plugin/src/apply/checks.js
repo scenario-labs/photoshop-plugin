@@ -447,7 +447,11 @@ function bandCheck(o) {
 //   just past the blend band, the original twice as far), worst channel;
 //   a straight gradient gives 0, a step gives its height. The same measure
 //   wholly inside the original is the picture's own texture and is taken
-//   off. The 75th percentile over segments; edge_ok: step < 10.
+//   off. The 75th percentile over segments; edge_ok: step < 22, set on
+//   labelled real takes (test/fixtures/extend-edges): clean takes read 11
+//   to 12, a tone band past the edge 42. The score is mostly the picture's
+//   own texture, so a horizon step on a mask-route take is left to the band
+//   residual, which separates those takes.
 // - repeated: textured 8 px blocks (half check scale) of the take within a
 //   zone past the old edge that match a block of the original near that
 //   edge (normalized correlation >= 0.9) when that block is unique in the
@@ -457,7 +461,7 @@ function bandCheck(o) {
 // o: { original (the original at check scale), take (the whole new canvas
 // at the same scale), offset [x, y] (the original in the take, check px),
 // sides (grown sides), blend (check px) }.
-var EDGE = { step: 10, seg: 16, strip: 3, gap: 2, blur: 2, block: 8, zone: 0.3, zone_max: 48, texture: 10, ncc: 0.9, unique: 0.8, repeats: 2 };
+var EDGE = { step: 22, seg: 16, strip: 3, gap: 2, blur: 2, block: 8, zone: 0.3, zone_max: 48, texture: 10, ncc: 0.9, unique: 0.8, repeats: 2 };
 
 function percentile(list, p) {
   if (!list.length) return null;

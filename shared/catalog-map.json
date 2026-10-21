@@ -18,7 +18,7 @@
       "requires_capabilities": ["img2img"],
       "tools": {
         "upscale": { "tags": ["image-upscale"], "models": [] },
-        "expand": { "tags": ["expand"], "models": ["model_openai-gpt-image-2-5-flare"] },
+        "expand": { "tags": ["expand"], "models": ["model_scenario-gemini-reframe", "model_openai-gpt-image-2-5-flare"] },
         "remove_background": { "tags": ["remove-background"], "models": [] }
       }
     }
@@ -28,13 +28,13 @@
   "mask_capabilities": ["inpaint"],
   "reference_capabilities": ["reference"],
   "defaults": {
-    "$comment": "SPEC 6.1 step 3: lane defaults are models whose price is exact before upload, with price-affecting settings pinned. GPT Image 2.5's quality defaults to auto, which changes the price, so the presets name a level. Replace inside and Remove have their own defaults, from the mask strategy test of 2026-10-20: Ideogram 4.5 Precise Edit kept the new subject inside the selection with the least change outside; Ideogram 4.5 removed cleanly where Precise Edit left a stub. The other edit actions (Make versions, More like this, Relight) run unmasked or were not in that test and keep GPT Image 2.5 Flare.",
+    "$comment": "SPEC 6.1 step 3: lane defaults are models whose price is exact before upload, with price-affecting settings pinned. GPT Image 2.5's quality defaults to auto, which changes the price, so the presets name a level. Replace inside and Remove have their own defaults, from the mask strategy test of 2026-10-20: Ideogram 4.5 Precise Edit kept the new subject inside the selection with the least change outside; Ideogram 4.5 removed cleanly where Precise Edit left a stub. The other edit actions (Make versions, More like this, Relight) run unmasked or were not in that test and keep GPT Image 2.5 Flare. Extend canvas defaults to Reframe at 2K (extend shoot-out of 2026-10-21 on a 2:3 poster grown to 16:9, two takes per route): both takes continued the town and the sea with no second copy of the heroine and no horizon step, where GPT Image 2.5 Flare at medium drew her twice in 3 of 4 takes; GPT Image 2.5 Sunburst at medium is the runner-up (no second heroine in 3 of 4 takes, a horizon step at the old edge in each). A 256 px stand-in prices Reframe the same as the real picture (measured 2026-10-21), and the preset pins 2K: left free, the position route picks 4K for a 16:9 canvas.",
     "image": { "model_id": "model_openai-gpt-image-2-5-flare", "preset": { "quality": "low" }, "takes": 1 },
     "edit": { "model_id": "model_openai-gpt-image-2-5-flare", "preset": { "quality": "low" }, "takes": 2 },
     "replace": { "model_id": "model_ideogram-v4-5-precise-edit", "preset": { "quality": "medium" }, "takes": 2 },
     "remove": { "model_id": "model_ideogram-v4-5", "preset": { "quality": "medium", "aspectRatio": "auto" }, "takes": 2 },
     "upscale": { "model_id": "model_topaz-image-upscale", "preset": { "upscaleFactor": "2x" }, "takes": 1 },
-    "expand": { "model_id": "model_openai-gpt-image-2-5-flare", "preset": { "quality": "low" }, "takes": 1 },
+    "expand": { "model_id": "model_scenario-gemini-reframe", "preset": { "resolution": "2K" }, "takes": 1 },
     "remove_background": { "model_id": "model_851-labs-background-remover", "preset": {}, "takes": 1 }
   },
   "picks": {
@@ -43,11 +43,11 @@
     "max": 6,
     "image": ["model_openai-gpt-image-2-5-flare"],
     "edit": ["model_ideogram-v4-5-precise-edit", "model_ideogram-v4-5", "model_openai-gpt-image-2-5-flare"],
-    "enhance": ["model_topaz-image-upscale", "model_openai-gpt-image-2-5-flare", "model_851-labs-background-remover"],
+    "enhance": ["model_topaz-image-upscale", "model_scenario-gemini-reframe", "model_openai-gpt-image-2-5-flare", "model_851-labs-background-remover"],
     "trained": []
   },
   "models": {
-    "$comment": "Per-model facts the schema does not state. price_inputs: how a file input the person has not uploaded yet is priced (SPEC 6.1 step 3): count (stand-ins by count; the first `free` slots priced without a file; with free_when, only while each named parameter has one of the listed values, measured 2026-10-20), size (a blank stand-in at the source's size), any (one small blank stand-in), omit (left out). capture_input: the input that receives the capture when the schema has no image input. output_max_px: largest output side measured. input_formats: the file types a paid run took for image inputs (PNG only when absent; JPEG for opaque captures, SPEC 5.5). mask_growth: on Replace inside the placed mask grows over what the model drew past the selection (apply/grow.js), for models that redraw the whole picture (mask strategy test, 2026-10-20). size_route follows_input: no size is sent and the capture goes at its own size; masked_params are added when a mask is sent (Ideogram 4.5 takes a mask only with aspectRatio auto). All measured live on 2026-10-19 except where noted.",
+    "$comment": "Per-model facts the schema does not state. price_inputs: how a file input the person has not uploaded yet is priced (SPEC 6.1 step 3): count (stand-ins by count; the first `free` slots priced without a file; with free_when, only while each named parameter has one of the listed values, measured 2026-10-20), size (a blank stand-in at the source's size), any (one small blank stand-in), omit (left out). capture_input: the input that receives the capture when the schema has no image input. output_max_px: largest output side measured. input_formats: the file types a paid run took for image inputs (PNG only when absent; JPEG for opaque captures, SPEC 5.5). mask_growth: on Replace inside the placed mask grows over what the model drew past the selection (apply/grow.js), for models that redraw the whole picture (mask strategy test, 2026-10-20). size_route follows_input: no size is sent and the capture goes at its own size; masked_params are added when a mask is sent (Ideogram 4.5 takes a mask only with aspectRatio auto). All measured live on 2026-10-19 except where noted. Qwen Edit Multiangle (New angle) images: size since 2026-10-21, when the count rule's 256 px stand-in quoted 1 CU and the real capture 5 to 14 CU after the upload (not yet checked live with the size rule).",
     "model_openai-gpt-image-2-5-flare": {
       "capture_input": "referenceImages",
       "price_inputs": { "referenceImages": { "rule": "count", "free": 1, "free_when": { "quality": ["low"] } }, "mask": { "rule": "omit" } },
@@ -90,12 +90,13 @@
     "model_bfl-flux-2-klein-4b-base": { "capture_input": "referenceImages" },
     "model_qwen-image-edit-2511": { "capture_input": "referenceImages" },
     "model_openai-gpt-image-2-5-sunburst": { "capture_input": "referenceImages", "price_inputs": { "referenceImages": { "rule": "count" }, "mask": { "rule": "omit" } }, "mask_polarity": "alpha", "input_formats": ["png", "jpeg"], "mask_growth": true },
-    "model_qwen-edit-multiangle-2511": { "capture_input": "images", "price_inputs": { "images": { "rule": "count" } } },
+    "model_qwen-edit-multiangle-2511": { "capture_input": "images", "price_inputs": { "images": { "rule": "size" } } },
     "model_meta-sam-3-1-image": { "price_inputs": { "image": { "rule": "any" } } },
     "model_bytedance-seedream-5-0-flash-layerize": { "price_inputs": { "image": { "rule": "any" } } },
     "model_bytedance-seedream-5-0-pro-layerize": { "price_inputs": { "image": { "rule": "any" } } },
     "model_ideogram-v3-layerize-text": { "price_inputs": { "image": { "rule": "any" } } },
     "model_scenario-smart-reframe": { "price_inputs": { "image": { "rule": "any" } } },
+    "model_scenario-gemini-reframe": { "price_inputs": { "image": { "rule": "any" } } },
     "model_minimax-h3-fast": { "capture_input": "firstFrameImage", "price_inputs": { "firstFrameImage": { "rule": "any" }, "lastFrameImage": { "rule": "omit" } } },
     "model_minimax-h3": { "capture_input": "firstFrameImage", "price_inputs": { "firstFrameImage": { "rule": "any" }, "lastFrameImage": { "rule": "omit" } } }
   },

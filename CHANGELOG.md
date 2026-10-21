@@ -15,6 +15,23 @@ Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures).
 - The run card shows the charged price, else the price waiting for approval after a price change on upload, else the quote. It kept the first quote. *Verified live: fixed* (New angle, 1 CU to 14 CU); the composer button still shows the first quote during the approval.
 - Jobs and its popover name video jobs (Animate, Frame to layer) "Video", not "Image". *Verified live: fixed* on Animate 5 s.
 
+### Changed
+
+- Extend canvas defaults to Reframe at 2K, with the resolution pinned by the lane preset; GPT Image 2.5 Sunburst at Medium was the runner-up of a two-take comparison per model on the same poster and canvas, and GPT Image 2.5 Flare stays in the Model menu (it drew the main figure a second time in 3 of 4 takes). The built-in Extend prompt is unchanged: a line asking not to repeat anything from the center did not help. *Tested automated*; *not tested live*.
+
+### Fixed after the re-test
+
+*Tested automated*; *not tested live*.
+
+- The single result card (Extend canvas, Upscale, Remove background) shows the badge the checks gave and each check in words. It showed none, so the step and the repeated detail recorded on the live Extend run were not visible.
+- The composer button shows the price after the upload for the same action and settings (New angle, 1 CU to 14 CU live), where it kept the first quote during the approval and the run.
+- Extend canvas: the step limit is 22 (was 10), calibrated on 14 labelled real takes; at 10 it flagged clean takes. The measured scores are a fixture test.
+- Photoshop could stay busy, and the panel showed the host's raw "host is in a modal state". The plugin's modal scopes now run one after the other, so a **Keep take** clicked while the context thumbnail is read waits for it (the first Keep after a placement did nothing); a scope Photoshop refuses as busy is tried again three times, then the panel reads "Photoshop is busy. Try again in a moment." (`PhotoshopBusy` for agents). A test holds that no modal scope wraps a network call, an upload, a poll, a download or a price check, and that no request is sent while one is open during a whole Extend run.
+- The context card's second row of action chips was cut in half at the composer's edge (a layer card with its Select field and two chip rows, docked at about 300 px). The context card and the chips now sit outside the part that shrinks, so they keep their full height, and the composer with its button stays in view: when even an empty middle leaves too little room, the last chips fold into **More**, one at a time, down to one row. *Tested headless* in Chrome with the plugin's own page and view code on each context at 280, 320 and 360 px: every chip row whole and the button in view from 360 to 390 px high (300 for takes), where 420 px failed before in three cases; *not tested live*.
+- The context card names a Scenario layer in plain words: "Take 1 of A paper kite" instead of "Take 1 NfpUm8 · Layer 1536 × 1024", a single result by its run's name; the id tail and the size stay in the tooltip, and a layer the person renamed keeps its name.
+- New angle is priced before the upload with a blank stand-in at the capture's size; the 256 px stand-in quoted 1 CU where the real capture cost 5 to 14 CU.
+- Development builds: the dev loop can open Style > **Match an image** and pick its picture (selection, layer, visible, or a file from the data folder). Release builds are unchanged.
+
 ### Documentation
 
 - README rewritten for people installing the plugin: what it does, install from a built `.ccx`, a first generation, and links to the guides. The build-by-build technical status moved to `docs/STATUS.md`.

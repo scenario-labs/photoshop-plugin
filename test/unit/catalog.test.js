@@ -49,7 +49,7 @@ test("Scenario picks: the lane defaults, then the tab's featured models, newest 
   assert.equal(image.length, 6);
   assert.deepEqual(image.slice(1, 3), ["model_ideogram-v4-5", "model_xai-grok-imagine-image-2-0"]);
   assert.ok(!image.includes("model_lyria-3-5") && !image.includes("model_bytedance-seedance-2-5"), "featured models of other kinds stay out");
-  assert.deepEqual(map.picks(rows, "enhance"), ["model_topaz-image-upscale", "model_openai-gpt-image-2-5-flare", "model_851-labs-background-remover"]);
+  assert.deepEqual(map.picks(rows, "enhance"), ["model_topaz-image-upscale", "model_scenario-gemini-reframe", "model_openai-gpt-image-2-5-flare", "model_851-labs-background-remover"]);
   assert.deepEqual(map.picks(rows, "trained"), []);
 });
 
