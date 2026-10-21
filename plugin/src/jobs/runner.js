@@ -310,6 +310,11 @@ function createRunner(o) {
         submitted_at: null,
         finished_at: null
       });
+    } catch (e) {
+      // Nothing was sent: a quote redeemed for a record that could not be
+      // written is given back.
+      if (red && typeof o.quotes.release === "function") o.quotes.release(q.quote_id);
+      throw e;
     } finally {
       delete claiming[fp];
     }

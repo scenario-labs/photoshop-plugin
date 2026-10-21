@@ -50,6 +50,9 @@ function createSettings(o) {
   var noSpend = false;
   // The allowance in thousandths, while one runs.
   var allowance = null;
+  // The allowance its last deduction used up, while that request may still
+  // be given back (never sent): a refund brings it back with that amount.
+  var usedUp = null;
   var listeners = [];
 
   function notify(what) {
@@ -85,6 +88,7 @@ function createSettings(o) {
   }
 
   function endAllowance(why) {
+    usedUp = null;
     if (!allowance) return false;
     allowance = null;
     syncSpending();
@@ -159,6 +163,7 @@ function createSettings(o) {
       if (!client || !client.session) throw new Error("Pick a connected client.");
       var p = limitOf(perCall, PER_CALL_DEFAULT);
       var t = limitOf(total, TOTAL_DEFAULT);
+      usedUp = null;
       allowance = { client: { session: client.session, client_name: client.client_name, connected_at: client.connected_at }, per_call: p, total: t, remaining: t };
       syncSpending();
       notify({ type: "allowance", granted: true });
@@ -175,11 +180,20 @@ function createSettings(o) {
       allowance.remaining -= amount;
       syncSpending();
       notify({ type: "allowance" });
-      if (allowance.remaining <= 0) endAllowance("the total is used");
+      if (allowance.remaining <= 0) {
+        var spent = allowance;
+        endAllowance("the total is used");
+        usedUp = spent;
+      }
       return true;
     },
     // A deducted request that was never sent gives its amount back.
     refund: function (session, amount) {
+      if (!allowance && usedUp && usedUp.client.session === session && amount > 0) {
+        allowance = usedUp;
+        usedUp = null;
+        log("agent allowance back (a request it paid for was not sent)");
+      }
       if (!allowance || allowance.client.session !== session || !(amount > 0)) return;
       allowance.remaining = Math.min(allowance.total, allowance.remaining + amount);
       syncSpending();
@@ -203,6 +217,7 @@ function createSettings(o) {
     // SPEC 2.6, Client sessions: when a session ends (it leaves the clients
     // list, or the link drops), the allowance granted to it ends too.
     endSessions: function (ids) {
+      if (usedUp && ids.indexOf(usedUp.client.session) >= 0) usedUp = null;
       if (!allowance || ids.indexOf(allowance.client.session) < 0) return false;
       return endAllowance("its session ended");
     },

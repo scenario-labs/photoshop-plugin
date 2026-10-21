@@ -271,6 +271,13 @@ function createQuotes(o) {
     return { kind: q.kind, thousandths: q.thousandths, max: q.max, fingerprint: q.fingerprint, issued_at: q.issued_at };
   }
 
+  // Gives a redeemed quote back when its request was never claimed (the
+  // record could not be written), so the same price can be sent again.
+  function release(quoteId) {
+    var q = Object.prototype.hasOwnProperty.call(store, quoteId) ? store[quoteId] : null;
+    if (q) q.used = false;
+  }
+
   // Checks 3 to 5 without using the quote (MCP.md section 3: the agent's
   // generate runs them before No-spend and the allowance; redeem() runs
   // them again when the request is claimed).
@@ -329,6 +336,7 @@ function createQuotes(o) {
   return {
     estimate: estimate,
     redeem: redeem,
+    release: release,
     peek: peek,
     fingerprintFor: fingerprintFor,
     bodyFor: bodyFor,

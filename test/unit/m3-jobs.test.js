@@ -62,6 +62,20 @@ test("ledger: records written atomically (temporary file then rename), revisions
   assert.equal(l2.all().length, 0, "a record that cannot be written is dropped, so nothing is sent for it");
 });
 
+test("runner: a record that cannot be written gives its quote back, so the same price can be sent once the disk works (Bugbot, PR 2)", async (t) => {
+  let failing = true;
+  const { app, mock } = await bootGenerate(t, { docs: [], psOpts: { failWrite: (n) => failing && n.startsWith("jobs/") } });
+  const req = { model_id: FLARE, lane: "image", parameters: { prompt: "a quiet harbor", width: 1024, height: 1024, quality: "low" }, takes: 1, pending: {}, target: { kind: "new_document", width: 1024, height: 1024 } };
+  const q = await app.quotes.estimate(req);
+  await assert.rejects(app.runner.start({ req, quote: q, refs: [], model_name: "GPT Image 2.5 Flare" }));
+  assert.equal(app.ledger.all().length, 0);
+  assert.equal(mock.paidCalls.length, 0, "nothing was sent");
+  failing = false;
+  const ok = await app.runner.start({ req, quote: q, refs: [], model_name: "GPT Image 2.5 Flare" });
+  assert.equal(ok.state, "queued", "the same quote works, not QuoteUsed");
+  assert.equal(mock.paidCalls.length, 1);
+});
+
 test("runner: the quote id is the idempotency key; a replay sends nothing; another request with the key conflicts; a changed request is refused before any record", async (t) => {
   const { app, mock, ps } = await bootGenerate(t, { docs: [] });
   const req = { model_id: FLARE, lane: "image", parameters: { prompt: "a quiet harbor", width: 1024, height: 1024, quality: "low" }, takes: 1, pending: {}, target: { kind: "new_document", width: 1024, height: 1024 } };

@@ -145,8 +145,10 @@ function takesOf(meta) {
     return k === "image" || k === "edit";
   };
   if (meta.group) {
+    // The group's own takes: a Scenario layer of another run dropped into
+    // the group is not one (host.js isTakeOf).
     var kids = (meta.children || []).filter(function (c) {
-      return c.fields && c.fields.assetId;
+      return c.fields && c.fields.assetId && c.fields.jobId === f.jobId;
     });
     if (!f.jobId || !gen(f.kind) || !kids.length) return null;
     return { group_id: meta.id, layer_id: null, job_id: f.jobId, kind: f.kind, name: meta.name, prompt: f.runName || f.prompt || null, model_name: f.modelName || null, children: kids };

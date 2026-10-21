@@ -1177,22 +1177,85 @@ function createCreateView(doc, ctl, o) {
     }
     return n;
   }
-  function fitTop(chips, more) {
+  // UXP lays out chips it has just drawn after this code returns (seen live
+  // on 27.11: the rows read as one and nothing folded, so the third row was
+  // cut), so the fit is measured again once the layout has settled.
+  var fit = null;
+  var fitTimer = null;
+  // The last fit's chips, context text and panel size, and what it folded:
+  // a render with the same ones folds the same chips at once, so the chips
+  // do not jump back and fold again on every redraw.
+  var lastFold = { sig: null, ids: [] };
+  // blind: UXP gave the chips no box (seen live on 27.11: every chip read
+  // 0 x 0 while its row showed), so rows cannot be counted; one chip goes
+  // per pass, measured again in between, and two stay beside More.
+  function foldOne(blind) {
+    var rows = chipRows(byId("acts"));
+    if (rows === 0 && !(blind && fit.keep.length > 2)) return false;
+    if (rows === 1) return false;
+    var at = -1;
+    for (var i = fit.keep.length - 1; i >= 0 && at < 0; i--) if (!fit.keep[i].on) at = i;
+    if (at < 0) return false;
+    fit.fold.unshift(fit.keep[at]);
+    fit.keep.splice(at, 1);
+    renderActs(fit.keep, fit.more, fit.fold);
+    lastFold = { sig: fit.sig, ids: fit.fold.map(function (c) {
+      return c.id;
+    }) };
+    return true;
+  }
+  function fitTop(chips, more, ctx) {
     var top = byId("sc-top");
     if (top) top.className = "sc-top";
-    if (composerFits()) return;
-    var box = byId("acts");
-    var keep = chips.slice();
-    var fold = [];
-    while (!composerFits() && chipRows(box) > 1) {
-      var at = -1;
-      for (var i = keep.length - 1; i >= 0 && at < 0; i--) if (!keep[i].on) at = i;
-      if (at < 0) break;
-      fold.unshift(keep[at]);
-      keep.splice(at, 1);
-      renderActs(keep, more, fold);
-    }
+    var v = rect(byId("view-main"));
+    var sig = JSON.stringify([chips.map(function (c) {
+      return c.id + (c.on ? "*" : "");
+    }), ctx ? [ctx.title, ctx.detail, !!ctx.select] : null, v ? [Math.round(v.width), Math.round(v.height)] : null]);
+    fit = { keep: chips.slice(), fold: [], more: more, tries: 0, sig: sig, after: null, same: 0 };
+    if (lastFold.sig === sig && lastFold.ids.length) {
+      fit.keep = chips.filter(function (c) {
+        return lastFold.ids.indexOf(c.id) < 0;
+      });
+      fit.fold = chips.filter(function (c) {
+        return lastFold.ids.indexOf(c.id) >= 0;
+      });
+      renderActs(fit.keep, fit.more, fit.fold);
+    } else lastFold = { sig: sig, ids: [] };
+    while (!composerFits() && foldOne(false)) {}
     if (!composerFits() && top) top.className = "sc-top squeezed";
+    if (fitTimer) clearTimeout(fitTimer);
+    fitTimer = setTimeout(lateFit, FIT_DELAYS[0]);
+  }
+  // A top that scrolls, or a composer pushed out of view: one more chip goes
+  // into More per pass, then the top scrolls. UXP can read an old layout for
+  // a while (seen live: the same sizes before and after a fold), so after a
+  // fold the next one waits for the sizes to change, or for two passes that
+  // read the same, and the passes go on for about 1.5 s.
+  var FIT_DELAYS = [40, 80, 120, 200, 300, 400, 400];
+  function lateFit() {
+    fitTimer = null;
+    // An open chip menu keeps its chip; the next render fits again.
+    if (!fit || fit.tries >= FIT_DELAYS.length || pop.kind) return;
+    var next = FIT_DELAYS[fit.tries++];
+    var top = byId("sc-top");
+    var squeezed = !!top && /squeezed/.test(top.className);
+    var c = rect(byId("composer"));
+    var a = rect(byId("acts"));
+    var sizes = [top ? top.scrollHeight : 0, top ? top.clientHeight : 0, c ? Math.round(c.bottom) : 0, a ? Math.round(a.height) : 0].join(",");
+    var fresh = fit.after !== sizes || fit.same >= 1;
+    fit.same = fit.after === sizes ? fit.same + 1 : 0;
+    // Live, the top could scroll with its class unsqueezed (UXP had not laid
+    // it out again), so a top that scrolls counts as well as a composer out
+    // of view.
+    var bad = !composerFits() || (!!top && top.scrollHeight > top.clientHeight + 1);
+    if (bad && (fit.after === null || fresh)) {
+      if (foldOne(true)) {
+        if (top) top.className = "sc-top";
+        fit.after = sizes;
+        fit.same = 0;
+      } else if (top && !squeezed) top.className = "sc-top squeezed";
+    }
+    fitTimer = setTimeout(lateFit, next);
   }
 
   // ---- drawing ----
@@ -1215,7 +1278,7 @@ function createCreateView(doc, ctl, o) {
       }
       renderComposer(m.composer);
       fitMid();
-      fitTop(m.chips || [], m.more);
+      fitTop(m.chips || [], m.more, m.ctx);
       // An open chip menu follows its chip (the composer was drawn again).
       if (pop.kind && pop.anchor && !pop.anchor.parentNode) {
         var a = findAnchor(pop.kind);
