@@ -1,0 +1,90 @@
+name: Bug report
+description: The plugin, a generation or an import into the document behaves wrong
+type: Bug
+projects: ["scenario-labs/31"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue is public and permanent. Before you submit, remove your API key and secret, signed asset URLs, e-mail addresses, local paths with your username, and any prompt or artwork you do not want published. Team and project ids identify your account: leave them out.
+
+        Would rather not post in public? Send the same fields to support@scenario.com. Account, billing, credit and security problems always go there or to in-app support at https://app.scenario.com.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: One or two sentences. The symptom, not the suspected cause.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Plugin panel (UI, settings, sign in)
+        - Model or API behaviour (the job ran but the result or cost is wrong)
+        - Import into the document
+        - Install or update
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps. Name the model, the settings you changed and what was selected in the document.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: The verbatim error text. Paste text, not a screenshot, so it is searchable.
+    validations:
+      required: true
+  - type: input
+    id: photoshop_version
+    attributes:
+      label: Photoshop version
+      description: From Help > About Photoshop (Photoshop > About Photoshop on macOS).
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+    validations:
+      required: true
+  - type: input
+    id: plugin_version
+    attributes:
+      label: Plugin version
+      description: The version of the release you installed.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: "Only ids you can share publicly: the job id, the model and the UTC time. No signed asset URLs, they are credentials."
+      placeholder: |
+        job id: ...
+        model: ...
+        when: <UTC date and time>
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched open and closed issues for a duplicate.
+          required: true
+        - label: This report contains no keys, tokens, signed asset URLs or personal data.
+          required: true
