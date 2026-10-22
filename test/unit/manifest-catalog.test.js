@@ -49,6 +49,9 @@ test("manifest: version 5, Photoshop 26.9 or later, loaded at startup, one panel
   assert.equal(panel.type, "panel");
   assert.equal(panel.id, "scenarioPanel");
   assert.deepEqual(panel.minimumSize, { width: 280, height: 420 });
+  // Without a maximum size the docked panel stayed at its minimum, 280 x 420,
+  // and could not be resized (live 2026-10-22).
+  assert.ok(panel.maximumSize && panel.maximumSize.width >= 1000 && panel.maximumSize.height >= 2000, "a maximum size well above the docked sizes");
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   assert.equal(require("../../helper/package.json").version, manifest.version, "helper and plugin share a version");
 });

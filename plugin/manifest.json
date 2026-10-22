@@ -15,6 +15,7 @@
       "id": "scenarioPanel",
       "label": { "default": "Scenario" },
       "minimumSize": { "width": 280, "height": 420 },
+      "maximumSize": { "width": 2000, "height": 4000 },
       "preferredDockedSize": { "width": 320, "height": 640 },
       "preferredFloatingSize": { "width": 360, "height": 720 }
     }

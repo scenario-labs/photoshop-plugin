@@ -34,8 +34,10 @@
 // dev-live/ in the data folder), opendoc (opens such a PSD again as one of
 // its documents, after a restart), hook (arms a test hook of
 // dev/test-hooks.js, such as a delay after a status read, to look at a
-// running job). The list of documents it made survives a reload of the
-// panel (dev-ui-made.json), so a reload never strands one.
+// running job), probe (records the real mouse events the panel receives,
+// for a pass that clicks with the system's pointer), rects (the boxes of
+// the elements a selector matches). The list of documents it made survives
+// a reload of the panel (dev-ui-made.json), so a reload never strands one.
 
 var uiDemo = require("./ui-demo.js");
 

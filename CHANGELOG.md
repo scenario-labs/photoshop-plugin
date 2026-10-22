@@ -21,6 +21,19 @@ Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures).
 - The run card shows the charged price, else the price waiting for approval after a price change on upload, else the quote. It kept the first quote. *Verified live: fixed* (New angle, 1 CU to 14 CU); the composer button still shows the first quote during the approval.
 - Jobs and its popover name video jobs (Animate, Frame to layer) "Video", not "Image". *Verified live: fixed* on Animate 5 s.
 
+### Fixed in the real-click pass
+
+A verification pass on 2026-10-22 pressed the panel's controls with real macOS mouse events (Photoshop 27.11, development build, panel docked at 280 px): the dev loop's own click calls a handler from code, so it passed while no real click could land on 2026-10-21. Each fix below is *tested automated* (a test that fails on the code before it); the live result ends each line.
+
+- The panel could not be resized: docked, it stayed at its minimum size, 280 x 420, with empty dock space under it. The manifest now gives a maximum size. *Verified live*: after a Photoshop restart the panel fills its dock column (280 x 912); resizing by hand is for the person to confirm.
+- A redraw now waits while the mouse button is down in the panel, so a click lands on the node it was pressed on. Job polls, price checks, the chip fold and menu refills redraw at any moment, and a redraw between press and release lost the click. *Tested automated*; *not tested live* yet with real clicks.
+- A menu opens at its top. The menu box is reused and kept the last menu's scroll: the Model menu opened on its last rows, with Recommended out of view. *Verified live* before the fix (the menu opened scrolled); the fix is *tested automated*.
+- Text that an open menu covers is hidden while it is open: a one-click action's note ("Separates the lettering…") showed through the More menu. *Verified live* before the fix; the fix is *tested automated* only for the hiding rule, *not tested live*.
+- The Model menu lists only models that can take the layer. On Make versions it offered Gemini 3.1, Gemini 3.0 Pro, Seedream 5.0 Pro, Gemini 3.1 Lite and Grok Imagine Image 2.0, and each one blocked the button ("This model takes no image, so it can't edit an area"). All models now refuses such a model with a note. *Verified live* before the fix (each of the five, real clicks); the fix is *tested automated*.
+- An approved agent spend keeps its card, reading "Approved, sending", without its buttons, until the approval ends. The card came back with both buttons live, and Decline said nothing was spent while the charge went on. *Tested automated*.
+- Settings > Agents and Connect a client are drawn again only when the link state changes: with no helper running, the link dials every 3 s and the whole box, its switches and its fields, was rebuilt each time. *Tested automated*.
+- The Library reads each project's own images (its list was kept per filter only, so a switch within a minute showed the other project's images), and a Library error has **Try again** (it stayed until another filter was clicked). *Tested automated*.
+
 ### Changed
 
 - Extend canvas defaults to Reframe at 2K, with the resolution pinned by the lane preset; GPT Image 2.5 Sunburst at Medium was the runner-up of a two-take comparison per model on the same poster and canvas, and GPT Image 2.5 Flare stays in the Model menu (it drew the main figure a second time in 3 of 4 takes). The built-in Extend prompt is unchanged: a line asking not to repeat anything from the center did not help. Reframe at 2K costs more than Flare at Low (about seven times as much at 16:9); the button shows the price before the run. *Tested automated*; *verified live* on the same poster to 16:9: one figure, no step at either old edge.
