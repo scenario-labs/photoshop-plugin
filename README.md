@@ -2,6 +2,8 @@
 
 Generate, edit, upscale and cut out with [Scenario](https://www.scenario.com) models without leaving Photoshop. Select something, pick an action, see its price on the button, click. The result lands as a layer you can compare, keep or undo in one step.
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/scenario-labs/photoshop-plugin/badge)](https://scorecard.dev/viewer/?uri=github.com/scenario-labs/photoshop-plugin)
+
 ![Replace inside on a painted cliff town: left of the wipe line the sky as it was, right of it the giant koi kite that landed inside the selection, with the town untouched; the Scenario panel shows the two takes and Keep take 1](docs/media/hero.jpg)
 
 ![A selection edit from the panel: three distractions selected on a harbor stairway, Remove priced at 24 CU, two takes land and the street is clean](docs/media/video/selection-edit.gif)
