@@ -1,0 +1,47 @@
+version: 2
+# Commit prefixes pass tools/commitlint/commitlint.config.mjs, which the
+# pr-title check runs on Dependabot's pull request titles too.
+updates:
+  - package-ecosystem: "github-actions"
+    # The workflows under .github/workflows/. There is no local composite action.
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Wait a week after a release before proposing it.
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "ci(deps)"
+  # What the helper runs on: the workspace lock (package-lock.json, with the
+  # helper/ and plugin/ packages) and the helper's own npm-shrinkwrap.json.
+  # Both locks must move together (test/unit/supply-chain.test.js), so each
+  # dependency is bumped in both directories in one pull request.
+  - package-ecosystem: "npm"
+    directories: ["/", "/helper"]
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      runtime:
+        group-by: dependency-name
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "fix(deps)"
+  # CI and contributor tooling (commitlint), not the plugin or the helper.
+  - package-ecosystem: "npm"
+    directory: "/tools/commitlint"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      commitlint:
+        patterns: ["*"]
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(deps)"
