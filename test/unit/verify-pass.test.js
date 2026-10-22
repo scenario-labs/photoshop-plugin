@@ -150,3 +150,24 @@ test("the Library reads each project's own images, and its error has Try again",
   app.controller.resetLibrary();
   assert.equal(app.controller.model().composer.library.state !== "error", true);
 });
+
+test("Upscale on a model with no factor setting shows no factor: the last one chosen on another model does not carry over", async (t) => {
+  // P-Image Upscale and Recraft Crisp Upscale have no upscaleFactor; after
+  // Topaz at ×6 the chip and the button still read ×6 and the menu offered ×2.
+  const { app, ps, doc } = await bootGenerate(t, { docs: [{ id: 7, title: "poster.psd", width: 1024, height: 1024 }], active: 7 });
+  await show(app, ps);
+  const ctl = app.controller;
+  const realSchema = app.catalog.schema;
+  app.catalog.schema = async (id) => {
+    const s = await realSchema(id);
+    return s && id === "model_topaz-image-upscale" ? { ...s, parameters: s.parameters.filter((x) => x.name !== "upscaleFactor") } : s;
+  };
+  ctl.selectAction("upscale");
+  await waitFor(() => ctl.state().action === "upscale", { label: "Upscale" });
+  ctl.choose("upsize", "6x");
+  const go = () => doc.text("go-label");
+  await waitFor(() => { const pr = ctl.state().price; return pr && pr.view && pr.view.lane === "upscale" && pr.view.sizes; }, { label: "the Upscale view built" });
+  await sleep(50);
+  assert.ok(!/×/.test(go()), "no factor on the button: " + go());
+  assert.deepEqual(doc.byId("cchips").children.map((c) => c.getAttribute("data-pop")), ["model"], "no factor chip");
+});

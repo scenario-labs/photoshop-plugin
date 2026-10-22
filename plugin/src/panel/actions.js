@@ -180,7 +180,7 @@ var ACTIONS = {
     takes: 1,
     chips: ["upsize", "model"],
     button: function (n, v) {
-      return "Upscale " + factorLabel(v);
+      return ("Upscale " + factorLabel(v)).trim();
     },
     land: function (L, n, v) {
       return v && v.out ? "Opens as a new document " + v.out.width + " × " + v.out.height : "Opens as a new document";
@@ -243,7 +243,7 @@ var ACTIONS = {
     takes: 1,
     chips: ["upsize", "model"],
     button: function (n, v) {
-      return "Upscale " + factorLabel(v);
+      return ("Upscale " + factorLabel(v)).trim();
     },
     land: function (L, n, v) {
       return v && v.out ? "Opens as a new document " + v.out.width + " × " + v.out.height : "Opens as a new document";
@@ -523,7 +523,7 @@ var ACTIONS = {
     takes: 1,
     chips: ["upsize", "model"],
     button: function (n, v) {
-      return "Upscale " + factorLabel(v);
+      return ("Upscale " + factorLabel(v)).trim();
     },
     land: function (L, n, v) {
       return v && v.out ? "Opens as a new document " + v.out.width + " × " + v.out.height : "Opens as a new document";
@@ -532,6 +532,8 @@ var ACTIONS = {
 };
 
 function factorLabel(v) {
+  // A model with no factor setting upscales at its own rate: no factor shown.
+  if (v && v.factor === null) return "";
   var f = v && v.factor ? String(v.factor) : "2x";
   var m = /^(\d+(?:\.\d+)?)x$/.exec(f);
   return "×" + (m ? m[1] : "2");

@@ -33,6 +33,8 @@ A verification pass on 2026-10-22 pressed the panel's controls with real macOS m
 - An approved agent spend keeps its card, reading "Approved, sending", without its buttons, until the approval ends. The card came back with both buttons live, and Decline said nothing was spent while the charge went on. *Tested automated*.
 - Settings > Agents and Connect a client are drawn again only when the link state changes: with no helper running, the link dials every 3 s and the whole box, its switches and its fields, was rebuilt each time. *Tested automated*.
 - The Library reads each project's own images (its list was kept per filter only, so a switch within a minute showed the other project's images), and a Library error has **Try again** (it stayed until another filter was clicked). *Tested automated*.
+- Upscale on a model with no factor setting (P-Image Upscale, Recraft Crisp Upscale) shows no factor: the chip and the button kept the factor last chosen on Topaz ("Upscale ×6") while the model upscales at its own rate, and the menu offered ×2 only. *Verified live* before the fix; the fix is *tested automated*.
+- A reloaded panel reads the document context at once: it showed "No document open" with a document open until Photoshop sent a document event. *Tested automated*.
 
 ### Changed
 

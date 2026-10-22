@@ -1936,6 +1936,10 @@ function createController(o) {
   function viewFacts(v) {
     if (!v) return { factor: st.factor || "2x" };
     var out = { factor: (v.controls && v.controls.factor) || st.factor || "2x" };
+    // An upscale view built for a model without a factor setting: the last
+    // factor chosen on another model does not apply (P-Image Upscale and
+    // Recraft Crisp Upscale read "×6" after Topaz at ×6, 2026-10-22).
+    if (v.lane === "upscale" && v.sizes && v.sizes.read && !(v.controls && v.controls.factor)) out.factor = null;
     if (v.sizes && v.sizes.output) out.out = v.sizes.output;
     if (v.sizes && v.sizes.to) out.to = v.sizes.to;
     if (v.lane === "image" && v.out) out.out = v.out;
@@ -2302,6 +2306,7 @@ function createController(o) {
     }
     if (kind === "upsize") {
       var f = viewFacts(p.view);
+      if (f.factor === null || (schema && !(commonMod.param(schema, "upscaleFactor") || {}).enum)) return null;
       return { kind: kind, icon: "upscale", value: actionsMod.factorLabel(f), key_text: f.out ? times(f.out.width, f.out.height) : "", title: "Upscale factor" };
     }
     if (kind === "edit") {

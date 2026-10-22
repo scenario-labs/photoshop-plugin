@@ -572,6 +572,10 @@ function boot(env) {
     })) {
       logger.log("document events unavailable");
     }
+    // The context is read once at load: a reloaded panel showed "No
+    // document open" with a document open until Photoshop sent an event
+    // (2026-10-22). Price checks still wait for the panel to be shown.
+    if (controller) Promise.resolve(controller.refresh()).then(null, function () {});
 
     // Agent cards in the creation view, Settings > Agents controls and
     // Connect a client (M6).

@@ -93,8 +93,11 @@ test("the release bundle boots in a fake UXP, links to a real owner and answers 
   panelDef.invokeMenu("about");
   assert.ok(ps.doc.shown("view-settings"));
   ps.doc.els.get("settings-back").click();
-  // Not signed in: the creation panel waits, its button names what it needs.
-  assert.equal(ps.doc.text("go-label"), "Fill in the prompt to see the price");
+  // The context is read at load, before any document event: two documents
+  // are open, so the button names the layer action, not "No document open"
+  // (a reloaded panel waited for an event, 2026-10-22). Not signed in, no
+  // price check runs before the panel shows.
+  await waitFor(() => ps.doc.text("go-label") === "Make versions", { label: "the document context read at load" });
   assert.equal(ps.doc.lanes.length, 0, "no lane tabs");
   await sleep(400);
   const log = ps.files.get("scenario-link.log") || "";

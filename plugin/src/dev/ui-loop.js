@@ -206,7 +206,11 @@ function start(o) {
     var out = [];
     for (var i = 0; i < all.length && out.length < 300; i++) {
       if (hidden(all[i])) continue;
-      out.push({ r: rect(all[i]), el: describe(all[i]) });
+      var row = { r: rect(all[i]), el: describe(all[i]) };
+      // full: the whole text, to compare a view before and after a click.
+      if (cmd.full) row.full = String(all[i].textContent || "").replace(/\s+/g, " ").trim().slice(0, 4000);
+      if (cmd.full && all[i].tagName && /sp-(checkbox|textfield)/i.test(all[i].tagName)) row.value = all[i].checked !== undefined ? !!all[i].checked : all[i].value;
+      out.push(row);
     }
     return { rects: out, viewport: [o.global.innerWidth, o.global.innerHeight] };
   }
