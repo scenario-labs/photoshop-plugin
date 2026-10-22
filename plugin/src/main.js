@@ -211,7 +211,7 @@ function boot(env) {
       hooks: hooks
     });
     // Open from Library and + Reference > Library (panel/library.js).
-    library = libraryMod.createLibrary({ client: client, downloader: downloader, host: host, log: logger.log });
+    library = libraryMod.createLibrary({ client: client, downloader: downloader, host: host, account: accounts.current, log: logger.log });
     runner = runnerMod.createRunner({
       client: client,
       quotes: quotes,
@@ -378,6 +378,7 @@ function boot(env) {
       }
     }
 
+    var lastLinkState = null;
     link = linkMod.createLink({
       WebSocket: host.WebSocket,
       getToken: function () {
@@ -403,6 +404,13 @@ function boot(env) {
       log: logger.log,
       onState: function (s) {
         if (panel) panel.renderLink(s);
+        // With no helper the link dials every 3 s and reports the same state
+        // each time: the Agents box and Connect a client are drawn again only
+        // when it changed, else their switches and fields were replaced every
+        // 3 s under the pointer (verification pass 2026-10-22).
+        var sig = JSON.stringify(s);
+        if (sig === lastLinkState && agentsSettings) return;
+        lastLinkState = agentsSettings ? sig : null;
         if (agentsSettings) agentsSettings.render();
         if (connectClient && connectClient.isOpen()) connectClient.render();
       },
@@ -550,6 +558,8 @@ function boot(env) {
     menu = menuMod.createMenu(menuHandlers);
     accounts.onChange(function () {
       if (accountPanel) accountPanel.refresh();
+      // The Library grid reads the new project's images.
+      if (controller && typeof controller.resetLibrary === "function") controller.resetLibrary();
       if (controller) controller.refresh();
       // Jobs waiting for their project's key continue.
       if (runner) runner.resume();
@@ -609,6 +619,7 @@ function boot(env) {
       catalog: catalog,
       quotes: quotes,
       standIns: standIns,
+      library: library,
       controller: controller,
       createView: createView,
       picker: picker,

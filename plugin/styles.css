@@ -1260,6 +1260,12 @@ body {
   background-color: #2c7be5;
 }
 
+/* An approval going through: the button stays, without a click. */
+.btn.blue.off,
+.btn.blue.off:hover {
+  opacity: 0.55;
+}
+
 .btn.blue:hover {
   background-color: #3d89f2;
 }

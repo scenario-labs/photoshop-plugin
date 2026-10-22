@@ -101,6 +101,8 @@ function createAgentCards(doc, o) {
         prompt: spend.data ? spend.data.prompt : null,
         model_name: spend.data ? spend.data.model_name : null,
         cu: cuOf(spend.price_label),
+        // Approved and going through: the card stays, without its buttons.
+        busy: !!spend.busy,
         approve: function () {
           act(o.approvals.approve(id));
         },

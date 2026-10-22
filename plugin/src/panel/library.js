@@ -151,6 +151,13 @@ function createLibrary(o) {
   // page token (null: that list is complete).
   var cache = {};
 
+  // Per project as well: another project's images never show after a
+  // switch (verification pass 2026-10-22).
+  function keyOf(f) {
+    var a = typeof o.account === "function" ? o.account() : null;
+    return (a && a.id ? a.id : "-") + "|" + f.key;
+  }
+
   async function readPage(type, token) {
     var q = { pageSize: String(PAGE), type: type };
     if (token) q.paginationToken = token;
@@ -198,10 +205,10 @@ function createLibrary(o) {
       force = false;
     }
     var f = filterOf(filter);
-    var e = cache[f.key];
+    var e = cache[keyOf(f)];
     if (!force && e && Date.now() - e.at < CACHE_MS) return view(e);
     e = { at: Date.now(), rows: [], tokens: {}, done: {} };
-    cache[f.key] = e;
+    cache[keyOf(f)] = e;
     await readMore(e, f.types);
     log("library: " + e.rows.length + " images (" + f.key + ")");
     return view(e);
@@ -210,7 +217,7 @@ function createLibrary(o) {
   // The next page of each list of the filter that has one.
   async function more(filter) {
     var f = filterOf(filter);
-    var e = cache[f.key];
+    var e = cache[keyOf(f)];
     if (!e) return list(false, f.key);
     var open = f.types.filter(function (t) {
       return !e.done[t];

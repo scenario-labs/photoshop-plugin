@@ -59,6 +59,11 @@ var CHANGE = [
 ];
 
 var TEXT = {
+  // A model the panel cannot give the layer to (its schema has no image
+  // input the plugin knows): offered nowhere, refused from All models.
+  no_layer_input: function (name, action) {
+    return name + " can't take the layer, so it can't " + String(action || "run here").toLowerCase() + " in this version of the plugin.";
+  },
   need_prompt: "Fill in the prompt to see the price",
   checking: "Checking the price",
   sending: "Sending",
@@ -1880,6 +1885,26 @@ function createController(o) {
 
   // Run with a trained model from All models… (the picker's Trained tab,
   // public models too): it becomes the Model menu's trained pick.
+  // Whether a base model can do this action in the panel: Create image needs
+  // no picture; every other action sends the layer or the selection, so the
+  // model needs an input the plugin knows how to fill (forms/schema.js
+  // capture_input_name). A schema that cannot be read counts as no.
+  function feedsLayer(id, modelId) {
+    if (laneOf(id) === "image") return Promise.resolve(true);
+    return Promise.resolve()
+      .then(function () {
+        return o.catalog.schema(modelId);
+      })
+      .then(
+        function (s) {
+          return !!(s && s.capture_input_name);
+        },
+        function () {
+          return false;
+        }
+      );
+  }
+
   async function runWithRow(row) {
     await loadStyles();
     if (!st.bases || !st.bases.length) st.bases = await o.catalog.baseSchemas();
@@ -2682,7 +2707,7 @@ function createController(o) {
       var tab = map.laneTab(lane);
       var ids = map.picks(rows, tab);
       var cat = [];
-      for (var r = 0; r < rows.length && cat.length < 8; r++) {
+      for (var r = 0; r < rows.length && cat.length < 16; r++) {
         var row = rows[r];
         if (row.id === rec || map.hidden(row) || !map.isBase(row)) continue;
         var lanes = map.lanesOf(row);
@@ -2690,6 +2715,19 @@ function createController(o) {
         if (ids.length && ids.indexOf(row.id) < 0 && cat.length >= ids.length) continue;
         cat.push({ value: row.id, label: row.name, thumb: thumbs.modelThumb(row), mono: monoOf(row.name), checked: !rwOn && st.models[mkey] === row.id });
       }
+      // Only models that can take the layer (verification pass 2026-10-22:
+      // Gemini 3.1, Seedream 5.0 Pro and Grok Imagine were offered for Make
+      // versions and then blocked the button). The chosen one stays shown.
+      var fed = await Promise.all(
+        cat.map(function (c) {
+          return feedsLayer(id, c.value);
+        })
+      );
+      cat = cat
+        .filter(function (c, i) {
+          return fed[i] || c.checked;
+        })
+        .slice(0, 8);
       if (cat.length) groups.push({ title: "Catalog · can " + a.label.toLowerCase(), items: cat });
       // Each model's price for this document and these settings.
       var mvals = [];
@@ -2813,6 +2851,11 @@ function createController(o) {
     libraryReload: function () {
       return loadLibrary(true);
     },
+    // Signed in, out or to another project: the grid is read again when it
+    // shows next.
+    resetLibrary: function () {
+      st.lib = { state: "idle", rows: [], more: false, error: null };
+    },
     cardAction: cardAction,
     choose: choose,
     togglePin: togglePin,
@@ -2853,6 +2896,10 @@ function createController(o) {
     planDecision: planDecision,
     agentDecision: function (yes) {
       var req = st.agent;
+      // An approval going through can no longer be declined (verification
+      // pass 2026-10-22: the card came back with both buttons live, and
+      // Decline said nothing was spent while the charge went on).
+      if (req && req.busy) return;
       st.agent = null;
       if (req) {
         if (yes && typeof req.approve === "function") req.approve();
@@ -2865,10 +2912,18 @@ function createController(o) {
     // All models…: a base model sets the Model chip; a trained row runs
     // with that trained model on its base (Run with, M7).
     chooseModel: function (row) {
-      if (!row || !row.id) return false;
+      if (!row || !row.id) return Promise.resolve(false);
       if (row.type && row.type !== "custom") return runWithRow(row);
-      choose("model", row.id);
-      return true;
+      var id = st.action;
+      return feedsLayer(id, row.id).then(function (ok) {
+        if (!ok) {
+          st.note = TEXT.no_layer_input(row.name || row.id, A[id] ? A[id].label : null);
+          emit();
+          return false;
+        }
+        choose("model", row.id);
+        return true;
+      });
     },
     state: function () {
       return { action: st.action, kind: st.ctx.kind, prompt: st.prompt, select: st.selectText, price: st.price, sending: st.sending, confirm: st.confirm, note: st.note, latest: st.latest, active: st.active, key: st.key, pins: st.pins, refs: st.refs.length, drefs: st.drefs.slice(), style: st.style ? (st.style.match ? "match" : st.style.id) : null, runWith: st.runWith ? st.runWith.id : null, models: JSON.parse(JSON.stringify(st.models)) };

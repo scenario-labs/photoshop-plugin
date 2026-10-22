@@ -536,7 +536,10 @@ function createCreateView(doc, ctl, o) {
       setText("agent-q", c.agent.prompt || "");
       show(byId("agent-q"), !!c.agent.prompt, "block");
       setText("agent-meta", (c.agent.model_name ? c.agent.model_name + " · " : "") + "asked through the Scenario MCP");
-      setText("agent-approve-label", "Approve · " + c.agent.cu + " CU");
+      setText("agent-approve-label", c.agent.busy ? "Approved, sending" : "Approve · " + c.agent.cu + " CU");
+      show(byId("agent-decline"), !c.agent.busy, "flex");
+      var apb = byId("agent-approve");
+      if (apb) apb.className = c.agent.busy ? "btn blue off" : "btn blue";
     }
     var plan = byId("plan-card");
     show(plan, !!c.plan);
@@ -651,7 +654,17 @@ function createCreateView(doc, ctl, o) {
         fl.appendChild(c);
       });
     if (m.state === "loading" && !m.items.length) body.appendChild(el("div", "lib-note", "Loading the project's images…"));
-    if (m.error) body.appendChild(el("div", "lib-note warn", m.error));
+    if (m.error) {
+      body.appendChild(el("div", "lib-note warn", m.error));
+      // An error stayed until another filter was clicked: Try again reads
+      // the list again (verification pass 2026-10-22).
+      var retry = el("div", "lib-more", "Try again");
+      retry.setAttribute("data-lib-retry", "1");
+      onClick(retry, function () {
+        return ctl.libraryReload();
+      });
+      body.appendChild(retry);
+    }
     if (m.empty) body.appendChild(el("div", "lib-note", m.empty));
     // Three columns from the grid's own width (each tile keeps a 4 px
     // margin on its right); the grid scrolls inside the composer so the
@@ -715,6 +728,7 @@ function createCreateView(doc, ctl, o) {
     show(p, false);
     show(byId("pop-scrim"), false);
     coverPrompt(false);
+    showUnder();
   }
 
   // UXP draws an sp-textarea above every other element, so an open popover
@@ -813,6 +827,9 @@ function createCreateView(doc, ctl, o) {
         if (!p) return;
         clear(p);
         fillPop(p, kind, m || {});
+        // A menu opens at its top: the box is reused, and it kept the last
+        // menu's scroll (live 2026-10-22: Model opened on its last rows).
+        p.scrollTop = 0;
         // The clicked chip may have been drawn again meanwhile, leaving the
         // old one without a box (seen live on 27.11): anchor on the new one.
         if (!rect(anchor)) anchor = findAnchor(kind) || anchor;
@@ -827,12 +844,14 @@ function createCreateView(doc, ctl, o) {
           m.later.then(function () {
             if (seq !== pop.seq || pop.kind !== kind) return null;
             return Promise.resolve(ctl.menu(kind)).then(function (m2) {
-              if (seq !== pop.seq || pop.kind !== kind || !m2) return;
-              var keep = p.scrollTop;
-              clear(p);
-              fillPop(p, kind, m2);
-              fitPop(p);
-              p.scrollTop = keep;
+              whenFree(function () {
+                if (seq !== pop.seq || pop.kind !== kind || !m2) return;
+                var keep = p.scrollTop;
+                clear(p);
+                fillPop(p, kind, m2);
+                fitPop(p);
+                p.scrollTop = keep;
+              });
             });
           }).then(null, report);
         }
@@ -848,6 +867,49 @@ function createCreateView(doc, ctl, o) {
   // (seen live on 27.11): give it the height of its rows when they need less.
   // Measured once UXP has laid the rows out (right after display they
   // still read the stretched box).
+  // UXP draws some text above an open popover (seen live on 27.11: the
+  // prompt and the refs row; on 2026-10-22 a one-click action's note across
+  // More). While a popover is open, the text it covers turns transparent;
+  // nothing moves, and closing it brings the text back.
+  var underPop = [];
+  function showUnder() {
+    for (var i = 0; i < underPop.length; i++) underPop[i].style.opacity = "";
+    underPop = [];
+  }
+  // The popover's box from the place it was given: its own box reads one
+  // layout late on 27.11, right after it moved.
+  function popBox(p) {
+    var app = rect(byId("app"));
+    var ox = app ? app.left : 0;
+    var oy = app ? app.top : 0;
+    var l = parseFloat(p.style.left);
+    var t = parseFloat(p.style.top);
+    var w = parseFloat(p.style.width);
+    var h = parseFloat(p.style.height) || parseFloat(p.style.maxHeight);
+    if (isNaN(t) && pop.upAt !== null && pop.upAt !== undefined && h) t = pop.upAt - h;
+    if (isNaN(l) || isNaN(t) || isNaN(w) || isNaN(h)) return rect(p);
+    return { left: ox + l, top: oy + t, right: ox + l + w, bottom: oy + t + h };
+  }
+  function hideUnder(p) {
+    showUnder();
+    var pr = popBox(p);
+    if (!pr) return;
+    var roots = [byId("composer"), byId("sc-top")];
+    for (var k = 0; k < roots.length; k++) {
+      if (!roots[k] || typeof roots[k].querySelectorAll !== "function") continue;
+      var all = roots[k].querySelectorAll("*");
+      for (var i = 0; i < all.length; i++) {
+        var e = all[i];
+        if ((e.children && e.children.length) || !String(e.textContent || "").trim()) continue;
+        // A dynamic node can read as an empty box on 27.11: its parent's box.
+        var r = rect(e) || rect(e.parentNode);
+        if (!r || r.right <= pr.left || r.left >= pr.right || r.bottom <= pr.top || r.top >= pr.bottom) continue;
+        e.style.opacity = "0";
+        underPop.push(e);
+      }
+    }
+  }
+
   function fitPop(p) {
     var seq = pop.seq;
     var tries = 0;
@@ -863,6 +925,7 @@ function createCreateView(doc, ctl, o) {
       }
       if (rect(pop.anchor)) place(p, pop.anchor, pop.kind);
       fitNow(p);
+      hideUnder(p);
     }
     setTimeout(again, 30);
   }
@@ -1246,6 +1309,11 @@ function createCreateView(doc, ctl, o) {
     fitTimer = null;
     // An open chip menu keeps its chip; the next render fits again.
     if (!fit || fit.tries >= FIT_DELAYS.length || pop.kind) return;
+    // A fold draws the chips again: not under a pressed button.
+    if (held()) {
+      fitTimer = setTimeout(lateFit, 60);
+      return;
+    }
     var next = FIT_DELAYS[fit.tries++];
     var top = byId("sc-top");
     var squeezed = !!top && /squeezed/.test(top.className);
@@ -1273,9 +1341,61 @@ function createCreateView(doc, ctl, o) {
 
   // ---- drawing ----
 
+  // A redraw replaces the chips, the cards and the menu rows. While the
+  // mouse button is down in the panel it waits for the release, so a click
+  // lands on the node it was pressed on: redraws come at any moment from
+  // job polls, price checks and the late fit (verification pass 2026-10-22).
+  // A release the panel never sees (the button let go outside it) ends the
+  // hold after HOLD_MAX_MS.
+  var HOLD_MAX_MS = 1500;
+  var press = { down: false, at: 0, pending: false, later: [] };
+  function held() {
+    if (press.down && Date.now() - press.at > HOLD_MAX_MS) press.down = false;
+    return press.down;
+  }
+  function flushHeld() {
+    if (held()) return;
+    var fns = press.later;
+    press.later = [];
+    if (press.pending) {
+      press.pending = false;
+      render();
+    }
+    for (var i = 0; i < fns.length; i++) fns[i]();
+  }
+  // fn now, or once the button is up.
+  function whenFree(fn) {
+    if (!held()) return fn();
+    press.later.push(fn);
+  }
+  if (typeof doc.addEventListener === "function") {
+    doc.addEventListener(
+      "mousedown",
+      function () {
+        press.down = true;
+        press.at = Date.now();
+        setTimeout(flushHeld, HOLD_MAX_MS + 20);
+      },
+      true
+    );
+    doc.addEventListener(
+      "mouseup",
+      function () {
+        press.down = false;
+        // After this press's click event has run.
+        setTimeout(flushHeld, 30);
+      },
+      true
+    );
+  }
+
   var renders = 0;
   function render() {
     if (drawing) return;
+    if (held()) {
+      press.pending = true;
+      return;
+    }
     renders++;
     drawing = true;
     try {

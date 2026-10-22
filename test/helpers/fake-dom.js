@@ -122,6 +122,11 @@ function createFakeDocument({ html = fs.readFileSync(INDEX, "utf8"), macPassword
     return m ? all.filter((e) => e.getAttribute(m[1]) !== null && inPage(e)) : [];
   };
   doc.createElement = (tag) => makeEl(tag);
+  // Mouse events at the document: the creation view holds a redraw while a
+  // button is down (ui/create-view.js, press hold).
+  const docHandlers = {};
+  doc.addEventListener = (type, fn) => (docHandlers[type] = docHandlers[type] || []).push(fn);
+  doc.fire = (type) => (docHandlers[type] || []).forEach((fn) => fn({ type }));
   doc.byId = (id) => {
     const el = els.get(id);
     if (!el) throw new Error(`no element #${id} in index.html`);

@@ -136,6 +136,79 @@ function start(o) {
     return out;
   }
 
+  // Real pointer checks: the loop's own click() calls a handler from code,
+  // so it passes even when no mouse click can land (the redraw loop of
+  // 2026-10-21). probe records the mouse events the panel really receives
+  // from macOS, each with the element under the pointer and whether that
+  // element is still in the page; a press whose click never arrives, or
+  // arrives on a node that was replaced, is a click the person lost.
+  var probeLog = [];
+  var probeOn = false;
+  function describe(el) {
+    if (!el || !el.getAttribute) return null;
+    var d = { tag: String(el.tagName || "").toLowerCase() };
+    if (el.id) d.id = el.id;
+    var cls = el.getAttribute("class");
+    if (cls) d.cls = String(cls);
+    var attrs = el.attributes || [];
+    for (var i = 0; i < attrs.length; i++) if (/^data-/.test(attrs[i].name)) d[attrs[i].name] = attrs[i].value;
+    var text = String(el.textContent || "").replace(/\s+/g, " ").trim();
+    if (text) d.text = text.length > 40 ? text.slice(0, 37) + "..." : text;
+    return d;
+  }
+  // The nearest element up the tree that names itself (id or a data-
+  // attribute), which is what a check compares.
+  function named(el) {
+    for (var n = el; n && n !== doc.body && n.getAttribute; n = n.parentNode) {
+      if (n.id) return n;
+      var attrs = n.attributes || [];
+      for (var i = 0; i < attrs.length; i++) if (/^data-/.test(attrs[i].name)) return n;
+    }
+    return el;
+  }
+  function inPage(el) {
+    for (var n = el; n; n = n.parentNode) if (n === doc.body) return true;
+    return false;
+  }
+  function record(ev) {
+    var t = ev.target;
+    var entry = { t: Date.now(), type: ev.type, x: Math.round(ev.clientX), y: Math.round(ev.clientY), target: describe(t), named: describe(named(t)), in_page: inPage(t), chain: [] };
+    // Every named element from the target up, so a press on a control's icon
+    // or label counts as a press on the control.
+    for (var n = t; n && n !== doc.body && entry.chain.length < 6; n = n.parentNode) {
+      if (n !== t && n === named(n) && (n.id || (n.attributes && n.attributes.length))) {
+        var dn = describe(n);
+        if (dn && (dn.id || Object.keys(dn).some(function (k) { return /^data-/.test(k); }))) entry.chain.push(dn);
+      }
+    }
+    if (ev.type === "mousemove") {
+      if (probeLog.length && probeLog[probeLog.length - 1].type === "mousemove") probeLog.pop();
+    }
+    probeLog.push(entry);
+    if (probeLog.length > 400) probeLog.shift();
+  }
+  function probe(cmd) {
+    if (cmd.on && !probeOn) {
+      ["mousemove", "pointerdown", "mousedown", "mouseup", "click"].forEach(function (type) {
+        doc.addEventListener(type, record, true);
+      });
+      probeOn = true;
+    }
+    var out = { on: probeOn, events: probeLog.slice(), renders: o.app && o.app.createView && typeof o.app.createView.renders === "function" ? o.app.createView.renders() : null };
+    if (cmd.clear) probeLog = [];
+    return out;
+  }
+  // Every shown element a selector matches, with its box and name.
+  function rects(cmd) {
+    var all = doc.querySelectorAll(String(cmd.sel || "[id]"));
+    var out = [];
+    for (var i = 0; i < all.length && out.length < 300; i++) {
+      if (hidden(all[i])) continue;
+      out.push({ r: rect(all[i]), el: describe(all[i]) });
+    }
+    return { rects: out, viewport: [o.global.innerWidth, o.global.innerHeight] };
+  }
+
   function setWidth(cmd) {
     var root = doc.getElementById("app") || doc.body;
     root.style.width = cmd.px ? cmd.px + "px" : "";
@@ -166,9 +239,11 @@ function start(o) {
   }
 
   function scroll(cmd) {
-    var el = doc.getElementById(cmd.id);
-    if (!el) throw new Error("no element " + cmd.id);
-    el.scrollTop = cmd.top || 0;
+    // el, not id: "id" carries the command's own request id.
+    var el = doc.getElementById(cmd.el);
+    if (!el) throw new Error("no element " + cmd.el);
+    // by: scrolls from where the element is now, as a wheel turn does.
+    el.scrollTop = typeof cmd.by === "number" ? el.scrollTop + cmd.by : cmd.top || 0;
     return { scrollTop: el.scrollTop };
   }
 
@@ -430,6 +505,10 @@ function start(o) {
         return demo(cmd);
       case "menu":
         return menu(cmd);
+      case "probe":
+        return probe(cmd);
+      case "rects":
+        return rects(cmd);
       default: {
         var out = await drive(cmd);
         if (out === null) throw new Error("unknown command " + cmd.cmd);
