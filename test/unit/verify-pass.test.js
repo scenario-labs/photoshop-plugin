@@ -171,3 +171,68 @@ test("Upscale on a model with no factor setting shows no factor: the last one ch
   assert.ok(!/×/.test(go()), "no factor on the button: " + go());
   assert.deepEqual(doc.byId("cchips").children.map((c) => c.getAttribute("data-pop")), ["model"], "no factor chip");
 });
+
+test("Extend canvas leaves out the ratio the canvas already has; choosing it moves to the next target", async (t) => {
+  // A 3:2 document was offered 3:2, and choosing it blocked the button
+  // ("Already 3:2, pick another target").
+  const { app, ps } = await bootGenerate(t, { docs: [LAYER_DOC], active: 7 });
+  await show(app, ps);
+  const ctl = app.controller;
+  ctl.selectAction("extend");
+  await waitFor(() => ctl.state().action === "extend", { label: "Extend canvas" });
+  const mm = await ctl.menu("target");
+  const keys = mm.items.map((i) => i.value);
+  assert.ok(!keys.includes("1:1"), "a square canvas is not offered 1:1: " + keys.join(","));
+  assert.ok(keys.includes("16:9"));
+  ctl.choose("target", "1:1");
+  const chip = () => ctl.model().composer.chips.find((c) => c.kind === "target");
+  await waitFor(() => chip() && chip().value === "16:9", { label: "the chip moves to 16:9 (now " + (chip() && chip().value) + ")" });
+});
+
+test("Extend canvas: +20% each side moves to a ratio on a model that cannot extend per side", async (t) => {
+  // After +20% on one model, switching to Photoroom Expand (center only)
+  // blocked the button: "This model expands around the center."
+  const { app, ps } = await bootGenerate(t, { docs: [LAYER_DOC], active: 7 });
+  await show(app, ps);
+  const ctl = app.controller;
+  ctl.selectAction("extend");
+  await waitFor(() => ctl.state().action === "extend", { label: "Extend canvas" });
+  await app.catalog.ensure();
+  ctl.choose("target", "+20");
+  const ok = await ctl.chooseModel(app.catalog.find("model_photoroom-expand"));
+  assert.notEqual(ok, false);
+  const chip = () => ctl.model().composer.chips.find((c) => c.kind === "target");
+  await waitFor(() => chip() && chip().value === "16:9", { label: "the chip moves to 16:9 (now " + (chip() && chip().value) + ")" });
+  await waitFor(() => ctl.state().price.state !== "checking" && ctl.state().price.state !== "idle", { label: "priced" });
+  assert.notEqual(ctl.state().price.reason, "This model expands around the center.");
+});
+
+test("Upscale on a source over the upload limit: the second Generate runs at the size that fits", async (t) => {
+  // The panel kept no reduced size, so every Generate said "click Generate
+  // again" and stopped again; the run never started.
+  const TOPAZ = "model_topaz-image-upscale";
+  const N = 1300;
+  const noise = new Uint8Array(N * N * 3);
+  let s = 7;
+  for (let i = 0; i < noise.length; i++) {
+    s = (Math.imul(s, 1103515245) + 12345) >>> 0;
+    noise[i] = s >>> 24;
+  }
+  const DOC = { id: 7, title: "noise.psd", width: N, height: N, layers: [{ name: "Background", background: true, content: "raster", raster: { width: N, height: N, data: noise } }] };
+  const cost = { status: 269, body: { creativeUnitsCost: 10, creativeUnitsDiscount: 0, costDetails: {} } };
+  const { app, ps, doc, mock } = await bootGenerate(t, { docs: [DOC], active: 7, psOpts: { scene: true }, mockOpts: { answer: (model) => (model === TOPAZ ? cost : undefined) } });
+  await show(app, ps);
+  const ctl = app.controller;
+  ctl.selectAction("upscale");
+  const ready = () => ctl.state().action === "upscale" && ctl.state().price.state === "ready" && !ctl.state().sending;
+  await waitFor(ready, { label: "Upscale priced" });
+  doc.byId("go").click();
+  await waitFor(() => /upload limit at/.test(ctl.state().note || ""), { label: "the reduced-size note" });
+  assert.equal(mock.paidCalls.length, 0, "nothing spent on the first click");
+  await waitFor(ready, { label: "priced again at the size that fits" });
+  assert.ok(ctl.state().price.view.sizes.read.width < N, "the price is for the reduced read");
+  doc.byId("go").click();
+  await waitFor(() => mock.paidCalls.length === 1, { label: "the second Generate runs", timeout: 8000 });
+  const up = mock.uploads.find((u) => u.name.startsWith("photoshop-capture-"));
+  assert.ok(up && up.width < N, "uploaded at the reduced size");
+});

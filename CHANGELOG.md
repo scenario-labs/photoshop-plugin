@@ -34,6 +34,9 @@ A verification pass on 2026-10-22 pressed the panel's controls with real macOS m
 - Settings > Agents and Connect a client are drawn again only when the link state changes: with no helper running, the link dials every 3 s and the whole box, its switches and its fields, was rebuilt each time. *Tested automated*.
 - The Library reads each project's own images (its list was kept per filter only, so a switch within a minute showed the other project's images), and a Library error has **Try again** (it stayed until another filter was clicked). *Tested automated*.
 - Upscale on a model with no factor setting (P-Image Upscale, Recraft Crisp Upscale) shows no factor: the chip and the button kept the factor last chosen on Topaz ("Upscale ×6") while the model upscales at its own rate, and the menu offered ×2 only. *Verified live* before the fix; the fix is *tested automated*.
+- Extend canvas leaves out the ratio the canvas already has: a 3:2 document was offered 3:2, and choosing it blocked the button ("Already 3:2, pick another target"); a target chosen on another document moves to the next one. *Tested automated*; found through the dev loop.
+- Extend canvas moves "+20% each side" to a ratio on a model that cannot extend per side (Photoroom Expand, Reframe): the button blocked with "This model expands around the center". *Tested automated*; found through the dev loop.
+- A source over Scenario's 4 MB upload limit (Upscale, Remove background and the one-click tools) runs on the second Generate, read at the size that fits: the panel kept no reduced size, so each Generate said "click Generate again" and stopped again. *Verified live* before and after the fix (Upscale on a 1536 x 1024 layer after Extend canvas: priced again at 1638 x 922, then ran).
 - A reloaded panel reads the document context at once: it showed "No document open" with a document open until Photoshop sent a document event. *Tested automated*.
 
 ### Changed

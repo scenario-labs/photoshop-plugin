@@ -264,6 +264,10 @@ function createController(o) {
     size: imageMod.DEFAULT_SIZE,
     target: "16:9",
     factor: null,
+    // The long side a source capture must be read at to fit the upload
+    // limit, from InputReduced: { key, id, long }. Kept for this context and
+    // action, so the next price check and Generate read at that size.
+    readLong: null,
     change: 2,
     adv: {},
     refs: [],
@@ -727,8 +731,32 @@ function createController(o) {
     return { doc: raw.doc, selection: null, selection_raw: null, layer: info || raw.layer };
   }
 
+  // A ratio target the canvas already has grows nothing: the menu leaves it
+  // out, and a chosen one moves to the next (a 3:2 document offered 3:2,
+  // which blocked the button, 2026-10-22).
+  function sameRatio(key) {
+    var d = st.raw && st.raw.doc;
+    var m = /^(\d+):(\d+)$/.exec(String(key || ""));
+    if (!d || !m || !d.width || !d.height) return false;
+    var want = Number(m[1]) / Number(m[2]);
+    return Math.abs(d.width / d.height - want) / want < 0.01;
+  }
+
+  // "+20% each side" needs a model that extends by a mask: after a switch
+  // to a ratio-only or center-only model, the target moves to a ratio.
+  function sidesOff() {
+    var sc = st.schemaCache[modelFor(st.action)];
+    return !!(sc && sc.expand_route && sc.expand_route !== "mask");
+  }
+
+  function targetKey() {
+    if (!sameRatio(st.target) && !(st.target === "+20" && sidesOff())) return st.target;
+    for (var i = 0; i < TARGETS.length; i++) if (!TARGETS[i].sides && !sameRatio(TARGETS[i].key)) return TARGETS[i].key;
+    return st.target;
+  }
+
   function expandOptions(raw) {
-    var t = st.target;
+    var t = targetKey();
     var opts = { anchor: st.adv.anchor || "center", overlap: commonMod.DEFAULT_OVERLAP };
     if (t === "+20" && raw && raw.doc) {
       var w = Math.round(raw.doc.width * 0.2);
@@ -803,6 +831,8 @@ function createController(o) {
         args.options.clip_name = st.clip.name;
       }
     }
+    var rl = st.readLong;
+    if (rl && rl.key === st.key && rl.id === id && (a.family === "upscale" || a.family === "cutout" || a.family === "tool")) args.options.read_long = rl.long;
     args.lane = lane;
     return args;
   }
@@ -815,7 +845,7 @@ function createController(o) {
 
   // Short words for a blocked view, from the prototype where it has them.
   function friendly(reason, id) {
-    if (reason === commonMod.TEXT.nothing_grows && A[id] && A[id].family === "expand") return "Already " + st.target + ", pick another target";
+    if (reason === commonMod.TEXT.nothing_grows && A[id] && A[id].family === "expand") return "Already " + targetKey() + ", pick another target";
     return reason || "Not available here";
   }
 
@@ -915,7 +945,7 @@ function createController(o) {
   // its own timeout), so the open menu can be drawn again with them.
   var optCache = { key: null, prices: {}, pending: {} };
   function settingsKey(id) {
-    return JSON.stringify([st.key, id, st.prompt, st.takes[id] || null, st.models, st.style ? st.style.id || st.style.name : null, st.runWith ? st.runWith.id : null, st.styleRef ? st.styleRef.id : null, st.size, st.target, st.factor, st.change, st.adv, refCount(id), st.drefOff, st.angle, st.format, st.duration, st.selectText]);
+    return JSON.stringify([st.key, id, st.prompt, st.takes[id] || null, st.models, st.style ? st.style.id || st.style.name : null, st.runWith ? st.runWith.id : null, st.styleRef ? st.styleRef.id : null, st.size, targetKey(), st.factor, st.change, st.adv, refCount(id), st.drefOff, st.angle, st.format, st.duration, st.selectText, st.readLong]);
   }
   async function optionPrices(id, values, kind, current) {
     var a = A[id];
@@ -1183,6 +1213,10 @@ function createController(o) {
       if (id === "more_like") st.keepAction = false;
     } catch (e) {
       var type = e && e.type;
+      // A source too big to upload: priced again at the size that fits, and
+      // the next Generate reads at it (each click said "click Generate
+      // again" and stopped again, 2026-10-22).
+      if (type === "InputReduced" && e.reduced_long) st.readLong = { key: st.key, id: id, long: e.reduced_long };
       st.note = type === "QuoteMismatch" || type === "QuoteExpired" || type === "QuoteUsed" ? TEXT.changed : errText(e);
       log("panel: generate " + (type || "error"));
     } finally {
@@ -2300,9 +2334,9 @@ function createController(o) {
     }
     if (kind === "target") {
       var t = TARGETS.filter(function (x) {
-        return x.key === st.target;
+        return x.key === targetKey();
       })[0];
-      return { kind: kind, icon: "expand", value: t ? t.label : st.target, title: "Extend to" };
+      return { kind: kind, icon: "expand", value: t ? t.label : targetKey(), title: "Extend to" };
     }
     if (kind === "upsize") {
       var f = viewFacts(p.view);
@@ -2534,9 +2568,9 @@ function createController(o) {
       return {
         title: "Extend to",
         items: TARGETS.filter(function (t) {
-          return !t.sides || sidesOk;
+          return (!t.sides || sidesOk) && !sameRatio(t.key);
         }).map(function (t) {
-          return { value: t.key, label: t.sides ? "+20% each side" : t.label, sub: t.sub || "", checked: st.target === t.key };
+          return { value: t.key, label: t.sides ? "+20% each side" : t.label, sub: t.sub || "", checked: targetKey() === t.key };
         })
       };
     }
