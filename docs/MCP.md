@@ -20,7 +20,7 @@ The full tool reference is [spec/MCP.md](spec/MCP.md). Claims carry how they wer
 > pbpaste | node helper/bin/scenario-photoshop.js setup claude-code --local --token-stdin
 > ```
 >
-> (after **Copy pairing token** in the panel). This is the route the live runs used.
+> (after **Copy token** in the panel). This is the route the live runs used.
 
 ## Before you start
 
@@ -141,7 +141,7 @@ Results always land as layers with their Scenario metadata (model, prompt, job),
 | Document changes (first switch) | `prepare_result_application`, `apply_result_application`, `select_layers`, `set_selection`, `remove_scenario_layers` |
 | Photoshop commands (second switch) | `execute_batchplay` |
 
-A typical edit: `document_summary`, `set_selection`, `capture_reference`, `upload_reference` (upload card), `estimate_cost`, `generate` (spend card), `wait_for_job`, `prepare_result_application`, `apply_result_application`.
+A typical edit: `document_summary`, `set_selection`, `capture_reference`, `upload_reference` (upload card), `estimate_cost`, `generate` (spend card), `wait_for_job`, `inspect_result_previews`, `prepare_result_application`, `apply_result_application`.
 
 ## Troubleshooting
 

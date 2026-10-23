@@ -1448,7 +1448,7 @@
     {
       "name": "inspect_result_previews",
       "title": "Inspect result previews",
-      "description": "One JPEG per take of a finished job (max_px default 512, max 1024), downloading the results if needed, plus checks against its capture: aspect_ok, edited, seam_bias, seam_residual, seam_ok, polarity_suspect, shift_px, and badges (the takes card's words: a take the model redrew around the edit reads seam_ok false with a small shift_px and \"Re-rendered around the edit\"; a moved take reads \"May be misaligned\"). No document change. Free; the images go to your model provider.",
+      "description": "One JPEG per take of a finished job (max_px default 512, max 1024), downloading the results if needed, plus checks against its capture: aspect_ok, edited, seam_bias, seam_residual, seam_ok, polarity_suspect, shift_px, and badges (the checks in words; the takes card sums them up as one chip, \"Edges ok\" or \"May not line up\": a take the model redrew around the edit reads seam_ok false with a small shift_px and \"Re-rendered around the edit\"; a moved take reads \"May be misaligned\"). No document change. Free; the images go to your model provider.",
       "release": "v1",
       "annotations": {
         "title": "Inspect result previews",
@@ -1498,7 +1498,7 @@
     {
       "name": "capture_reference",
       "title": "Capture reference",
-      "description": "Reads pixels from a document into the plugin's temp folder, shaped for a purpose and model, and records the placement target. Nothing is sent and the document does not change. Free. purpose: edit (selection edit; needs model_id and a selection), reference (an image input), expand (needs model_id and expand {left, top, right, bottom} or {aspect, anchor, overlap}), upscale, remove_background. source: selection, layer, all_visible, document. sample (all_visible or layer) for a selection edit, margin (px around the selection; 0 allowed), max_px. Returns capture_id, box, scale, size, parts, capture_input, mask_coverage, feathered, generated_size, resolution_ratio, expand_route, parameters and notes. Pass capture_id to estimate_cost; upload its parts with upload_reference first when needs_upload says so.",
+      "description": "Reads pixels from a document into the plugin's temp folder, shaped for a purpose and model, and records the placement target. Nothing is sent and the document does not change. Free. purpose: edit (selection edit; needs model_id and a selection), reference (an image input), expand (needs model_id and expand {left, top, right, bottom} or {aspect, anchor, overlap}; anchor is where the original sits, so left grows the canvas to the right; a model whose expand_route is exact_size keeps it centered), upscale, remove_background. source: selection, layer, all_visible, document. sample (all_visible or layer) for a selection edit, margin (px around the selection; 0 allowed), max_px. Returns capture_id, box, scale, size, parts, capture_input, mask_coverage, feathered, generated_size, resolution_ratio, expand_route, parameters and notes. Pass capture_id to estimate_cost; upload its parts with upload_reference first when needs_upload says so.",
       "release": "v1",
       "annotations": {
         "title": "Capture reference",

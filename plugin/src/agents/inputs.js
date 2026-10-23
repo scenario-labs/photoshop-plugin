@@ -87,6 +87,10 @@ function createInputs(o) {
     return { value: "auto", note: "margin " + m + " is not offered; the automatic margin (half the long side, at least 64 px) was used." };
   }
 
+  // The tool schema's anchor names (where the original sits in the larger
+  // canvas) to the panel's, shape.ANCHORS.
+  var ANCHOR_NAMES = { center: "center", top: "top", bottom: "bottom", left: "center-left", right: "center-right", top_left: "top-left", top_right: "top-right", bottom_left: "bottom-left", bottom_right: "bottom-right" };
+
   function viewFor(purpose, schema, ctx, a) {
     var src = a.source;
     if (purpose === "edit") {
@@ -99,7 +103,11 @@ function createInputs(o) {
     if (purpose === "expand") {
       var e = a.expand || {};
       var sides = e.left !== undefined || e.top !== undefined || e.right !== undefined || e.bottom !== undefined;
-      return enhanceMod.expandView(schema, ctx, { mode: sides ? "sides" : "aspect", sides: sides ? { left: e.left || 0, top: e.top || 0, right: e.right || 0, bottom: e.bottom || 0 } : null, ratio: e.aspect || "1:1", anchor: e.anchor || "center", overlap: typeof e.overlap === "number" ? e.overlap : undefined });
+      var anchor = ANCHOR_NAMES[e.anchor || "center"];
+      if (!anchor) throw invalid("expand.anchor must be one of: " + Object.keys(ANCHOR_NAMES).join(", ") + ".");
+      // A model that sizes the canvas itself keeps the original centered.
+      if (schema.expand_route === "exact_size" && anchor !== "center") throw invalid("This model keeps the original centered: use anchor center, or a model whose expand_route is position or mask.");
+      return enhanceMod.expandView(schema, ctx, { mode: sides ? "sides" : "aspect", sides: sides ? { left: e.left || 0, top: e.top || 0, right: e.right || 0, bottom: e.bottom || 0 } : null, ratio: e.aspect || "1:1", anchor: anchor, overlap: typeof e.overlap === "number" ? e.overlap : undefined });
     }
     if (purpose === "upscale") return enhanceMod.upscaleView(schema, ctx, { source: src === "selection" ? "selection" : src === "layer" ? "layer" : "visible", lands: "layer", read_long: a.max_px || undefined });
     return enhanceMod.cutoutView(schema, ctx, { source: src === "selection" ? "selection" : "layer", lands: "mask" });
