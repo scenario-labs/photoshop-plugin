@@ -853,7 +853,7 @@ function start(app, hostRequire, o) {
     },
     lasso: function (t) {
       if (!t.points || t.points.length < 3 || t.points.length > 400) throw new Error("tool: lasso needs 3 to 400 points");
-      return [{ _obj: mode(t.mode), _target: selTarget(), to: { _obj: "polygon", points: { _obj: "Pnts", points: t.points.map(point) } }, antiAlias: true }];
+      return [{ _obj: mode(t.mode), _target: selTarget(), to: { _obj: "polygon", points: t.points.map(point) }, antiAlias: true }];
     },
     marquee: function (t) {
       var shape = t.shape === "ellipse" ? "ellipse" : "rectangle";
@@ -890,6 +890,9 @@ function start(app, hostRequire, o) {
     },
     visible: function (t) {
       return [{ _obj: t.on === false ? "hide" : "show", null: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }] }];
+    },
+    delete_layer: function () {
+      return [{ _obj: "delete", _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }] }];
     }
   };
 
@@ -922,6 +925,24 @@ function start(app, hostRequire, o) {
         if (!L || !L.textItem) throw new Error("tool: the active layer is not a type layer");
         L.textItem.contents = String(t.text || "").slice(0, 400);
         return { text: L.textItem.contents };
+      });
+    }
+    if (t.name === "mask_info") {
+      // Read only: what imaging.getLayerMask returns for an area of a layer.
+      return modal("Scenario dev: mask", async function () {
+        var o = { documentID: doc.id, layerID: Number(t.layer_id), kind: "user" };
+        if (t.bounds) o.sourceBounds = { left: num(t.bounds[0], -1e5, 1e5), top: num(t.bounds[1], -1e5, 1e5), right: num(t.bounds[0] + t.bounds[2], -1e5, 1e5), bottom: num(t.bounds[1] + t.bounds[3], -1e5, 1e5) };
+        if (t.size) o.targetSize = { width: num(t.size, 1, 4096) };
+        var got = await ps.imaging.getLayerMask(o);
+        var im = got.imageData;
+        try {
+          var raw = await im.getData({ chunky: true });
+          var n = raw.length, sum = 0, w = Number(im.width), h = Number(im.height);
+          for (var i = 0; i < n; i++) sum += raw[i];
+          return { source_bounds: got.sourceBounds, level: got.level, width: w, height: h, components: Number(im.components), mean: n ? sum / n : null, corners: [raw[0], raw[w - 1], raw[(h - 1) * w], raw[n - 1]] };
+        } finally {
+          im.dispose();
+        }
       });
     }
     if (t.name === "duplicate_layer") {

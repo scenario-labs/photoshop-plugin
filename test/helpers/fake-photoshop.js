@@ -395,6 +395,23 @@ function createFakePhotoshop(opts = {}) {
       ps.xmpReads = (ps.xmpReads || 0) + 1;
       return layer.xmp ? { XMPMetadataAsUTF8: layer.xmp } : {};
     }
+    if (d._obj === "make" && d.new && d.new._class === "channel" && d.at && d.at._value === "mask") {
+      // Layer > Layer Mask > Hide All on the active layer: everything hidden
+      // until pixels are written.
+      if (!inModal) throw new Error("a layer mask needs a modal scope");
+      const layer = app.activeDocument.activeLayers[0];
+      if (!layer) throw new Error("fake: no active layer");
+      if (layer.mask) throw new Error("fake: the layer has a mask already");
+      layer.mask = maskOf({ width: 0, height: 0, left: 0, top: 0, data: new Uint8Array(0) });
+      layer.mask.outside = d.using && d.using._value === "hideAll" ? 0 : 255;
+      ps.hideAllMasks = (ps.hideAllMasks || 0) + (layer.mask.outside === 0 ? 1 : 0);
+      return {};
+    }
+    if (d._obj === "get" && d._target[0]._property === "userMaskEnabled") {
+      const layer = findLayer(doc, d._target[1]._id);
+      if (!layer) throw new Error("fake: no such layer");
+      return { userMaskEnabled: !!layer.mask && layer.mask.enabled !== false };
+    }
     if (d._obj === "get" && d._target[0]._property === "hasUserMask") {
       const layer = findLayer(doc, d._target[1]._id);
       if (!layer) throw new Error("fake: no such layer");
@@ -692,6 +709,31 @@ function createFakePhotoshop(opts = {}) {
         const lb = levelBounds(b, o.targetSize ? w / (b.right - b.left) : 1);
         return { imageData: imageData(w, h, comps, fill(w, h, comps, doc.pattern, w * 31 + h)), sourceBounds: lb.bounds, level: lb.level };
       },
+      // A layer's mask over an area: its pixels inside the mask's box, its
+      // default outside (Hide All 0, Reveal All 255); a layer without a
+      // mask gives no imageData (verified live on 27.11).
+      async getLayerMask(o) {
+        if (!inModal) throw new Error("imaging needs a modal scope");
+        const doc = app.documents.find((d) => d.id === o.documentID);
+        const layer = findLayer(doc, o.layerID);
+        if (!layer) throw new Error("fake: no such layer");
+        ps.maskReads = (ps.maskReads || 0) + 1;
+        if (!layer.mask) return { imageData: undefined };
+        const m = layer.mask;
+        const b = o.sourceBounds || { left: 0, top: 0, right: doc.width, bottom: doc.height };
+        const bw = b.right - b.left, bh = b.bottom - b.top;
+        const t = o.targetSize || {};
+        const w = t.width || (t.height ? Math.round((bw * t.height) / bh) : bw);
+        const h = t.height || (t.width ? Math.round((bh * t.width) / bw) : bh);
+        const outside = m.outside === undefined ? 0 : m.outside;
+        const data = new Uint8Array(w * h);
+        for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+          const mx = Math.floor(b.left + ((i + 0.5) * bw) / w) - Math.round(m.left);
+          const my = Math.floor(b.top + ((j + 0.5) * bh) / h) - Math.round(m.top);
+          data[j * w + i] = mx >= 0 && my >= 0 && mx < m.width && my < m.height ? (m.data ? m.data[my * m.width + mx] : 255) : outside;
+        }
+        return { imageData: imageData(w, h, 1, data), sourceBounds: { ...b } };
+      },
       async getSelection(o) {
         if (!inModal) throw new Error("imaging needs a modal scope");
         const doc = app.documents.find((d) => d.id === o.documentID);
@@ -714,7 +756,11 @@ function createFakePhotoshop(opts = {}) {
         if (!inModal) throw new Error("imaging needs a modal scope");
         const doc = app.documents.find((d) => d.id === o.documentID);
         const layer = findLayer(doc, o.layerID);
+        // Photoshop reveals what lies outside the written box, unless the
+        // mask was made Hide All first.
+        const outside = layer.mask && layer.mask.outside === 0 ? 0 : 255;
         layer.mask = maskOf({ width: o.imageData.width, height: o.imageData.height, left: o.targetBounds.left, top: o.targetBounds.top, data: opts.maskBroken ? null : Uint8Array.from(o.imageData._data) });
+        layer.mask.outside = outside;
       }
     }
   };

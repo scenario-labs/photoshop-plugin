@@ -85,7 +85,9 @@ function createScene(opts) {
   }
 
   // [r, g, b, a] of one layer at document pixel (x, y) (pixel centres).
-  function layerAt(layer, x, y, doc) {
+  // bare: without the layer's own mask, as getPixels reads a layer (verified
+  // live on 27.11: a cut-out's read brought back what its mask hides).
+  function layerAt(layer, x, y, doc, bare) {
     if (layer.kind === "group") {
       let acc = null;
       const kids = (layer.layers || []).filter((l) => l.visible);
@@ -118,7 +120,7 @@ function createScene(opts) {
         else px = [img.data[i], img.data[i], img.data[i], img.channels === 2 ? img.data[i + 1] : 255];
       }
     } else px = [...pattern(cx - f.left, cy - f.top, f.width, f.height), 255];
-    return applyMask(layer, px, x, y);
+    return bare ? px : applyMask(layer, px, x, y);
   }
 
   function applyMask(layer, px, x, y) {
@@ -126,7 +128,7 @@ function createScene(opts) {
     if (!m || !m.data) return px;
     const mx = x - Math.round(m.left);
     const my = y - Math.round(m.top);
-    const v = mx >= 0 && my >= 0 && mx < m.width && my < m.height ? m.data[my * m.width + mx] : 0;
+    const v = mx >= 0 && my >= 0 && mx < m.width && my < m.height ? m.data[my * m.width + mx] : m.outside === undefined ? 0 : m.outside;
     return [px[0], px[1], px[2], Math.round((px[3] * v) / 255)];
   }
 
@@ -161,7 +163,7 @@ function createScene(opts) {
       const y = Math.floor(bounds.top + (j + 0.5) * ky);
       for (let i = 0; i < w; i++) {
         const x = Math.floor(bounds.left + (i + 0.5) * kx);
-        const px = layer ? layerAt(layer, x, y, doc) || [0, 0, 0, 0] : compositeAt(doc, x, y);
+        const px = layer ? layerAt(layer, x, y, doc, true) || [0, 0, 0, 0] : compositeAt(doc, x, y);
         const o = (j * w + i) * comps;
         for (let c = 0; c < comps; c++) out[o + c] = px[c];
       }

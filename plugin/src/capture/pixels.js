@@ -349,7 +349,19 @@ function placeInto(gray, width, height, x, y) {
   return { width: width, height: height, components: 1, data: out };
 }
 
+// An image with a layer mask kept in its alpha (Photoshop's getPixels leaves
+// a layer's own mask out); the mask is resampled to the image's size.
+function keepMask(img, gray) {
+  var rgba = img.components === 4 ? img : addAlpha(img);
+  var m = gray.width === rgba.width && gray.height === rgba.height ? gray : resize(gray, rgba.width, rgba.height);
+  var n = rgba.width * rgba.height;
+  var out = new Uint8Array(rgba.data);
+  for (var i = 0; i < n; i++) out[i * 4 + 3] = Math.round((out[i * 4 + 3] * m.data[i]) / 255);
+  return { width: rgba.width, height: rgba.height, components: 4, data: out };
+}
+
 module.exports = {
+  keepMask: keepMask,
   sampleRegion: sampleRegion,
   resize: resize,
   fitLong: fitLong,

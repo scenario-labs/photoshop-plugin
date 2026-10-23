@@ -456,6 +456,30 @@ test("the takes come back from the layers' metadata after a restart: the group i
   assert.equal(d.layers[0].name, "Scenario image a-quiet-harbor");
 });
 
+test("a kept take offers its next steps in More: Remove background lands on the take that is showing", async (t) => {
+  // Live 2026-10-23: a kept side view (New angle) offered only Refine, More
+  // like this, Upscale and Animate; its cut-out needed a detour.
+  const group = xmp.build({ schema: "1", jobId: "job_angle", kind: "edit", prompt: "side view", modelName: "Qwen Edit Multiangle 2511" });
+  const take = xmp.build({ schema: "1", jobId: "job_angle", kind: "edit", take: "2", assetId: "asset_anglebbbbbb", prompt: "side view" });
+  const DOC = { ...POSTER, layers: [{ name: "Scenario edit new-angle", kind: "group", xmp: group, layers: [{ name: "Take 2 bbbbbb", kind: "smartObject", xmp: take }] }, { name: "Background", background: true }] };
+  const answer = (model) => (model === "model_851-labs-background-remover" ? cost(1) : undefined);
+  const { app, doc, ps, mock } = await bootGenerate(t, { docs: [DOC], active: 7, mockOpts: { answer } });
+  const d = ps.doc(7);
+  d.activeLayers = [d.layers[0]];
+  await show(app, ps);
+  await ctxTitle(doc, "Kept take · side view");
+  await popOpen(doc, "more");
+  assert.deepEqual(findAll(doc, "data-pick").map((e) => e.getAttribute("data-pick")), ["remove_bg", "angle", "animate"]);
+  find(doc, "data-pick", "remove_bg").children[0].click();
+  await button(doc, "Remove background · 1 CU");
+  assert.equal(doc.text("ctx-detail"), "Lands as a mask on Take 2 bbbbbb");
+  doc.byId("go").click();
+  await landed(app);
+  assert.equal(mock.paidCalls.length, 1);
+  assert.ok(d.layers[0].layers[0].mask, "the mask is on the take");
+  assert.ok(!d.layers[0].mask, "not on the group");
+});
+
 const cost = (n) => ({ status: 269, body: { creativeUnitsCost: n, creativeUnitsDiscount: 0, costDetails: { "custom-generation": n } } });
 const shownEl = (doc, id) => doc.byId(id).style.display !== "none" && doc.byId(id).style.display !== undefined && doc.byId(id).style.display !== "";
 

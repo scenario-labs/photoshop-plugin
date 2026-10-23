@@ -170,6 +170,9 @@ function takesOf(meta) {
   return { group_id: null, layer_id: meta.id, job_id: f.jobId, kind: f.kind, name: meta.name, prompt: f.runName || f.prompt || null, model_name: f.modelName || null, children: [{ id: meta.id, name: meta.name, visible: true, fields: f }] };
 }
 
+// The takes actions that read the take that is showing, not the group.
+var ON_SHOWN = { more_like: true, upscale_kept: true, remove_bg: true, angle: true };
+
 // A layer with transparency (a cut-out subject): a pixel or smart object
 // layer with a mask, or one that covers less of the canvas than all of it.
 // Scenario results count only when they are cut-outs (Cut out subject).
@@ -341,6 +344,10 @@ function createController(o) {
   }
 
   function layerName() {
+    if (st.ctx && st.ctx.kind === "takes" && ON_SHOWN[st.action]) {
+      var sh = shownChild(st.ctx.run);
+      if (sh && sh.child.name) return sh.child.name;
+    }
     if (st.raw && st.raw.layer) return st.raw.layer.name;
     return "the canvas";
   }
@@ -736,12 +743,13 @@ function createController(o) {
   }
 
   // The context a run reads: the document as it is, or, for the takes
-  // actions, the shown take (Upscale kept take, More like this) or the
-  // selection the run was made in (More like this on a selection edit).
+  // actions, the shown take (Upscale kept take, More like this, Remove
+  // background, New angle) or the selection the run was made in (More like
+  // this on a selection edit).
   async function contextFor(id) {
     var raw = st.raw;
     var run = cardRun();
-    if (!run || (id !== "more_like" && id !== "upscale_kept")) return raw;
+    if (!run || !ON_SHOWN[id]) return raw;
     var shown = shownChild(run);
     var rec = recordOf(run);
     if (id === "more_like" && wasMasked(rec) && rec.target.selection) {

@@ -393,4 +393,45 @@ test("Cut out subject keeps the selection's own shape, not only its box", async 
   const at = (x, y) => m.data[(y - m.top) * m.width + (x - m.left)];
   assert.ok(at(400, 400) > 200, "the middle is kept");
   assert.equal(at(205, 205), 0, "the corner of the box, outside the ellipse, is cut");
+  // Photoshop reveals what lies outside a mask's written box: the mask is
+  // made Hide All first, so a later Free Transform shows no edge line.
+  assert.equal(m.outside, 0, "outside the mask's box stays hidden");
+  assert.equal(ps.hideAllMasks, 1);
+});
+
+test("a layer's read keeps its mask: a cut-out sends what it shows, not what its mask hides", async (t) => {
+  // Live 2026-10-23: New angle on a Cut out subject layer sent the sky and
+  // the roof under the mask (getPixels leaves a layer's mask out).
+  const mask = { left: 100, top: 100, width: 200, height: 200, data: new Uint8Array(200 * 200).fill(255) };
+  const DOC = { id: 7, title: "poster.psd", width: 400, height: 400, layers: [{ name: "Keeper", kind: "smartObject", frame: { left: 0, top: 0, width: 400, height: 400 }, mask }, { name: "Background", background: true }] };
+  const { host, ps } = await bootGenerate(t, { docs: [DOC], active: 7, psOpts: { scene: true } });
+  const layer = ps.doc(7).layers[0];
+  const alphaAt = (img, x, y) => img.data[(y * img.width + x) * 4 + 3];
+  const read = () => host.readPixels({ document_id: 7, layer_id: layer.id, bounds: { left: 0, top: 0, width: 400, height: 400 }, long_side: 200, exact: true });
+  layer.mask.outside = 0;
+  const hidden = await read();
+  assert.deepEqual([hidden.width, hidden.height, hidden.components], [200, 200, 4]);
+  assert.equal(alphaAt(hidden, 20, 20), 0, "outside a Hide All mask's box: clear");
+  assert.equal(alphaAt(hidden, 100, 100), 255, "inside the mask: kept");
+  layer.mask.outside = 255;
+  assert.equal(alphaAt(await read(), 20, 20), 255, "outside a Reveal All mask's box: kept");
+  layer.mask.enabled = false;
+  layer.mask.outside = 0;
+  assert.equal(alphaAt(await read(), 20, 20), 255, "a disabled mask is left out, as Photoshop shows the layer");
+  assert.ok(ps.maskReads >= 2);
+});
+
+test("a Free Transform or a Move refreshes the context: the takes land where the layer is now", async (t) => {
+  // Live 2026-10-23: New angle after a Free Transform landed on the layer's
+  // old bounds; "transform" was not among the events the panel follows.
+  const DOC = { id: 7, title: "poster.psd", width: 1024, height: 1024, layers: [{ name: "Keeper", kind: "pixel", frame: { left: 100, top: 100, width: 300, height: 400 } }, { name: "Background", background: true }] };
+  const { app, ps } = await bootGenerate(t, { docs: [DOC], active: 7 });
+  await show(app, ps);
+  const ctl = app.controller;
+  await waitFor(() => /\|300x400\|/.test(ctl.state().key), { label: "the first bounds" });
+  ps.doc(7).layers[0].frame = { left: 100, top: 100, width: 450, height: 600 };
+  ps.fire("transform");
+  await waitFor(() => /\|450x600\|/.test(ctl.state().key), { label: "transform refreshes the context" });
+  const follows = (name) => ps.notifications.some((n) => n.events.some((e) => e.event === name));
+  assert.ok(follows("move") && follows("duplicate") && follows("paste"), "Move, Duplicate and Paste refresh it too");
 });

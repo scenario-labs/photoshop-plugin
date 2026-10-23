@@ -322,6 +322,8 @@ function start(o) {
         // click in the Layers panel does.
         var ld = own(cmd.document_id);
         await o.host.selectLayer(ld, Number(cmd.layer_id));
+        // As the person's click in the Layers panel would (see "tool").
+        if (app.controller && typeof app.controller.refresh === "function") await app.controller.refresh();
         return { layer_id: Number(cmd.layer_id) };
       }
       case "selection":
@@ -456,9 +458,15 @@ function start(o) {
         if (cmd.more) await app.controller.libraryMore();
         return { library: app.controller.model().composer.library };
       }
-      case "tool":
+      case "tool": {
         if (cmd.tool && cmd.tool.to_document_id !== undefined) own(cmd.tool.to_document_id);
-        return await live().tool(own(cmd.document_id), cmd.tool || {});
+        var done = await live().tool(own(cmd.document_id), cmd.tool || {});
+        // The plugin's own batchPlay reaches none of its notification
+        // listeners (live 2026-10-23): the panel reads the document again as
+        // Photoshop's event would make it after the person's own edit.
+        if (app.controller && typeof app.controller.refresh === "function") await app.controller.refresh();
+        return done;
+      }
       case "panel":
         return await live().panel(String(cmd.name || ""), cmd.show, cmd.pick);
       case "closedoc": {

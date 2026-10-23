@@ -321,6 +321,32 @@ function createHost(hostRequire, g) {
     return img;
   }
 
+  // getPixels leaves a layer's own mask out, so a cut-out (Cut out subject,
+  // Remove background) would send what its mask hides. The mask is read over
+  // the same area (outside its pixels it gives the mask's default, Hide All
+  // or Reveal All; verified live on 27.11) and kept in the alpha.
+  async function keepMask(docId, layerId, img, b) {
+    if (!img || !b || !(await hasUserMask(docId, layerId)) || !(await maskEnabled(docId, layerId))) return img;
+    var got = await ps.imaging.getLayerMask({ documentID: docId, layerID: layerId, kind: "user", sourceBounds: { left: b.left, top: b.top, right: b.left + b.width, bottom: b.top + b.height }, targetSize: { width: img.width, height: img.height } });
+    if (!got || !got.imageData) return img;
+    var gray;
+    try {
+      gray = { width: Number(got.imageData.width), height: Number(got.imageData.height), components: 1, data: toBytes(await got.imageData.getData({ chunky: true })).slice() };
+    } finally {
+      got.imageData.dispose();
+    }
+    return pixelsMod.keepMask(img, gray);
+  }
+
+  async function maskEnabled(docId, layerId) {
+    try {
+      var r = await play([{ _obj: "get", _target: [{ _property: "userMaskEnabled" }, { _ref: "layer", _id: layerId }, { _ref: "document", _id: docId }] }]);
+      return !(r && r[0] && r[0].userMaskEnabled === false);
+    } catch (e) {
+      return true;
+    }
+  }
+
   // Selects the layer a result goes above: the insert point, or the top of
   // its clipping chain (SPEC 3.8), or the top of the document.
   // Selects the layer the takes are placed above. insert.below: the takes
@@ -421,7 +447,14 @@ function createHost(hostRequire, g) {
     await play([{ _obj: "set", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "layer", _id: layerId }, { _ref: "document", _id: doc.id }], to: { _obj: "layer", XMPMetadataAsUTF8: packet } }]);
   }
 
+  // A mask written only over its box reveals everything outside it, so a
+  // Free Transform that scales the layer brings up a line of its edge
+  // pixels. A new mask starts as Hide All: outside the box stays hidden.
   async function putMask(doc, layerId, m) {
+    if (!(await hasUserMask(doc.id, layerId))) {
+      await selectLayers(doc.id, [layerId]);
+      await play([{ _obj: "make", new: { _class: "channel" }, at: { _ref: "channel", _enum: "channel", _value: "mask" }, using: { _enum: "userMaskEnabled", _value: "hideAll" } }]);
+    }
     var data = await ps.imaging.createImageDataFromBuffer(m.data, { width: m.width, height: m.height, components: 1, chunky: true, colorSpace: "Grayscale", colorProfile: "Gray Gamma 2.2" });
     try {
       await ps.imaging.putLayerMask({ documentID: doc.id, layerID: layerId, kind: "user", imageData: data, targetBounds: { left: m.left, top: m.top } });
@@ -1061,6 +1094,8 @@ function createHost(hostRequire, g) {
     // exact (exactly the bounds, padded clear outside a layer) }.
     // Resolves { width, height, components, data }.
     readPixels: function (req) {
+      // The document area the shot covers (keepMask reads the mask there).
+      var shotBounds = null;
       return modal("Scenario: Read reference", async function (mctx) {
         // Layers left out of the read (Formats: the titles), hidden in a
         // History state that is then rolled back, so the document is as it
@@ -1078,7 +1113,8 @@ function createHost(hostRequire, g) {
           }
         }
         try {
-          return await readNow();
+          var shot = await readNow();
+          return req.layer_id ? await keepMask(req.document_id, req.layer_id, shot, shotBounds) : shot;
         } finally {
           if (hide && hc) await hc.resumeHistory(sid, false);
           else if (hide) {
@@ -1092,6 +1128,7 @@ function createHost(hostRequire, g) {
       });
       async function readNow() {
         if (req.exact && req.bounds) {
+          shotBounds = req.bounds;
           // Exactly the bounds, at most long_side on the long side; outside a
           // layer's own pixels: clear (captures, SPEC 5.8).
           var bw = req.bounds.width;
@@ -1120,6 +1157,9 @@ function createHost(hostRequire, g) {
         }
         var got = await ps.imaging.getPixels(opts);
         var image = got.imageData;
+        var lv = Math.pow(2, Math.max(0, Number(got.level) || 0));
+        var gb = got.sourceBounds;
+        shotBounds = gb ? { left: px(gb.left) * lv, top: px(gb.top) * lv, width: (px(gb.right) - px(gb.left)) * lv, height: (px(gb.bottom) - px(gb.top)) * lv } : req.bounds || null;
         try {
           var data = await image.getData({ chunky: true });
           return { width: image.width, height: image.height, components: image.components, data: toBytes(data).slice() };
@@ -1428,7 +1468,9 @@ function createHost(hostRequire, g) {
     onDocumentEvents: function (fn) {
       if (!ps || !ps.action || typeof ps.action.addNotificationListener !== "function") return false;
       var pending = null;
-      var events = ["select", "set", "make", "delete", "open", "close", "placeEvent", "crop", "canvasSize", "imageSize"];
+      // transform and move: a Free Transform or a Move left the context on
+      // the layer's old bounds, and the takes landed there (live 2026-10-23).
+      var events = ["select", "set", "make", "delete", "open", "close", "placeEvent", "crop", "canvasSize", "imageSize", "transform", "move", "duplicate", "paste"];
       try {
         ps.action.addNotificationListener(
           events.map(function (e) {

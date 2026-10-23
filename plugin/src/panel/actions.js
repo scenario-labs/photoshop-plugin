@@ -609,7 +609,13 @@ var MORE = {
   blank: [],
   // Upscale the selection was Upscale with a crop: removed after the review.
   selection: [],
-  takes: [["Animate", ["animate"]]]
+  // The shown take's own next steps (a kept side view, then its cut-out):
+  // they read the take that is showing (controller contextFor).
+  takes: [
+    ["Select and cut", ["remove_bg"]],
+    ["Make variants", ["angle"]],
+    ["Animate", ["animate"]]
+  ]
 };
 
 var MAX_CHIPS = 6;
