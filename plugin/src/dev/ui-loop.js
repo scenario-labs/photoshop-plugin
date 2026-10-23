@@ -460,7 +460,7 @@ function start(o) {
         if (cmd.tool && cmd.tool.to_document_id !== undefined) own(cmd.tool.to_document_id);
         return await live().tool(own(cmd.document_id), cmd.tool || {});
       case "panel":
-        return await live().panel(String(cmd.name || ""), cmd.show);
+        return await live().panel(String(cmd.name || ""), cmd.show, cmd.pick);
       case "closedoc": {
         var ids = cmd.all ? made.slice() : [own(cmd.document_id)];
         await live().closeDocs(ids);

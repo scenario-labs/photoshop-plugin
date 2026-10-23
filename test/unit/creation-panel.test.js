@@ -450,6 +450,10 @@ test("the takes come back from the layers' metadata after a restart: the group i
   await waitFor(() => d.layers[0].layers[1].visible && !d.layers[0].layers[0].visible, { label: "take 2 shows" });
   assert.deepEqual(ps.history, [{ document_id: 7, name: "Scenario: Show take" }]);
   await waitFor(() => doc.text("ctx-detail") === "Showing take 2 · click a take to compare", { label: "the context follows" });
+  // Keep take: the group no longer counts takes it does not hold.
+  await app.controller.keep();
+  await waitFor(() => d.layers[0].layers.length === 1, { label: "kept" });
+  assert.equal(d.layers[0].name, "Scenario image a-quiet-harbor");
 });
 
 const cost = (n) => ({ status: 269, body: { creativeUnitsCost: n, creativeUnitsDiscount: 0, costDetails: { "custom-generation": n } } });

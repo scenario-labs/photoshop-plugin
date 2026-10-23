@@ -1005,6 +1005,9 @@ function createHost(hostRequire, g) {
           }
           if (keep.visible === false) keep.visible = true;
           if (group.visible === false) group.visible = true;
+          // "(4 takes)" no longer says what the group holds.
+          var plain = String(group.name || "").replace(/ \(\d+ takes\)$/, "");
+          if (plain && plain !== group.name) group.name = plain;
         });
         return removed;
       });

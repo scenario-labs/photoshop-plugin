@@ -885,6 +885,9 @@ function start(app, hostRequire, o) {
     opacity: function (t) {
       return [{ _obj: "set", _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }], to: { _obj: "layer", opacity: { _unit: "percentUnit", _value: num(t.value, 0, 100) } } }];
     },
+    rename: function (t) {
+      return [{ _obj: "set", _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }], to: { _obj: "layer", name: String(t.text || "Layer").slice(0, 120) } }];
+    },
     visible: function (t) {
       return [{ _obj: t.on === false ? "hide" : "show", null: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }] }];
     }
@@ -945,9 +948,10 @@ function start(app, hostRequire, o) {
 
   // Window menu panels the takes need closed (or open), by their menu title.
   var PANELS = ["Timeline", "Actions", "History", "Properties", "Adjustments", "Libraries", "Comments", "Layers", "Channels", "Paths"];
-  async function panel(name, show) {
+  async function panel(name, show, pick) {
     if (PANELS.indexOf(name) < 0) throw new Error("panel: not one of " + PANELS.join(", "));
     var core = ps.core;
+    var found = [];
     for (var id = 1; id <= 9000; id++) {
       var title = "";
       try {
@@ -957,15 +961,22 @@ function start(app, hostRequire, o) {
       }
       if (String(title).replace(/&/g, "") !== name) continue;
       var st = await core.getMenuCommandState({ commandID: id });
-      var on = Array.isArray(st) ? !!st[0] : !!st;
-      if (show !== undefined && on !== !!show) {
-        await modal("Scenario dev: panel", async function () {
-          return core.performMenuCommand({ commandID: id });
-        });
-      }
-      return { panel: name, id: id, was: on };
+      found.push({ id: id, state: st });
     }
-    throw new Error("panel: no menu command titled " + name);
+    if (!found.length) throw new Error("panel: no menu command titled " + name);
+    // Several Window commands can share a title: pick one by id, else the
+    // first. The menu state does not tell shown from hidden (live 27.11),
+    // so show toggles once, without reading it.
+    var at = pick ? found.filter(function (f) {
+      return f.id === Number(pick);
+    })[0] : found[0];
+    if (!at) throw new Error("panel: " + pick + " is not a " + name + " command");
+    if (show !== undefined) {
+      await modal("Scenario dev: panel", async function () {
+        return core.performMenuCommand({ commandID: at.id });
+      });
+    }
+    return { panel: name, toggled: show !== undefined ? at.id : null, commands: found };
   }
 
   // The layers of a document it made, top first: names, kinds, visibility,
