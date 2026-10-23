@@ -530,3 +530,12 @@ test("Formats: the title lands inside each artboard, the second one too, even wh
   const frames = ps.doc(docs[0]).layers.filter((l) => l.artboard).map((l) => l.frame);
   for (const a of frames) for (const b of frames) if (a !== b) assert.ok(a.left + a.width <= b.left || b.left + b.width <= a.left, "the artboards do not overlap");
 });
+
+test("an upscale opens as a document named after its source and factor", () => {
+  // Live 2026-10-23: Upscale opened "Scenario upscale upscale-layer G4xH38".
+  const plan = require("../../plugin/src/apply/plan.js");
+  const rec = { lane: "upscale", parameters: { upscaleFactor: "2x" }, outputs: [{ asset_id: "asset_G4xH38", path: "out/u.png", width: 2048, height: 3072 }], target: { kind: "upscale", document_title: "The Kite Keeper.psd", read: [1024, 1536], output: [2048, 3072] } };
+  const p = plan.build(rec, { document: null, box: { left: 0, top: 0, width: 2048, height: 3072 } });
+  assert.equal(p.new_document.name, "The Kite Keeper ×2");
+  assert.ok(p.takes[0].name.startsWith("Scenario upscale"), "the layer keeps its Scenario name");
+});

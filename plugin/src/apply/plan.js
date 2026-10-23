@@ -81,6 +81,14 @@ function agentHistory(rec, name) {
   return rec.origin && rec.origin.kind === "agent" ? name.replace(/^Scenario: /, "Scenario agent: ") : name;
 }
 
+// An upscale opens as "<source title> ×2", the way a person would name it.
+function documentName(rec, kind) {
+  var t = rec.target || {};
+  if (kind !== "upscale" || !t.document_title || !t.output || !t.read || !(t.read[0] > 0)) return null;
+  var f = Math.round((t.output[0] / t.read[0]) * 10) / 10;
+  return String(t.document_title).replace(/\.[A-Za-z0-9]{2,4}$/, "") + " \u00d7" + f;
+}
+
 function build(rec, o) {
   o = o || {};
   var kind = kindOf(rec.lane);
@@ -158,7 +166,7 @@ function build(rec, o) {
     history_name: agentHistory(rec, HISTORY[kind] || "Scenario: Place " + kind),
     kind: kind,
     document_id: doc ? doc.id : null,
-    new_document: doc ? null : { width: Math.round(box.width), height: Math.round(box.height), name: n.group || n.layers[0] },
+    new_document: doc ? null : { width: Math.round(box.width), height: Math.round(box.height), name: documentName(rec, kind) || n.group || n.layers[0] },
     duplicate: doc && o.duplicate ? o.duplicate : null,
     box: box,
     takes: takes,
