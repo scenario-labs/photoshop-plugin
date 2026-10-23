@@ -36,6 +36,10 @@ function fill(w, h, comps, pattern, seed = 1) {
           out[i] = 255;
           continue;
         }
+        if (pattern === "blank") {
+          out[i] = 255;
+          continue;
+        }
         if (pattern === "noise") {
           s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
           out[i] = s >>> 24;

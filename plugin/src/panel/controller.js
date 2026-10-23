@@ -30,6 +30,7 @@ var schemaMod = require("../forms/schema.js");
 var price = require("../forms/price.js");
 var thumbs = require("../ui/thumbs.js");
 var pngMod = require("../util/png.js");
+var pixelsMod = require("../capture/pixels.js");
 var errorsMod = require("../scenario/errors.js");
 var sparkMod = require("../scenario/spark.js");
 var moreLanes = require("../lanes/more.js");
@@ -540,12 +541,32 @@ function createController(o) {
     }
   }
 
+  // A flat document whose Background is one color (File > New): read once
+  // per document, layer, size and History state, 24 px on the long side.
+  var blank = { key: null, value: false };
+  async function isBlank(raw) {
+    if (typeof o.host.readPixels !== "function") return false;
+    var d = raw.doc;
+    var key = [d.id, raw.layer.id, d.width, d.height, d.state].join(":");
+    if (key === blank.key) return blank.value;
+    var value = false;
+    try {
+      var px = await o.host.readPixels({ document_id: d.id, layer_id: raw.layer.id, bounds: { left: 0, top: 0, width: d.width, height: d.height }, long_side: 24, exact: true });
+      value = pixelsMod.uniform(px, 6);
+    } catch (e) {
+      value = false;
+    }
+    blank = { key: key, value: value };
+    return value;
+  }
+
   async function readContext() {
     var raw = await contextMod.read(o.host);
     if (raw.doc) await findEarlierRuns(raw.doc.id);
     var meta = null;
     if (raw.doc && raw.layer && typeof o.host.scenarioLayer === "function") meta = await o.host.scenarioLayer(raw.doc.id, raw.layer.id);
     var ctx = classify(raw, meta);
+    if (ctx.kind === "flat" && (await isBlank(raw))) ctx = { kind: "blank", run: null };
     // The document's latest run from this panel: its Takes card shows in
     // every context of the document until the person closes it.
     var card = null;
@@ -2067,6 +2088,7 @@ function createController(o) {
       out.icon = "layer";
       out.checker = c.kind === "cutout";
       out.title = lay ? lay.name + " · Layer " + times(lw, lh) : (raw.doc.title || "Document") + " · Canvas " + times(raw.doc.width, raw.doc.height);
+      if (c.kind === "blank") out.title = "Blank canvas " + times(raw.doc.width, raw.doc.height);
       var plain = lay ? layerTitle(lay.name, st.meta && st.meta.fields) : null;
       if (plain && plain !== lay.name) {
         out.tip = out.title;

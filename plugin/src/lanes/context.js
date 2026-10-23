@@ -4,7 +4,7 @@
 // its active layer. Read only: no modal scope, nothing changes.
 //
 // Resolves { doc: { id, width, height, title, layers (top-level count),
-// selected (selected layers) } | null, selection: bounds
+// selected (selected layers), state (the History state) } | null, selection: bounds
 // clipped to the canvas | null, selection_raw: bounds as read | null, layer:
 // host.activeLayerInfo() | null }.
 
@@ -40,7 +40,7 @@ async function read(host) {
     }
   }
   return {
-    doc: { id: id, width: size.width, height: size.height, title: title, layers: stats ? stats.layers : null, selected: stats ? stats.selected : null },
+    doc: { id: id, width: size.width, height: size.height, title: title, layers: stats ? stats.layers : null, selected: stats ? stats.selected : null, state: stats ? stats.state || null : null },
     selection: raw ? shapeMod.clip(raw, canvas) : null,
     selection_raw: raw,
     layer: layer

@@ -28,7 +28,7 @@ From install to a first image in a few steps, once the package is built (the tim
 
 2. **Get a key.** On app.scenario.com, in the project you want to use, create a **Project key** with the **Editor** role. A CU limit on the key caps what this plugin and connected agents can spend. Only team admins and project owners can create keys; **Copy a request for your admin** prepares the message for them.
 3. **Sign in.** Paste the key and the secret (pasting `key:secret`, or the two on two lines, fills both fields) and click **Save and test**. The plugin checks the key with two free reads and keeps it in Photoshop's secure storage on this computer. *Verified live* (through the development key import; typing into the fields *not tested*).
-4. **Open a document** (Photoshop hides docked panels on its Home screen, so the panel shows once a document is open). Click **New layer**, type a prompt, and click the blue button, which reads `New layer · 3 CU` or similar.
+4. **Make a new document** with **File > New** (Photoshop hides docked panels on its Home screen, so the panel shows once a document is open). On a blank canvas the panel opens on **Create image**: type a prompt and click the button, which shows its price. The image is made at the canvas's size and lands as a layer above the Background. On an image or a layer, **New layer** does the same.
 5. The context card shows the progress (Queued, Generating, Downloading), then the image lands as a new layer in one History state. *Verified live*.
 
 ## Find your way around
@@ -48,6 +48,10 @@ From top to bottom:
 ## Actions
 
 What the panel offers depends on what is selected. Each action below was *verified live* on 27.11 unless marked; the pictures are the before and the result of that run.
+
+### Blank document
+
+A document of one Background of a single color, as **File > New** makes it, offers **Create image** first: made at the canvas's aspect (the model's nearest size), in up to four takes, landing as a layer at canvas size in the same document. **Place from Library** is beside it. *Verified live* (the context and its price); *tested automated* (the landing).
 
 ### Selection actions
 

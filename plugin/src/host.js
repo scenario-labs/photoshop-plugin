@@ -905,7 +905,11 @@ function createHost(hostRequire, g) {
       var d = findDoc(docId);
       if (!d) return null;
       try {
-        return { layers: (d.layers || []).length, selected: (d.activeLayers || []).length };
+        var h = d.activeHistoryState;
+        // The History state, so a context read once (a blank document) is
+        // read again after any change.
+        var state = h ? [h.id !== undefined ? h.id : "", h.name, d.historyStates ? d.historyStates.length : ""].join(":") : null;
+        return { layers: (d.layers || []).length, selected: (d.activeLayers || []).length, state: state };
       } catch (e) {
         return null;
       }

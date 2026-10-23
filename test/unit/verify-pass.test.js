@@ -286,6 +286,42 @@ test("New layer inside a selection lands cut out and fitted in the selection, ne
   assert.ok(rec.placement.notes.some((n) => /Remove Background cut it out/.test(n)), rec.placement.notes.join(" | "));
 });
 
+test("a blank document (File > New) offers Create image, made at the canvas's size and landing as a layer", async (t) => {
+  // Live 2026-10-23: Create image lived only in the no-document context,
+  // which Photoshop hides on its Home screen; a new blank document offered
+  // Split into layers first.
+  const BLANK = { id: 9, title: "Untitled-1", width: 1024, height: 1536, pattern: "blank", layers: [{ name: "Background", background: true }] };
+  const FLARE = "model_openai-gpt-image-2-5-flare";
+  const cost = { status: 269, body: { creativeUnitsCost: 8, creativeUnitsDiscount: 0, costDetails: {} } };
+  const { app, ps, doc, mock } = await bootGenerate(t, { docs: [BLANK], active: 9, mockOpts: { answer: (model) => (model === FLARE ? cost : undefined) } });
+  await show(app, ps);
+  const ctl = app.controller;
+  await waitFor(() => ctl.state().action === "create_canvas", { label: "blank context" });
+  const chips = ctl.model().chips.map((c) => c.id || c.act || c.value);
+  assert.equal(chips[0], "create_canvas", JSON.stringify(ctl.model().chips[0]));
+  ctl.setPrompt("a cliff town at sunset");
+  try {
+    await waitFor(() => ctl.state().price.state === "ready" && !ctl.state().sending, { label: "priced" });
+  } catch (e) {
+    throw new Error(JSON.stringify(ctl.state().price) + " " + JSON.stringify(ctl.model().ctx));
+  }
+  assert.equal(ctl.model().ctx.detail, "Lands above Background at canvas size");
+  assert.equal(ctl.model().ctx.title, "Blank canvas 1024 × 1536");
+  doc.byId("go").click();
+  await waitFor(() => app.ledger.all().some((r) => r.state === "applied"), { label: "landed", timeout: 8000 });
+  const body = mock.paidCalls[0].body;
+  assert.ok(body.width < body.height, "the canvas's 2:3, not the default square");
+  assert.equal(ps.doc(9).layers.length, 2, "a layer above the Background, in the same document");
+  assert.equal(ps.app.documents.length, 1, "no new document");
+});
+
+test("a flat picture is not blank: its context keeps Split into layers first", async (t) => {
+  const FLAT = { id: 9, title: "poster.png", width: 1024, height: 1024, layers: [{ name: "Background", background: true }] };
+  const { app, ps } = await bootGenerate(t, { docs: [FLAT], active: 9 });
+  await show(app, ps);
+  await waitFor(() => app.controller.state().action === "split", { label: "flat context" });
+});
+
 test("an opaque take is measured by its alpha: a real cut out is placed as it came", () => {
   const pixels = require("../../plugin/src/capture/pixels.js");
   const rgb = { width: 2, height: 2, components: 3, data: new Uint8Array(12) };

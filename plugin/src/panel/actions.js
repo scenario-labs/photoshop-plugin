@@ -457,6 +457,25 @@ var ACTIONS = {
     }
   },
 
+  // A blank document (File > New): the image is made at the canvas's size
+  // and lands as a layer, in the document the person just made.
+  create_canvas: {
+    label: "Create image",
+    family: "image",
+    prompt: "req",
+    placeholder: "Describe the image",
+    takes: 4,
+    chips: ["style", "model", "takes"],
+    refs: true,
+    insert: "above",
+    button: function () {
+      return "Create image";
+    },
+    land: function (L) {
+      return "Lands above " + L + " at canvas size";
+    }
+  },
+
   library: {
     label: "Open from Library",
     family: null,
@@ -550,6 +569,8 @@ var CONTEXTS = {
   element: ["versions", "relight", "angle", "upscale"],
   // A document of one layer (a generated or delivered JPEG or PNG).
   flat: ["split", "versions", "upscale", "formats"],
+  // A document of one Background of a single color, as File > New makes it.
+  blank: ["create_canvas", "library_place"],
   selection: ["replace", "remove", "versions_sel", "cutout", "new_layer"],
   takes: ["compare", "more_like", "refine", "upscale_kept"]
 };
@@ -585,6 +606,7 @@ var MORE = {
     ["Make variants", ["sketch", "angle", "relight"]],
     ["Animate", ["animate"]]
   ],
+  blank: [],
   // Upscale the selection was Upscale with a crop: removed after the review.
   selection: [],
   takes: [["Animate", ["animate"]]]

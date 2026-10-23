@@ -311,6 +311,16 @@ function alphaMask(img) {
   return { width: img.width, height: img.height, components: 1, data: out };
 }
 
+// True when every pixel is within tol of the first on each color channel
+// (a blank canvas).
+function uniform(img, tol) {
+  var n = img.width * img.height;
+  var c = Math.min(3, img.components);
+  if (!n) return false;
+  for (var i = 1; i < n; i++) for (var k = 0; k < c; k++) if (Math.abs(img.data[i * img.components + k] - img.data[k]) > tol) return false;
+  return true;
+}
+
 // The share of pixels that cover what is under them, alpha 128 or more (1
 // for an image without alpha). GPT Image's "transparent" background came
 // back at alpha 232 to 250 everywhere (live 2026-10-23).
@@ -359,5 +369,6 @@ module.exports = {
   addAlpha: addAlpha,
   alphaMask: alphaMask,
   opaqueShare: opaqueShare,
+  uniform: uniform,
   placeInto: placeInto
 };
