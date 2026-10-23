@@ -103,7 +103,7 @@ function createAgentTools(o) {
   };
 
   function switchOn(key, label) {
-    if (!o.settings.switches()[key]) throw fail("SwitchOff", "Turn on " + label + " in Settings > Agents to let agents do this.");
+    if (!o.settings.switches()[key]) throw fail("SwitchOff", "Turn on " + label + " in Settings > Connect an AI agent to let agents do this.");
   }
 
   function modifyOn() {
@@ -948,7 +948,7 @@ function createAgentTools(o) {
       if (purpose === "edit_selection" || purpose === "expand" || purpose === "cutout_mask") {
         var size = o.host.documentSize(docId);
         var cv = rec.target.canvas;
-        if (cv && size && (size.width !== cv[0] || size.height !== cv[1])) throw fail("DocumentChanged", "The canvas changed since the capture. Capture again, or place it with new_layer.");
+        if (cv && size && (size.width !== cv[0] || size.height !== cv[1])) throw fail("DocumentChanged", "The canvas changed since the capture. Capture again, or open the result with new_document.");
       }
       if (purpose === "edit_selection" && rec.outputs && rec.outputs[0] && rec.outputs[0].width && rec.target.upload) {
         var o0 = rec.outputs[0];
