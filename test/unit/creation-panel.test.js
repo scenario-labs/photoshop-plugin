@@ -204,7 +204,7 @@ test("F1 a selection: Replace inside lands masked as a group above the layer; Re
   const { app, doc, ps, mock } = await bootGenerate(t, { docs: [{ ...POSTER, selection: sel }], active: 7, mockOpts: { answer: flarePrice() } });
   await show(app, ps);
   await ctxTitle(doc, "Selection 512 × 512 on Background");
-  assert.deepEqual(chips(doc), ["replace", "remove", "versions_sel", "cutout"], "no More: every selection action is a chip");
+  assert.deepEqual(chips(doc), ["replace", "remove", "versions_sel", "cutout", "new_layer"], "no More: every selection action is a chip");
   assert.deepEqual(onChip(doc), ["replace"]);
   assert.equal(doc.text("ctx-detail"), "Lands inside the selection, masked");
   assert.equal(doc.byId("prompt").getAttribute("placeholder"), "Describe what goes inside the selection");

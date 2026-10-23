@@ -325,7 +325,58 @@ function unionMasks(reads) {
   return { width: w, height: h, components: 1, data: out, objects: objects };
 }
 
+// The box of a text mask (gray, over `box` at its read size) in document
+// pixels, or null when it holds nothing.
+function maskBox(mask, box) {
+  var minX = mask.width, minY = mask.height, maxX = -1, maxY = -1;
+  for (var y = 0; y < mask.height; y++) {
+    for (var x = 0; x < mask.width; x++) {
+      if (mask.data[y * mask.width + x] < 128) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) return null;
+  var kx = box.width / mask.width;
+  var ky = box.height / mask.height;
+  var left = Math.floor(box.left + minX * kx);
+  var top = Math.floor(box.top + minY * ky);
+  return { left: left, top: top, width: Math.ceil(box.left + (maxX + 1) * kx) - left, height: Math.ceil(box.top + (maxY + 1) * ky) - top };
+}
+
+// Split text's Text layer: its packet carries the text box, so Formats can
+// lay the title out again on each artboard.
+function textXmp(rec, o, tb) {
+  return packet(rec, o, "text", tb ? { textBox: [tb.left, tb.top, tb.width, tb.height].join(",") } : {});
+}
+
+// Where a title of the source lands on an artboard: at the same place in
+// the frame (a title at the bottom stays at the bottom; Smart Reframe
+// recomposes the picture, so its place on the picture does not hold, live
+// 2026-10-23), at the same share of the frame's width, kept inside a margin
+// (4% of the short side), smaller if it would not fit.
+// Returns { scale, center_x, center_y, width, height }.
+function titleFit(title, source, rect) {
+  var s = Math.min(rect.width / source.width, rect.height / source.height);
+  var m = Math.round(0.04 * Math.min(rect.width, rect.height));
+  var fitW = (rect.width - 2 * m) / (title.width * s);
+  var fitH = (rect.height - 2 * m) / (title.height * s);
+  if (fitW < 1 || fitH < 1) s *= Math.min(fitW, fitH);
+  var w = title.width * s;
+  var h = title.height * s;
+  var cx = rect.left + (rect.width * (title.left + title.width / 2)) / source.width;
+  var cy = rect.top + (rect.height * (title.top + title.height / 2)) / source.height;
+  cx = Math.max(rect.left + m + w / 2, Math.min(rect.left + rect.width - m - w / 2, cx));
+  cy = Math.max(rect.top + m + h / 2, Math.min(rect.top + rect.height - m - h / 2, cy));
+  return { scale: s, center_x: cx, center_y: cy, width: w, height: h };
+}
+
 module.exports = {
+  maskBox: maskBox,
+  textXmp: textXmp,
+  titleFit: titleFit,
   split: split,
   text: text,
   segment: segment,

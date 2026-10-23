@@ -100,8 +100,12 @@ function imageView(schema, ctx, o) {
       v.blocked = "Select a layer first.";
       return v;
     }
-    pick = nearest(v.sizes, doc.width, doc.height) || { key: "1:1", width: 1024, height: 1024 };
-    target = { kind: "canvas", document_id: doc.id, box: [0, 0, doc.width, doc.height] };
+    // New layer inside a selection: sized to the selection and fitted in its
+    // box, so the element lands where it was drawn.
+    var sel = o.action === "new_layer" && ctx.selection ? ctx.selection : null;
+    pick = nearest(v.sizes, sel ? sel.width : doc.width, sel ? sel.height : doc.height) || { key: "1:1", width: 1024, height: 1024 };
+    target = sel ? { kind: "canvas", document_id: doc.id, box: [sel.left, sel.top, sel.width, sel.height], within: "selection" } : { kind: "canvas", document_id: doc.id, box: [0, 0, doc.width, doc.height] };
+    if (sel) v.within = "selection";
     if (ctx.layer && o.insert) {
       target.layer_id = ctx.layer.id;
       target.insert = o.insert;
@@ -112,7 +116,18 @@ function imageView(schema, ctx, o) {
     params[si.width_input] = pick.width;
     params[si.height_input] = pick.height;
   }
-  v.out = target.kind === "new_document" ? { width: pick.width, height: pick.height } : { width: doc.width, height: doc.height };
+  v.out = target.kind === "new_document" ? { width: pick.width, height: pick.height } : v.within ? { width: target.box[2], height: target.box[3] } : { width: doc.width, height: doc.height };
+  // Cut out: the model's own transparent background (GPT Image's
+  // background input), so the element never covers what is under it. A
+  // model that still returns an opaque picture is cut at placement by
+  // Photoshop's Remove Background (jobs/runner.js opaqueTake).
+  var bg = commonMod.param(schema, "background");
+  v.cutout_ok = !!(bg && bg.enum && bg.enum.indexOf("transparent") >= 0);
+  if (o.cutout && v.cutout_ok && target.kind === "canvas") {
+    params.background = "transparent";
+    v.cutout = true;
+    target.cutout = true;
+  }
   if (o.references && v.refs_max === 0) {
     v.blocked = "This model takes no reference images.";
     return v;

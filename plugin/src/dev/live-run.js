@@ -824,6 +824,150 @@ function start(app, hostRequire, o) {
     });
   }
 
+  // Photoshop's own tools for the film and the docs shots, development builds
+  // only, on a document the loop made: a fixed list of named operations, each
+  // built here from checked numbers (no descriptor comes from outside).
+  function num(v, lo, hi) {
+    var n = Number(v);
+    if (!isFinite(n) || n < lo || n > hi) throw new Error("tool: number out of range");
+    return n;
+  }
+  function selTarget() {
+    return [{ _ref: "channel", _property: "selection" }];
+  }
+  function mode(m) {
+    return m === "add" ? "addTo" : m === "subtract" ? "subtractFrom" : "set";
+  }
+  function point(p) {
+    return { _obj: "paint", horizontal: px(num(p[0], -1e5, 1e5)), vertical: px(num(p[1], -1e5, 1e5)) };
+  }
+  var TOOLS = {
+    select_subject: function () {
+      return [{ _obj: "autoCutout", sampleAllLayers: false }];
+    },
+    remove_background: function () {
+      return [{ _obj: "removeBackground" }];
+    },
+    delete_mask: function () {
+      return [{ _obj: "delete", _target: [{ _ref: "channel", _enum: "channel", _value: "mask" }] }];
+    },
+    lasso: function (t) {
+      if (!t.points || t.points.length < 3 || t.points.length > 400) throw new Error("tool: lasso needs 3 to 400 points");
+      return [{ _obj: mode(t.mode), _target: selTarget(), to: { _obj: "polygon", points: { _obj: "Pnts", points: t.points.map(point) } }, antiAlias: true }];
+    },
+    marquee: function (t) {
+      var shape = t.shape === "ellipse" ? "ellipse" : "rectangle";
+      var top = num(t.top, -1e5, 1e5), left = num(t.left, -1e5, 1e5);
+      return [{ _obj: mode(t.mode), _target: selTarget(), to: { _obj: shape, top: px(top), left: px(left), bottom: px(top + num(t.height, 1, 1e5)), right: px(left + num(t.width, 1, 1e5)) }, antiAlias: true }];
+    },
+    feather: function (t) {
+      return [{ _obj: "feather", radius: px(num(t.radius, 0.1, 250)), selectionModifyEffectAtCanvasBounds: false }];
+    },
+    grow_selection: function (t) {
+      var r = num(t.by, -100, 100);
+      return [{ _obj: r >= 0 ? "expand" : "contract", by: px(Math.abs(r)), selectionModifyEffectAtCanvasBounds: false }];
+    },
+    deselect: function () {
+      return [{ _obj: "set", _target: selTarget(), to: { _enum: "ordinal", _value: "none" } }];
+    },
+    mask_from_selection: function () {
+      return [{ _obj: "make", new: { _class: "channel" }, at: { _ref: "channel", _enum: "channel", _value: "mask" }, using: { _enum: "userMaskEnabled", _value: "revealSelection" } }];
+    },
+    transform: function (t) {
+      var d = { _obj: "transform", _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }], freeTransformCenterState: { _enum: "quadCenterState", _value: "QCSAverage" }, offset: { _obj: "offset", horizontal: px(num(t.dx || 0, -1e5, 1e5)), vertical: px(num(t.dy || 0, -1e5, 1e5)) } };
+      if (t.scale !== undefined) d.width = d.height = { _unit: "percentUnit", _value: num(t.scale, 1, 1000) };
+      if (t.angle !== undefined) d.angle = { _unit: "angleUnit", _value: num(t.angle, -360, 360) };
+      return [d];
+    },
+    hue_saturation: function (t) {
+      return [{ _obj: "make", _target: [{ _ref: "adjustmentLayer" }], using: { _obj: "adjustmentLayer", group: t.clip !== false, type: { _obj: "hueSaturation", presetKind: { _enum: "presetKindType", _value: "presetKindCustom" }, colorize: false, adjustment: [{ _obj: "hueSatAdjustmentV2", hue: num(t.hue || 0, -180, 180), saturation: num(t.saturation || 0, -100, 100), lightness: num(t.lightness || 0, -100, 100) }] } } }];
+    },
+    opacity: function (t) {
+      return [{ _obj: "set", _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }], to: { _obj: "layer", opacity: { _unit: "percentUnit", _value: num(t.value, 0, 100) } } }];
+    },
+    visible: function (t) {
+      return [{ _obj: t.on === false ? "hide" : "show", null: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }] }];
+    }
+  };
+
+  async function tool(docId, t) {
+    var doc = findDoc(docId);
+    if (!doc) throw new Error("document is not open");
+    if (t.name === "type_new") {
+      // A new type layer (Photoshop's Type tool), centered on x, y.
+      return modal("Scenario dev: type", async function () {
+        if (ps.app.activeDocument !== doc) ps.app.activeDocument = doc;
+        var opts = { contents: String(t.text || "Title").slice(0, 200), fontSize: num(t.size || 72, 4, 1000), position: { x: num(t.x || 0, -1e5, 1e5), y: num(t.y || 0, -1e5, 1e5) } };
+        if (t.font) opts.fontName = String(t.font).slice(0, 80);
+        if (t.color && t.color.length === 3) {
+          var c = new ps.app.SolidColor();
+          c.rgb.red = num(t.color[0], 0, 255);
+          c.rgb.green = num(t.color[1], 0, 255);
+          c.rgb.blue = num(t.color[2], 0, 255);
+          opts.textColor = c;
+        }
+        var L = await doc.createTextLayer(opts);
+        if (t.center && L && L.textItem && L.textItem.paragraphStyle && ps.constants && ps.constants.Justification) L.textItem.paragraphStyle.justification = ps.constants.Justification.CENTER;
+        // Letter spacing in Photoshop's units (1/1000 em).
+        if (t.tracking !== undefined && L && L.textItem && L.textItem.characterStyle) L.textItem.characterStyle.tracking = num(t.tracking, -1000, 10000);
+        return { layer_id: L ? L.id : null, bounds: L ? L.bounds : null };
+      });
+    }
+    if (t.name === "type_text") {
+      return modal("Scenario dev: type", async function () {
+        var L = doc.activeLayers && doc.activeLayers[0];
+        if (!L || !L.textItem) throw new Error("tool: the active layer is not a type layer");
+        L.textItem.contents = String(t.text || "").slice(0, 400);
+        return { text: L.textItem.contents };
+      });
+    }
+    if (t.name === "duplicate_layer") {
+      // Layer > Duplicate Layer into another document the loop made, on top,
+      // with its mask (the caller checks the target is the loop's own).
+      var to = findDoc(t.to_document_id);
+      if (!to) throw new Error("tool: the target document is not open");
+      return modal("Scenario dev: duplicate", async function () {
+        if (ps.app.activeDocument !== doc) ps.app.activeDocument = doc;
+        await play([{ _obj: "select", _target: [{ _ref: "layer", _id: Number(t.layer_id) }], makeVisible: false }]);
+        await play([{ _obj: "duplicate", _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }], to: { _ref: "document", _id: to.id }, version: 5 }]);
+        return { document_id: to.id };
+      });
+    }
+    var build = Object.prototype.hasOwnProperty.call(TOOLS, t.name) ? TOOLS[t.name] : null;
+    if (!build) throw new Error("tool: unknown " + String(t.name).slice(0, 40));
+    var descs = build(t);
+    return modal("Scenario dev: " + t.name, async function () {
+      if (ps.app.activeDocument !== doc) ps.app.activeDocument = doc;
+      await play(descs);
+      return { tool: t.name };
+    });
+  }
+
+  // Window menu panels the takes need closed (or open), by their menu title.
+  var PANELS = ["Timeline", "Actions", "History", "Properties", "Adjustments", "Libraries", "Comments", "Layers", "Channels", "Paths"];
+  async function panel(name, show) {
+    if (PANELS.indexOf(name) < 0) throw new Error("panel: not one of " + PANELS.join(", "));
+    var core = ps.core;
+    for (var id = 1; id <= 9000; id++) {
+      var title = "";
+      try {
+        title = await core.getMenuCommandTitle({ commandID: id });
+      } catch (e) {
+        title = "";
+      }
+      if (String(title).replace(/&/g, "") !== name) continue;
+      var st = await core.getMenuCommandState({ commandID: id });
+      var on = Array.isArray(st) ? !!st[0] : !!st;
+      if (show !== undefined && on !== !!show) {
+        await modal("Scenario dev: panel", async function () {
+          return core.performMenuCommand({ commandID: id });
+        });
+      }
+      return { panel: name, id: id, was: on };
+    }
+    throw new Error("panel: no menu command titled " + name);
+  }
+
   // The layers of a document it made, top first: names, kinds, visibility,
   // masks, Scenario metadata; and the active History state's name.
   async function inspect(docId) {
@@ -867,6 +1011,8 @@ function start(app, hostRequire, o) {
     front: front,
     closeDocs: closeDocs,
     select: select,
+    tool: tool,
+    panel: panel,
     inspect: inspect,
     composite: composite,
     stop: function () {

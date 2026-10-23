@@ -456,6 +456,11 @@ function start(o) {
         if (cmd.more) await app.controller.libraryMore();
         return { library: app.controller.model().composer.library };
       }
+      case "tool":
+        if (cmd.tool && cmd.tool.to_document_id !== undefined) own(cmd.tool.to_document_id);
+        return await live().tool(own(cmd.document_id), cmd.tool || {});
+      case "panel":
+        return await live().panel(String(cmd.name || ""), cmd.show);
       case "closedoc": {
         var ids = cmd.all ? made.slice() : [own(cmd.document_id)];
         await live().closeDocs(ids);

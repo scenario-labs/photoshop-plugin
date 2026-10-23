@@ -21,6 +21,16 @@ Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures).
 - The run card shows the charged price, else the price waiting for approval after a price change on upload, else the quote. It kept the first quote. *Verified live: fixed* (New angle, 1 CU to 14 CU); the composer button still shows the first quote during the approval.
 - Jobs and its popover name video jobs (Animate, Frame to layer) "Video", not "Image". *Verified live: fixed* on Animate 5 s.
 
+### Fixed after the 2026-10-23 review
+
+- New layer covered what was under it: it landed as an opaque picture at canvas size over the lettering of a character sheet. With a selection, **New layer** is now offered in the selection context, sized to the selection and fitted inside it, and lands cut out: the request asks the model for a transparent background, and a take that still covers what is under it (GPT Image 2.5 Flare returned a painted sky at alpha 0.91 to 0.98) is cut at placement by Photoshop's own Remove Background, as an editable layer mask (no credits). Photoshop takes a small layer's whole rectangle for its subject, so the take is scaled up to the canvas for the cut and back to its frame after. A **Lands** chip switches between Cut out and Full frame. *Verified live* (a swallow kite inside a 300 x 380 selection over a painted sky: cut, no box); *tested automated*.
+- Formats cut painted titles: the poster's title was cropped or gone in Wide and Square. The picture is now read without its type layers (and Split text layers), and each live title is laid out again on each artboard at the same place in the frame, inside a 4% margin, scaled with the picture and smaller only when it would not fit, still editable. *Verified live* before the placement rule changed (the title was copied and scaled into the artboard, but placed over the town); the rule now keeps the title's place in the frame, *tested automated*, not re-run live.
+- Cut out subject keeps the selection's own shape (a lasso, an ellipse), not only its box. *Tested automated*.
+
+### Changed
+
+- Button shapes follow the Scenario web app: the Generate button is a rounded rectangle (6 px corners), the chips and other buttons are full pills. *Verified live*.
+
 ### Fixed in the real-click pass
 
 A verification pass on 2026-10-22 pressed the panel's controls with real macOS mouse events (Photoshop 27.11, development build, panel docked at 280 px): the dev loop's own click calls a handler from code, so it passed while no real click could land on 2026-10-21. Each fix below is *tested automated* (a test that fails on the code before it); the live result ends each line.

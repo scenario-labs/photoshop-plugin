@@ -311,6 +311,18 @@ function alphaMask(img) {
   return { width: img.width, height: img.height, components: 1, data: out };
 }
 
+// The share of pixels that cover what is under them, alpha 128 or more (1
+// for an image without alpha). GPT Image's "transparent" background came
+// back at alpha 232 to 250 everywhere (live 2026-10-23).
+function opaqueShare(img) {
+  if (img.components !== 4 && img.components !== 2) return 1;
+  var n = img.width * img.height;
+  var a = img.components - 1;
+  var k = 0;
+  for (var i = 0; i < n; i++) if (img.data[i * img.components + a] >= 128) k++;
+  return n ? k / n : 1;
+}
+
 // Copies a gray image into a larger zero mask at (x, y): for cutouts from a
 // selection box, the mask hides everything outside the box.
 function placeInto(gray, width, height, x, y) {
@@ -346,5 +358,6 @@ module.exports = {
   expandInput: expandInput,
   addAlpha: addAlpha,
   alphaMask: alphaMask,
+  opaqueShare: opaqueShare,
   placeInto: placeInto
 };

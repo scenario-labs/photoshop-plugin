@@ -70,6 +70,8 @@ var OUTPUT_FOLDER = "Scenario";
 var POLLING = ["queued", "generating", "cancel_requested"];
 // The quote mode recorded with each job: the price-check flag's value.
 var QUOTE_MODE = priceChecks.DRY_RUN_QUERY[Object.keys(priceChecks.DRY_RUN_QUERY)[0]];
+// Above this share of opaque pixels a "cut out" take is cut by Photoshop's Remove Background.
+var OPAQUE_SHARE = 0.9;
 var AUTO_PLACE_RETRY_MS = 2000;
 var AUTO_PLACE_TRIES = 30;
 // Pauses for a status read that cannot go through (SPEC 6.4 item 5).
@@ -208,7 +210,7 @@ function createRunner(o) {
   function targetRecord(a) {
     var t = a.req.target || {};
     var out = { kind: t.kind || null, session: o.session || null, sample: t.sample || null };
-    var keep = ["canvas", "upload", "layer_id", "selection", "margin", "feather", "source", "read", "output", "lands", "expand", "route", "overlap", "anchor", "mask_box", "background", "insert", "expect", "mode", "format", "text", "duration", "clip_asset", "mask_layer_id", "edit_mode"];
+    var keep = ["canvas", "upload", "layer_id", "selection", "margin", "feather", "source", "read", "output", "lands", "expand", "route", "overlap", "anchor", "mask_box", "background", "insert", "expect", "mode", "format", "text", "duration", "clip_asset", "mask_layer_id", "edit_mode", "within", "cutout"];
     for (var i = 0; i < keep.length; i++) if (t[keep[i]] !== undefined) out[keep[i]] = JSON.parse(JSON.stringify(t[keep[i]]));
     if (t.kind === "new_document") {
       out.width = t.width;
@@ -831,7 +833,7 @@ function createRunner(o) {
       // New layer lands above the active layer, Add background below it
       // (the panel's actions, SPEC 3).
       var ins = t.layer_id && (t.insert === "above" || t.insert === "below") ? { layer_id: t.layer_id, below: t.insert === "below" } : null;
-      return { document: doc, box: box, fit: "cover", mask: mask, insert: ins, notes: notes };
+      return { document: doc, box: box, fit: t.within === "selection" ? "box" : "cover", mask: mask, insert: ins, notes: notes };
     }
     if (rec.lane === "edit") {
       var m = null;
@@ -1146,7 +1148,8 @@ function createRunner(o) {
       throw e;
     }
     if (rec.target && rec.target.kind === "expand" && where.mask) rec = await matchExpandTone(rec, where);
-    var p = planMod.build(rec, { version: o.version, document: where.document, box: opts.box || where.box, mask: where.mask, restore_active: !!opts.auto, fit: opts.fit || where.fit, insert: where.insert, canvas: where.canvas, duplicate: where.duplicate, reads: where.reads, cutout: where.cutout, assets: opts.assets || null });
+    var subject = rec.lane === "image" && rec.target && rec.target.cutout && where.document && !opts.new_document ? await opaqueTake(rec) : false;
+    var p = planMod.build(rec, { version: o.version, document: where.document, box: opts.box || where.box, mask: where.mask, restore_active: !!opts.auto, fit: opts.fit || where.fit, insert: where.insert, canvas: where.canvas, duplicate: where.duplicate, reads: where.reads, cutout: where.cutout, subject: subject, assets: opts.assets || null });
     where.plan = p;
     var before = rec.state;
     await update(id, { state: "applying", placement_checked: true });
@@ -1208,6 +1211,22 @@ function createRunner(o) {
   // a take that does not line up lands unmasked, and a tone match there
   // would hide the misalignment from it. Returns the record to build the
   // plan from (not saved).
+  // A cut out New layer whose model ignored the transparent background:
+  // take 1 is (almost) opaque, so the placement cuts each take with
+  // Photoshop's Remove Background instead of covering what is under it.
+  async function opaqueTake(rec) {
+    var out = (rec.outputs || [])[0];
+    if (!out || !out.path || !/\.png$/i.test(out.path) || !o.host.readDataBinary) return false;
+    try {
+      var bytes = await o.host.readDataBinary(out.path);
+      if (!bytes) return false;
+      return pixelsMod.opaqueShare(inflateMod.decodePng(bytes)) > OPAQUE_SHARE;
+    } catch (e) {
+      log("jobs: the take's alpha could not be read (" + ((e && e.message) || e) + ")");
+      return false;
+    }
+  }
+
   async function matchExpandTone(rec, where) {
     var t = rec.target || {};
     if (t.route !== "mask") return rec;

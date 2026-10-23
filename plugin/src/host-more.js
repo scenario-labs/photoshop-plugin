@@ -187,7 +187,7 @@ function createMorePlacers(host, o) {
         var mask = morePlan.textMask(a, b, plan.text.threshold, 2);
         var copy = await source.duplicate();
         copy.name = plan.text.name;
-        await I.setXmp(doc, copy.id, plan.text.xmp);
+        await I.setXmp(doc, copy.id, morePlan.textXmp(rec, { version: ctx.version }, morePlan.maskBox(mask, box)));
         var EP = ps.constants && ps.constants.ElementPlacement;
         if (EP && typeof copy.move === "function") await copy.move(base, EP.PLACEBEFORE);
         var full = rs.width === box.width && rs.height === box.height ? mask : pixelsMod.resize(mask, box.width, box.height);
@@ -266,6 +266,37 @@ function createMorePlacers(host, o) {
     return ab;
   }
 
+  // The titles of the source (type layers and Split text's Text layers),
+  // copied onto the artboard and laid out again where they were on the
+  // picture (more-plan.js titleFit). Live type stays live.
+  async function placeTitles(src, doc, artboard, rect, titles, notes) {
+    var EP = ps.constants && ps.constants.ElementPlacement;
+    var ids = [];
+    for (var i = 0; i < titles.length; i++) {
+      var tl = titles[i];
+      var layer = I.findLayer(src, tl.id);
+      if (!layer || typeof layer.duplicate !== "function") continue;
+      var copy = await layer.duplicate(doc);
+      if (!copy) continue;
+      if (artboard && EP && typeof copy.move === "function") {
+        var first = artboard.layers && artboard.layers[0];
+        if (first && first.id !== copy.id) await copy.move(first, EP.PLACEBEFORE);
+      }
+      var fit = morePlan.titleFit(tl.box, { width: src.width, height: src.height }, rect);
+      var b = I.boundsOf(copy);
+      var pcx = b.left + b.width / 2;
+      var pcy = b.top + b.height / 2;
+      await copy.scale(fit.scale * 100, fit.scale * 100);
+      // The title's center after scaling about the layer's own center.
+      var tcx = pcx + (tl.box.left + tl.box.width / 2 - pcx) * fit.scale;
+      var tcy = pcy + (tl.box.top + tl.box.height / 2 - pcy) * fit.scale;
+      await copy.translate(fit.center_x - tcx, fit.center_y - tcy);
+      ids.push(copy.id);
+    }
+    if (ids.length) notes.push(ids.length === 1 ? "The title is laid out again on the artboard, still editable." : ids.length + " titles are laid out again on the artboard, still editable.");
+    return ids;
+  }
+
   var reframe = {
     anyDocument: true,
     place: function (rec, ctx) {
@@ -295,6 +326,8 @@ function createMorePlacers(host, o) {
         }
         var layerId = null;
         var artboard = null;
+        var titleIds = [];
+        var titles = d0 ? await host.overlayLayers(d0.id) : [];
         await I.inOneState(mctx, doc, plan.history_name, async function () {
           var rect = { left: at.left, top: at.top, width: plan.size.width, height: plan.size.height };
           if (doc.layers && doc.layers[0]) await I.selectLayers(doc.id, [doc.layers[0].id]);
@@ -309,11 +342,12 @@ function createMorePlacers(host, o) {
             log("formats: artboard not made (" + ((e && e.message) || e) + ")");
             notes.push("Placed as a layer: Photoshop did not make the artboard.");
           }
+          if (titles.length) titleIds = await placeTitles(d0, doc, artboard, rect, titles, notes);
           // The empty layer of a new document goes.
           if (made && doc.layers) {
             for (var i = 0; i < doc.layers.length; i++) {
               var l = doc.layers[i];
-              if (l.id !== layerId && (!artboard || l.id !== artboard.id) && l.kind !== "group" && String(l.kind) !== "group") {
+              if (l.id !== layerId && titleIds.indexOf(l.id) < 0 && (!artboard || l.id !== artboard.id) && l.kind !== "group" && String(l.kind) !== "group") {
                 try {
                   await I.deleteLayer(doc, l);
                 } catch (e2) {
@@ -326,11 +360,11 @@ function createMorePlacers(host, o) {
         formatsDocs[t.document_id] = { id: doc.id, right: at.left + plan.size.width };
         return {
           document_id: doc.id,
-          layer_ids: [layerId],
+          layer_ids: [layerId].concat(titleIds),
           group_id: artboard && artboard.id !== layerId ? artboard.id : null,
           history: plan.history_name,
           masked: false,
-          notes: notes.length ? notes : [(made ? "In a new document " : "Added to ") + '"' + plan.document_name + '" as ' + plan.artboard_name + "."],
+          notes: [(made ? "In a new document " : "Added to ") + '"' + plan.document_name + '" as ' + plan.artboard_name + "."].concat(notes),
           badges: [],
           landed: { kind: "reframe", format: plan.format, artboard: !!artboard, new_document: made }
         };

@@ -67,6 +67,8 @@ Draw a selection with any Photoshop tool. The context card reads "Selection W ×
 
 **Select by description**: type what to select in the context card's **Select…** field ("all the sailboats"), click **Select**. The masks the model finds become a Photoshop selection, ready for the next action.
 
+**New layer** in a selection: a new element drawn for the selection, sized to it and placed inside it. **Lands: Cut out** (the default) asks the model for a transparent background; when the model still returns a full picture, Photoshop's own Remove Background cuts it at placement, as a layer mask you can paint on. **Full frame** keeps the model's own background inside the selection box.
+
 **Make versions** also works on a selection.
 
 ### Layer and image actions
@@ -99,7 +101,7 @@ With no selection, the panel works on the active layer, or the whole image for a
 
 **Remove text** (More > Finish): the same image without its text, as a new layer above. **Split text** (More > Layers) gives the clean base and the text on its own layer instead.
 
-**Formats**: reframes the image to Story 9:16, Feed 4:5, Square 1:1 or Wide 16:9 (Scenario Smart Reframe), as an artboard in a new "<title> formats" document.
+**Formats**: reframes the image to Story 9:16, Feed 4:5, Square 1:1 or Wide 16:9 (Scenario Smart Reframe), as an artboard in a new "<title> formats" document. Type layers stay out of the reframe: each title is laid out again on the artboard at its place in the frame, still editable.
 
 **Animate** (More > Animate): a short clip from the image and your prompt (Minimax H3 Fast, 5 s by default). The clip opens as a new document and the MP4 is saved in the output folder. **Frame to layer** brings its last frame back as a layer.
 

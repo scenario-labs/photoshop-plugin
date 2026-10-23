@@ -180,6 +180,19 @@ function createFakePhotoshop(opts = {}) {
     return out;
   }
 
+  // A mask over a frame: an ellipse inscribed in it, or the whole rectangle.
+  function ellipseMask(f, shape) {
+    const w = Math.max(1, Math.round(f.width)), h = Math.max(1, Math.round(f.height));
+    const data = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const dx = (x + 0.5 - w / 2) / (w / 2), dy = (y + 0.5 - h / 2) / (h / 2);
+      data[y * w + x] = shape !== "ellipse" || dx * dx + dy * dy <= 1 ? 255 : 0;
+    }
+    const m = maskOf({ width: w, height: h, left: Math.round(f.left), top: Math.round(f.top), data });
+    Object.defineProperty(m, "shape", { value: shape, enumerable: false });
+    return m;
+  }
+
   function removeLayer(doc, layer) {
     const lists = [doc.layers];
     while (lists.length) {
@@ -425,6 +438,34 @@ function createFakePhotoshop(opts = {}) {
       const t = d.to;
       const v = (x) => (typeof x === "number" ? x : x._value);
       target.selection = { left: v(t.left), top: v(t.top), width: v(t.right) - v(t.left), height: v(t.bottom) - v(t.top), shape: t._obj === "ellipse" ? "ellipse" : "rect" };
+      return {};
+    }
+    if (d._obj === "removeBackground") {
+      // Remove Background on the active layer: an ellipse mask inside its
+      // frame. As on 27.11, a layer much smaller than the canvas comes back
+      // with its whole rectangle (opts.noSubject: no mask at all).
+      if (!inModal) throw new Error("Remove Background needs a modal scope");
+      const target = app.activeDocument;
+      const layer = target.activeLayers[0];
+      const f = layer && layer.frame;
+      if (!f) throw new Error("fake: no layer frame");
+      if (opts.noSubject) return {};
+      const big = f.width >= target.width * 0.9 || f.height >= target.height * 0.9;
+      layer.mask = ellipseMask(f, big ? "ellipse" : "rect");
+      ps.subjectCuts = (ps.subjectCuts || []).concat([{ layer_id: layer.id, frame: { ...f }, big }]);
+      return {};
+    }
+    if (d._obj === "transform") {
+      // Free Transform about the layer's center; a linked mask follows.
+      const target = app.activeDocument;
+      const layer = target.activeLayers[0];
+      const f = layer && layer.frame;
+      if (!f) throw new Error("fake: no layer frame");
+      const k = d.width ? d.width._value / 100 : 1;
+      const cx = f.left + f.width / 2 + (d.offset ? d.offset.horizontal._value : 0);
+      const cy = f.top + f.height / 2 + (d.offset ? d.offset.vertical._value : 0);
+      layer.frame = { left: cx - (f.width * k) / 2, top: cy - (f.height * k) / 2, width: f.width * k, height: f.height * k };
+      if (layer.mask && layer.mask.shape) layer.mask = ellipseMask(layer.frame, layer.mask.shape);
       return {};
     }
     if (d._obj === "feather") {

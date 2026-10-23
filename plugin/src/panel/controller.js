@@ -269,6 +269,7 @@ function createController(o) {
     // action, so the next price check and Generate read at that size.
     readLong: null,
     change: 2,
+    cutout: true,
     adv: {},
     refs: [],
     drefs: [],
@@ -840,7 +841,7 @@ function createController(o) {
   function imageOptions(id, refs, n, schema, over, modelId) {
     var a = A[id];
     var tr = trainedRun(id, modelId ? false : over);
-    return { action: id, size: st.size, prompt: promptOf(id, modelId ? false : over), takes: takesFor(id, n), references: refs, insert: a.insert || null, quality: tr ? null : qualityOf(schema, id), trained: trainedPanel.argOf(tr, st.adv) };
+    return { action: id, size: st.size, prompt: promptOf(id, modelId ? false : over), takes: takesFor(id, n), references: refs, insert: a.insert || null, cutout: id === "new_layer" && st.cutout !== false, quality: tr ? null : qualityOf(schema, id), trained: trainedPanel.argOf(tr, st.adv) };
   }
 
   // Short words for a blocked view, from the prototype where it has them.
@@ -945,7 +946,7 @@ function createController(o) {
   // its own timeout), so the open menu can be drawn again with them.
   var optCache = { key: null, prices: {}, pending: {} };
   function settingsKey(id) {
-    return JSON.stringify([st.key, id, st.prompt, st.takes[id] || null, st.models, st.style ? st.style.id || st.style.name : null, st.runWith ? st.runWith.id : null, st.styleRef ? st.styleRef.id : null, st.size, targetKey(), st.factor, st.change, st.adv, refCount(id), st.drefOff, st.angle, st.format, st.duration, st.selectText, st.readLong]);
+    return JSON.stringify([st.key, id, st.prompt, st.takes[id] || null, st.models, st.style ? st.style.id || st.style.name : null, st.runWith ? st.runWith.id : null, st.styleRef ? st.styleRef.id : null, st.size, targetKey(), st.factor, st.change, st.adv, refCount(id), st.drefOff, st.angle, st.format, st.duration, st.selectText, st.readLong, st.cutout]);
   }
   async function optionPrices(id, values, kind, current) {
     var a = A[id];
@@ -1499,6 +1500,7 @@ function createController(o) {
     } else if (kind === "size") st.size = value;
     else if (kind === "target") st.target = value;
     else if (kind === "upsize") st.factor = value;
+    else if (kind === "bg") st.cutout = value !== "full";
     else if (kind === "change") st.change = Math.max(0, Math.min(CHANGE.length - 1, Number(value) || 0));
     else if (kind === "edit") setEditMode(id, value === "bolder" ? "bolder" : "inside");
     else if (kind === "angle") st.angle = value;
@@ -1977,6 +1979,10 @@ function createController(o) {
     if (v.sizes && v.sizes.output) out.out = v.sizes.output;
     if (v.sizes && v.sizes.to) out.to = v.sizes.to;
     if (v.lane === "image" && v.out) out.out = v.out;
+    if (v.lane === "image") {
+      out.within = v.within || null;
+      out.cutout = !!v.cutout;
+    }
     return out;
   }
 
@@ -2352,6 +2358,11 @@ function createController(o) {
       if (!changeOn(id, schema)) return null;
       return { kind: kind, icon: "slider", key_text: "Change", value: CHANGE[st.change].label, title: "Change amount", key_first: true };
     }
+    if (kind === "bg") {
+      var bv = p.view;
+      if (!bv || !bv.cutout_ok) return null;
+      return { kind: kind, icon: "layer", key_text: "Lands", value: st.cutout === false ? "Full frame" : "Cut out", title: "How the layer lands", key_first: true };
+    }
     if (kind === "angle") return { kind: kind, icon: "refresh", value: angleOf().label, title: "Angle" };
     if (kind === "format") {
       var fm = moreLanes.FORMATS[st.format];
@@ -2604,6 +2615,15 @@ function createController(o) {
           var m = actionsMod.EDIT_MODES[k];
           return { value: k, label: m.label, sub: m.sub, right: ep.prices[k === "inside" ? ins : bm] || "", checked: cur === k };
         })
+      };
+    }
+    if (kind === "bg") {
+      return {
+        title: "Lands",
+        items: [
+          { value: "cutout", label: "Cut out", sub: "Transparent background, nothing under it is covered", checked: st.cutout !== false },
+          { value: "full", label: "Full frame", sub: "A whole picture with its own background", checked: st.cutout === false }
+        ]
       };
     }
     if (kind === "change") {

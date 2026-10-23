@@ -236,3 +236,125 @@ test("Upscale on a source over the upload limit: the second Generate runs at the
   const up = mock.uploads.find((u) => u.name.startsWith("photoshop-capture-"));
   assert.ok(up && up.width < N, "uploaded at the reduced size");
 });
+
+test("New layer inside a selection lands cut out and fitted in the selection, never as a box over the layer under it", async (t) => {
+  // Live 2026-10-21: a New layer landed as an opaque full-canvas picture and
+  // covered the lettering of the sheet under it.
+  const FLARE = "model_openai-gpt-image-2-5-flare";
+  const cost = { status: 269, body: { creativeUnitsCost: 2, creativeUnitsDiscount: 0, costDetails: {} } };
+  const sel = { left: 600, top: 100, width: 300, height: 600 };
+  const { app, ps, doc, mock } = await bootGenerate(t, { docs: [{ ...LAYER_DOC, selection: sel }], active: 7, mockOpts: { answer: (model) => (model === FLARE ? cost : undefined) } });
+  await show(app, ps);
+  const ctl = app.controller;
+  ctl.selectAction("new_layer");
+  ctl.setPrompt("a paper lantern");
+  const ready = () => ctl.state().action === "new_layer" && ctl.state().price.state === "ready" && !ctl.state().sending;
+  await waitFor(ready, { label: "New layer priced" });
+  assert.match(ctl.model().ctx.detail, /inside the selection, cut out$/);
+  const chip = ctl.model().composer.chips.find((c) => c.kind === "bg");
+  assert.equal(chip && chip.value, "Cut out");
+  // Full frame: the model's own background.
+  await ctl.choose("bg", "full");
+  await waitFor(() => ready() && ctl.model().composer.chips.find((c) => c.kind === "bg").value === "Full frame", { label: "Full frame priced" });
+  assert.match(ctl.model().ctx.detail, /inside the selection$/);
+  await ctl.choose("bg", "cutout");
+  await waitFor(() => ready() && /cut out$/.test(ctl.model().ctx.detail), { label: "Cut out again" });
+  doc.byId("go").click();
+  await waitFor(() => app.ledger.all().some((r) => r.state === "applied"), { label: "landed", timeout: 8000 });
+  const body = mock.paidCalls[0].body;
+  assert.equal(body.background, "transparent");
+  assert.ok(body.width < body.height, "sized to the tall selection");
+  const d = ps.doc(7);
+  const top = d.layers[0];
+  const f = (top.layers ? top.layers[0] : top).frame;
+  assert.ok(f.left >= sel.left - 1 && f.top >= sel.top - 1 && f.left + f.width <= sel.left + sel.width + 1 && f.top + f.height <= sel.top + sel.height + 1, `inside the selection (${JSON.stringify(f)})`);
+  // Live 2026-10-23: GPT Image 2.5 Flare returned an opaque sky although
+  // the request asked for a transparent background. The opaque take is cut
+  // by Photoshop's Remove Background: a layer mask, the corners hidden. A
+  // small layer comes back whole from Remove Background (live 27.11), so
+  // the cut runs on the take scaled up to the canvas, then scaled back.
+  const layer = top.layers ? top.layers[0] : top;
+  const takes = top.layers ? top.layers.length : 1;
+  assert.ok(ps.subjectCuts && ps.subjectCuts.length === takes && ps.subjectCuts.every((c) => c.big), "each take cut at canvas size");
+  assert.ok(Math.abs(layer.frame.left - f.left) < 1 && Math.abs(layer.frame.width - f.width) < 1, "back in its frame");
+  const m = layer.mask;
+  assert.ok(m && m.data, "the take carries a mask");
+  const at = (x, y) => m.data[(y - m.top) * m.width + (x - m.left)];
+  assert.equal(at(m.left + 1, m.top + 1), 0, "the corner, outside the subject, is hidden");
+  assert.equal(at(m.left + (m.width >> 1), m.top + (m.height >> 1)), 255, "the subject is kept");
+  const rec = app.ledger.all().find((r) => r.state === "applied");
+  assert.ok(rec.placement.notes.some((n) => /Remove Background cut it out/.test(n)), rec.placement.notes.join(" | "));
+});
+
+test("an opaque take is measured by its alpha: a real cut out is placed as it came", () => {
+  const pixels = require("../../plugin/src/capture/pixels.js");
+  const rgb = { width: 2, height: 2, components: 3, data: new Uint8Array(12) };
+  assert.equal(pixels.opaqueShare(rgb), 1);
+  const cut = { width: 2, height: 2, components: 4, data: new Uint8Array([0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255]) };
+  assert.equal(pixels.opaqueShare(cut), 0.5);
+  const veiled = { width: 1, height: 2, components: 4, data: new Uint8Array([9, 9, 9, 235, 9, 9, 9, 240]) };
+  assert.equal(pixels.opaqueShare(veiled), 1, "a picture at alpha 0.92 still covers what is under it");
+});
+
+test("Formats lays a title out again on each artboard at its place in the frame, inside a margin, smaller only if it would not fit", () => {
+  const morePlan = require("../../plugin/src/apply/more-plan.js");
+  const src = { width: 1536, height: 1024 };
+  // A title across the bottom of a 3:2 poster.
+  const title = { left: 368, top: 820, width: 800, height: 140 };
+  const inside = (f, r) => f.center_x - f.width / 2 >= r.left && f.center_x + f.width / 2 <= r.left + r.width && f.center_y - f.height / 2 >= r.top && f.center_y + f.height / 2 <= r.top + r.height;
+  for (const r of [{ left: 0, top: 0, width: 1080, height: 1920 }, { left: 1180, top: 0, width: 1080, height: 1080 }, { left: 0, top: 0, width: 1920, height: 1080 }]) {
+    const f = morePlan.titleFit(title, src, r);
+    assert.ok(inside(f, r), `inside ${JSON.stringify(r)}: ${JSON.stringify(f)}`);
+    assert.ok(Math.abs(f.center_x - (r.left + r.width / 2)) < 1, "still centered");
+    const k = Math.min(r.width / src.width, r.height / src.height);
+    assert.ok(Math.abs(f.scale - k) < 1e-9, "scaled like the picture");
+    assert.ok(Math.abs(f.center_y - (r.top + r.height * (890 / 1024))) < 1, "at the same height in the frame");
+  }
+  // A title wider than the frame with its margin shrinks to fit.
+  const wide = morePlan.titleFit({ left: 0, top: 10, width: 1536, height: 100 }, src, { left: 0, top: 0, width: 1080, height: 1080 });
+  assert.ok(wide.width <= 1080 - 2 * Math.round(0.04 * 1080) + 1e-6);
+  // The text box of a Split text mask, in document pixels.
+  const mask = { width: 10, height: 5, data: new Uint8Array(50) };
+  mask.data[2 * 10 + 3] = 255;
+  mask.data[3 * 10 + 6] = 255;
+  assert.deepEqual(morePlan.maskBox(mask, { left: 100, top: 50, width: 100, height: 50 }), { left: 130, top: 70, width: 40, height: 20 });
+});
+
+test("Formats reads the picture without its titles: they are hidden for the read only", async () => {
+  const { createCapture } = require("../../plugin/src/capture/capture.js");
+  const reads = [];
+  const host = {
+    overlayLayers: async () => [{ id: 41, name: "THE KITE KEEPER", kind: "type", box: { left: 0, top: 0, width: 10, height: 10 } }],
+    readPixels: async (req) => {
+      reads.push(req);
+      return { width: 64, height: 32, components: 3, data: new Uint8Array(64 * 32 * 3) };
+    },
+    encodeJpeg: async () => new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    ensureDataDir: async () => {},
+    writeDataBinary: async () => {}
+  };
+  const cap = createCapture({ host });
+  const spec = { document_id: 7, layer_id: null, box: { left: 0, top: 0, width: 64, height: 32 }, read_long: 64, capture_input: "image", jpeg_ok: true };
+  await cap.source({ ...spec, without_titles: true });
+  assert.deepEqual(reads[0].hide_ids, [41]);
+  await cap.source(spec);
+  assert.equal(reads[1].hide_ids, undefined, "other tools read everything visible");
+});
+
+test("Cut out subject keeps the selection's own shape, not only its box", async (t) => {
+  const sel = { left: 200, top: 200, width: 400, height: 400, shape: "ellipse" };
+  const answer = (model) => (model === "model_851-labs-background-remover" ? { status: 269, body: { creativeUnitsCost: 1, creativeUnitsDiscount: 0, costDetails: {} } } : undefined);
+  const DOC = { id: 7, title: "poster.psd", width: 1024, height: 1024, selection: sel };
+  const { app, ps, mock } = await bootGenerate(t, { docs: [DOC], active: 7, psOpts: { scene: true }, mockOpts: { answer } });
+  await show(app, ps);
+  const ctl = app.controller;
+  ctl.selectAction("cutout");
+  await waitFor(() => ctl.state().action === "cutout" && ctl.state().price.state === "ready", { label: "Cut out priced" });
+  ctl.go();
+  await waitFor(() => app.ledger.all().some((r) => r.state === "applied"), { label: "landed", timeout: 8000 });
+  assert.equal(mock.paidCalls.length, 1);
+  const m = ps.doc(7).layers[0].mask;
+  const at = (x, y) => m.data[(y - m.top) * m.width + (x - m.left)];
+  assert.ok(at(400, 400) > 200, "the middle is kept");
+  assert.equal(at(205, 205), 0, "the corner of the box, outside the ellipse, is cut");
+});

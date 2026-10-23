@@ -207,14 +207,15 @@ var ACTIONS = {
     prompt: "req",
     placeholder: "Describe the new layer",
     takes: 2,
-    chips: ["style", "model", "takes"],
+    chips: ["bg", "style", "model", "takes"],
     refs: true,
     insert: "above",
     button: function () {
       return "New layer";
     },
-    land: function (L) {
-      return "Lands above " + L + " at canvas size";
+    land: function (L, n, v) {
+      var where = v && v.within === "selection" ? " inside the selection" : " at canvas size";
+      return "Lands above " + L + where + (v && v.cutout ? ", cut out" : "");
     }
   },
   background: {
@@ -549,7 +550,7 @@ var CONTEXTS = {
   element: ["versions", "relight", "angle", "upscale"],
   // A document of one layer (a generated or delivered JPEG or PNG).
   flat: ["split", "versions", "upscale", "formats"],
-  selection: ["replace", "remove", "versions_sel", "cutout"],
+  selection: ["replace", "remove", "versions_sel", "cutout", "new_layer"],
   takes: ["compare", "more_like", "refine", "upscale_kept"]
 };
 

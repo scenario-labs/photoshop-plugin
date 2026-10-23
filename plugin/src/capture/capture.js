@@ -128,8 +128,10 @@ function createCapture(o) {
     }
   }
 
-  async function read(docId, layerId, clip, longSide) {
-    return o.host.readPixels({ document_id: docId, layer_id: layerId || null, bounds: clip, long_side: longSide, exact: true });
+  async function read(docId, layerId, clip, longSide, hideIds) {
+    var req = { document_id: docId, layer_id: layerId || null, bounds: clip, long_side: longSide, exact: true };
+    if (hideIds && hideIds.length) req.hide_ids = hideIds;
+    return o.host.readPixels(req);
   }
 
   // A layer's outline as a gray mask in document pixels over `clip` (its
@@ -241,7 +243,14 @@ function createCapture(o) {
   // source in document pixels), read_long, capture_input, jpeg_ok }.
   async function source(c) {
     var id = newId();
-    var got = await read(c.document_id, c.layer_id, c.box, c.read_long);
+    // Formats: the picture without its titles, which land again, live, on
+    // each artboard (host-more.js).
+    var hide = [];
+    if (c.without_titles && typeof o.host.overlayLayers === "function") {
+      var titles = await o.host.overlayLayers(c.document_id);
+      for (var ti = 0; ti < titles.length; ti++) hide.push(titles[ti].id);
+    }
+    var got = await read(c.document_id, c.layer_id, c.box, c.read_long, hide);
     var f;
     try {
       f = await fit(got, null, c.jpeg_ok, true);
@@ -251,7 +260,7 @@ function createCapture(o) {
       // read again at it, smaller in 10% steps until the read itself fits.
       var long = e.reduced_long;
       for (var i = 0; i < API.uploads.reduce_steps && long >= API.uploads.min_long_side_px; i++) {
-        var again = await read(c.document_id, c.layer_id, c.box, long);
+        var again = await read(c.document_id, c.layer_id, c.box, long, hide);
         var enc = await encode(again, c.jpeg_ok);
         if (enc.bytes.length < LIMIT) {
           e.reduced_long = long;

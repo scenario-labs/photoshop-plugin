@@ -75,7 +75,8 @@ function names(kind, prompt, assetIds, leavePrompts) {
 // fit ("cover" by default, or "box"), insert ({layer_id} or null: the top),
 // canvas (Expand), duplicate ({name}: land in a copy), reads (for the
 // checks), cutout (Remove BG: { layer_id, background (the source was the
-// Background), lands, box, mask_box, source_path }) }.
+// Background), lands, box, mask_box, source_path }), subject (cut each
+// take with Photoshop's Remove Background: a cut out New layer that came back opaque) }.
 function agentHistory(rec, name) {
   return rec.origin && rec.origin.kind === "agent" ? name.replace(/^Scenario: /, "Scenario agent: ") : name;
 }
@@ -167,6 +168,7 @@ function build(rec, o) {
     canvas: o.canvas || null,
     reads: o.reads || null,
     cutout: cut,
+    subject: !!o.subject,
     restore_active: !!o.restore_active
   };
 }

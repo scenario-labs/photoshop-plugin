@@ -322,7 +322,14 @@ async function startFixtureScenario(opts = {}) {
         return { status: 500, body: { reason: "the mock refuses anything but a price check" } };
       }
       const key = shape(r.body);
-      const hit = table.find((x) => x.model === g[1] && x.key === key);
+      let hit = table.find((x) => x.model === g[1] && x.key === key);
+      // GPT Image's background input does not change the price: measured
+      // 052 (2026-10-23) answers what the same body without it answers.
+      if (!hit && r.body && r.body.background === "transparent") {
+        const rest = { ...r.body };
+        delete rest.background;
+        hit = table.find((x) => x.model === g[1] && x.key === shape(rest));
+      }
       priceChecks.push({ model: g[1], search: r.search, body: r.body, key, matched: !!hit });
       if (opts.answer) {
         const custom = opts.answer(g[1], r.body);

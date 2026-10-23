@@ -905,6 +905,26 @@
      "custom-generation": 60
     }
    }
+  },
+  {
+   "measured": "052",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 1,
+    "background": "transparent"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 2,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 2
+    }
+   }
   }
  ],
  "assets": {

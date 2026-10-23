@@ -999,7 +999,7 @@ body {
   height: 24px;
   padding: 0 10px;
   margin: 0 6px 6px 0;
-  border-radius: 6px;
+  border-radius: 12px;
   border: 1px solid rgba(0, 0, 0, 0.265);
   background-color: rgba(0, 0, 0, 0.19);
   font-size: 12px;
@@ -1230,7 +1230,7 @@ body {
   height: 26px;
   padding: 0 10px;
   margin: 0 6px 6px 0;
-  border-radius: 6px;
+  border-radius: 13px;
   border: 1px solid rgba(255, 255, 255, 0.11);
   background-color: rgba(0, 0, 0, 0.19);
   font-size: 12px;
@@ -1273,6 +1273,7 @@ body {
 .btn.sm {
   height: 22px;
   padding: 0 8px;
+  border-radius: 11px;
   font-size: 11px;
 }
 
@@ -1583,7 +1584,7 @@ body {
   height: 24px;
   padding: 0 8px 0 6px;
   margin: 0;
-  border-radius: 6px;
+  border-radius: 12px;
   border: 1px solid rgba(0, 0, 0, 0.265);
   font-size: 12px;
   white-space: nowrap;
@@ -1704,7 +1705,7 @@ body {
   height: 24px;
   padding: 0 8px 0 6px;
   margin: 0 6px 6px 0;
-  border-radius: 6px;
+  border-radius: 12px;
   border: 1px solid rgba(0, 0, 0, 0.265);
   background-color: rgba(0, 0, 0, 0.19);
   font-size: 12px;
@@ -1819,7 +1820,7 @@ body {
   height: 32px;
   padding: 0 12px;
   overflow: hidden;
-  border-radius: 16px;
+  border-radius: 6px;
   font-size: 13px;
   font-weight: bold;
   color: #ffffff;
@@ -1861,7 +1862,7 @@ body {
   width: 32px;
   height: 32px;
   margin-left: 6px;
-  border-radius: 16px;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.11);
   color: var(--uxp-host-text-color-secondary);
   background-color: rgba(0, 0, 0, 0.19);
@@ -2252,6 +2253,7 @@ body {
   .cp .chip {
     height: 22px;
     margin: 0 4px 4px 0;
+    border-radius: 11px;
   }
   .cp .sc-mid {
     padding: 0 12px 0 12px;
@@ -2268,6 +2270,7 @@ body {
   .cp .cc {
     height: 22px;
     margin: 0 4px 4px 0;
+    border-radius: 11px;
   }
   .cp .sug {
     height: 22px;

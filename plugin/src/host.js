@@ -144,6 +144,32 @@ function createHost(hostRequire, g) {
     }
   }
 
+  // Cuts a placed take with Photoshop's own Remove Background (a layer
+  // mask, no credits): a cut out New layer that the model returned opaque.
+  // On a small layer Photoshop takes the whole rectangle for the subject
+  // (seen on 27.11), so the take is scaled up to fill the canvas for the
+  // cut, then scaled back to its frame; the linked mask follows it.
+  async function subjectMask(doc, layerId) {
+    var f = await frameOf(doc.id, layerId);
+    if (!f || f.width <= 0 || f.height <= 0) throw new Error("the take's frame could not be read");
+    var W = Number(doc.width);
+    var H = Number(doc.height);
+    var k = Math.min(W / f.width, H / f.height);
+    var dx = W / 2 - (f.left + f.width / 2);
+    var dy = H / 2 - (f.top + f.height / 2);
+    var move = function (scale, x, y) {
+      return { _obj: "transform", _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }], freeTransformCenterState: { _enum: "quadCenterState", _value: "QCSAverage" }, offset: { _obj: "offset", horizontal: { _unit: "pixelsUnit", _value: x }, vertical: { _unit: "pixelsUnit", _value: y } }, width: { _unit: "percentUnit", _value: scale }, height: { _unit: "percentUnit", _value: scale } };
+    };
+    await selectLayers(doc.id, [layerId]);
+    await play([move(k * 100, dx, dy)]);
+    try {
+      await play([{ _obj: "removeBackground" }]);
+    } finally {
+      await play([move(100 / k, -dx, -dy)]);
+    }
+    if (!(await hasUserMask(doc.id, layerId))) throw new Error("Remove Background left no mask");
+  }
+
   // The frame of a placed smart object in document pixels, from the
   // corners in smartObjectMore.transform (verified live on 27.11).
   async function frameOf(docId, layerId) {
@@ -444,6 +470,27 @@ function createHost(hostRequire, g) {
         })[0] || null;
     }
     if (!source) throw new Error("the source layer is gone");
+    // A cut-out of a selection keeps the selection's own shape (a lasso, an
+    // Object Selection), not only its box: read here, before the result is
+    // placed for its alpha (placing drops the selection).
+    var selShape = null;
+    if (c.drop_selection) {
+      var got = null;
+      try {
+        got = await ps.imaging.getSelection({ documentID: doc.id });
+      } catch (e) {
+        got = null;
+      }
+      if (got && got.imageData) {
+        try {
+          var sb = got.sourceBounds || {};
+          var sd = await got.imageData.getData({ chunky: true });
+          selShape = { left: px(sb.left), top: px(sb.top), width: got.imageData.width, height: got.imageData.height, data: toBytes(sd).slice() };
+        } finally {
+          got.imageData.dispose();
+        }
+      }
+    }
     await selectLayers(doc.id, [source.id]);
     var temp = await placeFile(doc, plan.takes[0].path, plan.takes[0].fit, notes);
     var box = c.box;
@@ -452,6 +499,10 @@ function createHost(hostRequire, g) {
     await deleteLayer(doc, temp);
     var mb = c.mask_box;
     var mask = pixelsMod.placeInto(alpha, mb.width, mb.height, box.left - mb.left, box.top - mb.top);
+    if (selShape) {
+      var shape = pixelsMod.placementMask(selShape, mb, 0);
+      for (var k = 0; k < mask.data.length; k++) mask.data[k] = Math.round((mask.data[k] * shape.data[k]) / 255);
+    }
     var target;
     if (c.lands === "mask") {
       if (source.isBackgroundLayer) source = await fromBackground(doc, source);
@@ -1003,7 +1054,36 @@ function createHost(hostRequire, g) {
     // exact (exactly the bounds, padded clear outside a layer) }.
     // Resolves { width, height, components, data }.
     readPixels: function (req) {
-      return modal("Scenario: Read reference", async function () {
+      return modal("Scenario: Read reference", async function (mctx) {
+        // Layers left out of the read (Formats: the titles), hidden in a
+        // History state that is then rolled back, so the document is as it
+        // was.
+        var hide = req.hide_ids && req.hide_ids.length ? req.hide_ids : null;
+        var hc = hide && mctx ? mctx.hostControl : null;
+        var sid = null;
+        if (hide) {
+          var dh = findDoc(req.document_id);
+          if (!dh) throw new Error("the document was closed");
+          sid = hc ? await hc.suspendHistory({ documentID: dh.id, name: "Scenario: Read without titles" }) : null;
+          for (var hi = 0; hi < hide.length; hi++) {
+            var hl = findLayer(dh, hide[hi]);
+            if (hl) hl.visible = false;
+          }
+        }
+        try {
+          return await readNow();
+        } finally {
+          if (hide && hc) await hc.resumeHistory(sid, false);
+          else if (hide) {
+            var dr = findDoc(req.document_id);
+            for (var ri = 0; dr && ri < hide.length; ri++) {
+              var rl = findLayer(dr, hide[ri]);
+              if (rl) rl.visible = true;
+            }
+          }
+        }
+      });
+      async function readNow() {
         if (req.exact && req.bounds) {
           // Exactly the bounds, at most long_side on the long side; outside a
           // layer's own pixels: clear (captures, SPEC 5.8).
@@ -1039,7 +1119,36 @@ function createHost(hostRequire, g) {
         } finally {
           image.dispose();
         }
-      });
+      }
+    },
+    // The titles of a document, top first: its visible type layers and the
+    // Text layers Split text made (their text box is in their metadata).
+    // Formats reads the picture without them and lays them out again on each
+    // artboard. Resolves [{ id, name, kind: "type" | "split_text", box }].
+    overlayLayers: async function (docId) {
+      var d = findDoc(docId);
+      if (!d) return [];
+      var out = [];
+      async function walk(list) {
+        for (var i = 0; i < (list || []).length; i++) {
+          var l = list[i];
+          if (l.visible === false) continue;
+          var kind = String(l.kind || "");
+          if (kind === "group") {
+            await walk(l.layers);
+            continue;
+          }
+          if (kind === "text") {
+            out.push({ id: l.id, name: String(l.name || ""), kind: "type", box: boundsOf(l) });
+            continue;
+          }
+          var f = await metaOf(d.id, l.id);
+          var tb = f && f.kind === "text" && typeof f.textBox === "string" ? f.textBox.split(",").map(Number) : null;
+          if (tb && tb.length === 4 && tb[2] > 0 && tb[3] > 0) out.push({ id: l.id, name: String(l.name || ""), kind: "split_text", box: { left: tb[0], top: tb[1], width: tb[2], height: tb[3] } });
+        }
+      }
+      await walk(d.layers);
+      return out;
     },
     // JPEG bytes of opaque RGB pixels, encoded by Photoshop.
     encodeJpeg: function (pixels) {
@@ -1175,6 +1284,19 @@ function createHost(hostRequire, g) {
                 layer.name = take.name;
                 await setXmp(doc, layer.id, take.xmp);
                 placed.unshift(layer);
+              }
+              if (plan.subject) {
+                var cut = 0;
+                for (var si = 0; si < placed.length; si++) {
+                  try {
+                    await subjectMask(doc, placed[si].id);
+                    cut++;
+                  } catch (e) {
+                    // that take stays whole
+                  }
+                }
+                if (cut) masked = true;
+                notes.push(cut === placed.length ? "The model returned an opaque picture: Photoshop's Remove Background cut it out (a layer mask, editable)." : "The model returned an opaque picture and Photoshop's Remove Background could not cut " + (cut ? "every take" : "it") + ": add a mask by hand.");
               }
               if (R.takes) {
                 for (var r = 0; r < placed.length; r++) reads.takes.push(await readArea(doc, placed[r].id, R.takes.bounds, R.takes.width, R.takes.height));
