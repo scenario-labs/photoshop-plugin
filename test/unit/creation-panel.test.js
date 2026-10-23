@@ -99,6 +99,16 @@ test("no document: Create image leads, Open from Library beside it; an empty pro
   assert.equal(mock.requests.filter((r) => r.path.startsWith("/v1/generate")).length, 0, "no price without a prompt");
 });
 
+// Photoshop calls show() once. For a panel it restores at launch, that is
+// while the plugin is still loading, and reopening the panel does not call it
+// again: the release first run of 2026-10-23 kept the button on "· …".
+test("a panel shown while the plugin loads still prices the prompt", async (t) => {
+  const { doc } = await bootGenerate(t, { docs: [], showAtLaunch: true, mockOpts: { answer: flarePrice() } });
+  doc.type("prompt", "A lighthouse on a rocky coast");
+  await waitFor(() => /^Create image · \d+ CU$/.test(go(doc)), { label: `the button shows a price (now ${go(doc)})`, timeout: 5000 });
+  assert.equal(goOn(doc), true);
+});
+
 // A price for any Flare request: 1 CU plus 1 per take (the measured table
 // answers only some sizes).
 // Replace inside and Remove default to Ideogram 4.5 Precise Edit and

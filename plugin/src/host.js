@@ -1470,7 +1470,9 @@ function createHost(hostRequire, g) {
       var pending = null;
       // transform and move: a Free Transform or a Move left the context on
       // the layer's old bounds, and the takes landed there (live 2026-10-23).
-      var events = ["select", "set", "make", "delete", "open", "close", "placeEvent", "crop", "canvasSize", "imageSize", "transform", "move", "duplicate", "paste"];
+      // historyStateChanged: Undo and Redo send none of the others, and the
+      // card kept takes that Undo had removed (live 2026-10-23).
+      var events = ["select", "set", "make", "delete", "open", "close", "placeEvent", "crop", "canvasSize", "imageSize", "transform", "move", "duplicate", "paste", "historyStateChanged"];
       try {
         ps.action.addNotificationListener(
           events.map(function (e) {

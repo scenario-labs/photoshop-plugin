@@ -43,14 +43,14 @@ You need Photoshop 2026 (27.x; tested on 27.11 on macOS) and a Scenario account 
    "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/build/scenario-photoshop-0.7.1.ccx"
    ```
 
-   *Verified live* with the development package (`scenario-photoshop-0.7.1-dev.ccx`, same installer and command) on macOS with Photoshop's Developer Mode on. The release package's install and first run are *not tested* yet. Double-clicking the `.ccx` should do the same through Creative Cloud; *not tested*.
+   *Verified live* with the release package on macOS on 2026-10-23, with Photoshop's Developer Mode on (whether the installer needs it was not tested): install, restart, sign-in and a first image took 1 min 53 s. A script did the clicks and typing, so this time has no reading in it, and 59 s of it was the generation. Double-clicking the `.ccx` should do the same through Creative Cloud; *not tested*.
 3. In Photoshop, open **Plugins > Scenario**.
 
 ## First generation
 
 1. On [app.scenario.com](https://app.scenario.com), open your project's API keys and create a **Project key** with the **Editor** role. Copy the key and its secret.
 2. In the panel, paste them (pasting `key:secret` fills both fields) and click **Save and test**.
-3. Open or create a document, click **New layer**, type what you want, and click the blue button. It shows the price, for example `New layer · 3 CU`.
+3. Open or create a document. On a blank canvas the panel offers **Create image**, and on an image or a layer **New layer**. Type what you want and click the blue button. It shows the price, for example `Create image · 13 CU` for four takes.
 
 The full walkthrough, with every action, is in the [User Guide](docs/USER_GUIDE.md#quick-start).
 

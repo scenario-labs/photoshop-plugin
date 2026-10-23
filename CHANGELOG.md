@@ -21,6 +21,13 @@ Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures).
 - The run card shows the charged price, else the price waiting for approval after a price change on upload, else the quote. It kept the first quote. *Verified live: fixed* (New angle, 1 CU to 14 CU); the composer button still shows the first quote during the approval.
 - Jobs and its popover name video jobs (Animate, Frame to layer) "Video", not "Image". *Verified live: fixed* on Animate 5 s.
 
+### Fixed in the release first run
+
+The release package was installed, signed in and used live for the first time on 2026-10-23 (Photoshop 27.11, macOS, clicks and keystrokes by a script).
+
+- Prices never loaded when Photoshop started with the panel already open, which is the usual case from the second launch on. The button stayed on "Create image · …" and Generate stayed off. Photoshop calls the panel's show() once, while the plugin is still loading, and does not call it again when the panel is reopened. A panel shown during loading now starts its price checks when loading ends. Development builds hid the bug: their test loop starts the price checks itself. *Verified live* on the release package: install, sign-in and a first image in 1 min 53 s. *Tested automated*.
+- After Undo of a landed run, the panel kept showing the takes that Undo had removed ("Showing take 1"). The panel now also follows Photoshop's History changes. *Verified live*: Undo and Redo, twice each, and the card followed the layers every time. *Tested automated*.
+
 ### Fixed after the 2026-10-23 review
 
 - New layer covered what was under it: it landed as an opaque picture at canvas size over the lettering of a character sheet. With a selection, **New layer** is now offered in the selection context, sized to the selection and fitted inside it, and lands cut out: the request asks the model for a transparent background, and a take that still covers what is under it (GPT Image 2.5 Flare returned a painted sky at alpha 0.91 to 0.98) is cut at placement by Photoshop's own Remove Background, as an editable layer mask (no credits). Photoshop takes a small layer's whole rectangle for its subject, so the take is scaled up to the canvas for the cut and back to its frame after. A **Lands** chip switches between Cut out and Full frame. *Verified live* (a swallow kite inside a 300 x 380 selection over a painted sky: cut, no box); *tested automated*.

@@ -59,7 +59,10 @@ async function bootGenerate(t, opts = {}) {
     addEventListener: (type, fn) => (listeners[type] = listeners[type] || []).push(fn),
     dispatch: (type) => (listeners[type] || []).forEach((fn) => fn({ type }))
   };
-  const app = await main.boot({ host, document: doc, console: null, global, apiBaseUrl: mock.url, downloadOrigins: [mock.origin], pollDelay: () => pollMs, placers: opts.placers });
+  const booting = main.boot({ host, document: doc, console: null, global, apiBaseUrl: mock.url, downloadOrigins: [mock.origin], pollDelay: () => pollMs, placers: opts.placers });
+  // Photoshop shows a panel it restores at launch while the plugin loads.
+  if (opts.showAtLaunch) ps.entrypoints.panels.scenarioPanel.show();
+  const app = await booting;
   t.after(async () => {
     stopped = true;
     for (const h of timers) clearTimeout(h);

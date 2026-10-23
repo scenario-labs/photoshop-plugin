@@ -144,6 +144,9 @@ function boot(env) {
   var menu = null;
   var jobsModel = null;
   var library = null;
+  // Photoshop calls the panel's show() once; for a panel it restores at
+  // launch, that is while boot is still loading (below).
+  var shown = false;
   // Development builds only (dev/test-hooks.js); release builds carry a stub
   // whose points do nothing.
   var hooks = flags.DEV || env.testHooks ? devHooks.create({ log: logger.log, timers: host.timers }) : null;
@@ -157,6 +160,7 @@ function boot(env) {
       panels: {
         scenarioPanel: {
           show: function () {
+            shown = true;
             if (panel) panel.refresh();
             // Price checks start when the panel is first shown, never at launch.
             if (controller) controller.activate();
@@ -574,8 +578,10 @@ function boot(env) {
     }
     // The context is read once at load: a reloaded panel showed "No
     // document open" with a document open until Photoshop sent an event
-    // (2026-10-22). Price checks still wait for the panel to be shown.
-    if (controller) Promise.resolve(controller.refresh()).then(null, function () {});
+    // (2026-10-22). Price checks still wait for the panel to be shown; a
+    // panel shown while this loaded starts them now, since Photoshop does
+    // not call show() again (release first run, 2026-10-23).
+    if (controller) Promise.resolve(shown ? controller.activate() : controller.refresh()).then(null, function () {});
 
     // Agent cards in the creation view, Settings > Agents controls and
     // Connect a client (M6).

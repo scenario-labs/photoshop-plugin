@@ -438,6 +438,20 @@ test("a Free Transform or a Move refreshes the context: the takes land where the
   assert.ok(follows("move") && follows("duplicate") && follows("paste"), "Move, Duplicate and Paste refresh it too");
 });
 
+test("Undo and Redo refresh the context: the card follows the document's layers", async (t) => {
+  // Live 2026-10-23 (release first run): Edit > Undo took the landed takes
+  // away and the panel kept "Showing take 1"; none of the events the panel
+  // followed came with the Undo.
+  const DOC = { id: 7, title: "poster.psd", width: 1024, height: 1024, layers: [{ name: "Keeper", kind: "pixel", frame: { left: 100, top: 100, width: 300, height: 400 } }, { name: "Background", background: true }] };
+  const { app, ps } = await bootGenerate(t, { docs: [DOC], active: 7 });
+  await show(app, ps);
+  const ctl = app.controller;
+  await waitFor(() => /\|300x400\|/.test(ctl.state().key), { label: "the first bounds" });
+  ps.doc(7).layers[0].frame = { left: 100, top: 100, width: 450, height: 600 };
+  ps.fire("historyStateChanged");
+  await waitFor(() => /\|450x600\|/.test(ctl.state().key), { label: "a History change refreshes the context" });
+});
+
 test("Place in current document places a split whose own document is gone, when the canvas matches", async (t) => {
   // Live 2026-10-23: Jobs offered Place in current document on a Split into
   // layers row whose unsaved document had gone, and the place failed with

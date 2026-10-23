@@ -67,6 +67,14 @@ npm run package   # build/scenario-photoshop-0.7.1.ccx
 
 Details for contributors and coding agents: [AGENTS.md](../AGENTS.md). Design: [spec/SPEC.md](spec/SPEC.md) and the tool reference [spec/MCP.md](spec/MCP.md).
 
+## Release first run
+
+Photoshop 27.11 on macOS, the release package of 0.7.1 (`npm run package`), 2026-10-23. A script did the clicks and the typing, with real mouse and key events: the release build has no test loop.
+
+- Install with Creative Cloud's installer, restart, sign-in by pasting `key:secret`, a new 2048 × 1152 document, **Create image** with four takes at the default model: the takes landed as one group in one History state, 1 min 53 s after the install began (59 s of it was the generation). *Verified live*.
+- The first attempt found that prices never loaded when Photoshop started with the panel open. That is fixed (see the [changelog](../CHANGELOG.md)) and the run above is on the fixed package.
+- Undo and Redo of the landed run, color-managed and large documents: results in [Known limitations](KNOWN_LIMITATIONS.md#creation-and-application) (development build, same fixes).
+
 ## M8 live pass
 
 Photoshop 27.11 on macOS, plugin 0.7.1 development build, panel docked at 320 px, 2026-10-20. One run per action at the panel's default model, from the creation panel driven through the development UI loop (each paid click checked against its price first). Every run landed in one History state with layer metadata and its file in the Output Folder; every charge matched its price. *Verified live*:

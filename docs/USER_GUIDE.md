@@ -20,14 +20,14 @@ Scenario for Photoshop, development build 0.7.1. Pictures and recordings in this
 
 ## Quick start
 
-From install to a first image in a few steps, once the package is built (the time was not measured live yet) (see the [README](../README.md#install)).
+From install to a first image in about two minutes, once the package is built: 1 min 53 s measured live with the release package on 2026-10-23, with the clicks done by a script (see the [README](../README.md#install)).
 
 1. **Install** the `.ccx` and restart Photoshop, then open **Plugins > Scenario**. The panel opens on **Connect your Scenario account**.
 
    <img src="media/screens/first-run-sign-in.png" width="320" alt="The sign-in screen: API key and secret fields, Save and test, and links to create a key">
 
 2. **Get a key.** On app.scenario.com, in the project you want to use, create a **Project key** with the **Editor** role. A CU limit on the key caps what this plugin and connected agents can spend. Only team admins and project owners can create keys; **Copy a request for your admin** prepares the message for them.
-3. **Sign in.** Paste the key and the secret (pasting `key:secret`, or the two on two lines, fills both fields) and click **Save and test**. The plugin checks the key with two free reads and keeps it in Photoshop's secure storage on this computer. *Verified live* (through the development key import; typing into the fields *not tested*).
+3. **Sign in.** Paste the key and the secret (pasting `key:secret`, or the two on two lines, fills both fields) and click **Save and test**. The plugin checks the key with two free reads and keeps it in Photoshop's secure storage on this computer. *Verified live* with the release package: `key:secret` pasted into the key field, then **Save and test**, which answered in about a second.
 4. **Make a new document** with **File > New** (Photoshop hides docked panels on its Home screen, so the panel shows once a document is open). On a blank canvas the panel opens on **Create image**: type a prompt and click the button, which shows its price. The image is made at the canvas's size and lands as a layer above the Background. On an image or a layer, **New layer** does the same.
 5. The context card shows the progress (Queued, Generating, Downloading), then the image lands as a new layer in one History state. *Verified live*.
 
