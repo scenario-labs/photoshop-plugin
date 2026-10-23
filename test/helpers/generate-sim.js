@@ -59,7 +59,7 @@ async function bootGenerate(t, opts = {}) {
     addEventListener: (type, fn) => (listeners[type] = listeners[type] || []).push(fn),
     dispatch: (type) => (listeners[type] || []).forEach((fn) => fn({ type }))
   };
-  const app = await main.boot({ host, document: doc, console: null, global, apiBaseUrl: mock.url, downloadOrigins: [mock.origin], pollDelay: () => pollMs });
+  const app = await main.boot({ host, document: doc, console: null, global, apiBaseUrl: mock.url, downloadOrigins: [mock.origin], pollDelay: () => pollMs, placers: opts.placers });
   t.after(async () => {
     stopped = true;
     for (const h of timers) clearTimeout(h);

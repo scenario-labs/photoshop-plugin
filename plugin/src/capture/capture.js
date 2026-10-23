@@ -136,6 +136,11 @@ function createCapture(o) {
 
   // A layer's outline as a gray mask in document pixels over `clip` (its
   // alpha; an opaque layer covers all of it), shaped like readSelectionMask.
+  // Relight's outline grows by this many px at least, or this share of the
+  // area's long side.
+  var OUTLINE_GROW = 3;
+  var OUTLINE_GROW_SHARE = 0.005;
+
   async function layerOutline(docId, layerId, clip) {
     var px = await read(docId, layerId, clip, Math.max(clip.width, clip.height));
     var n = px.width * px.height;
@@ -170,6 +175,12 @@ function createCapture(o) {
     if (c.selection && c.mask_layer_id) {
       sel = await layerOutline(c.document_id, c.mask_layer_id, clip);
       if (!sel) throw invalid("The layer has no visible pixels to relight.");
+      // The layer stays below the relit take. Its own soft edge lies where
+      // the outline fades, so a take drawn a little narrower left a dull
+      // line of the original around it (live 2026-10-23): the mask grows
+      // past the edge and the take covers it.
+      var grown = pixels.growGray(sel, Math.max(OUTLINE_GROW, Math.round(Math.max(clip.width, clip.height) * OUTLINE_GROW_SHARE)));
+      sel = { left: sel.left, top: sel.top, width: sel.width, height: sel.height, data: grown.data };
     } else if (c.selection) {
       sel = await o.host.readSelectionMask(c.document_id);
       if (!sel) throw invalid("The selection is empty.");

@@ -247,6 +247,8 @@ test("New layer inside a selection lands cut out and fitted in the selection, ne
   await show(app, ps);
   const ctl = app.controller;
   ctl.selectAction("new_layer");
+  // Before the prompt (no price yet) the line already says where it lands.
+  await waitFor(() => /^Lands above .* inside the selection$/.test(ctl.model().ctx.detail), { label: "lands inside before the price" });
   ctl.setPrompt("a paper lantern");
   const ready = () => ctl.state().action === "new_layer" && ctl.state().price.state === "ready" && !ctl.state().sending;
   await waitFor(ready, { label: "New layer priced" });
@@ -434,4 +436,56 @@ test("a Free Transform or a Move refreshes the context: the takes land where the
   await waitFor(() => /\|450x600\|/.test(ctl.state().key), { label: "transform refreshes the context" });
   const follows = (name) => ps.notifications.some((n) => n.events.some((e) => e.event === name));
   assert.ok(follows("move") && follows("duplicate") && follows("paste"), "Move, Duplicate and Paste refresh it too");
+});
+
+test("Place in current document places a split whose own document is gone, when the canvas matches", async (t) => {
+  // Live 2026-10-23: Jobs offered Place in current document on a Split into
+  // layers row whose unsaved document had gone, and the place failed with
+  // "Open … to place this result there".
+  const calls = [];
+  const placers = { split: { place: async (rec, ctx) => (calls.push(ctx.document_id), { document_id: ctx.document_id, layer_ids: [1], notes: [] }) } };
+  const DOC = { id: 9, title: "copy.psd", width: 1024, height: 1536 };
+  const { app } = await bootGenerate(t, { docs: [DOC], active: 9, placers });
+  const target = { kind: "split", document_id: 4, document_title: "gone.psd", document_key: null, canvas: [1024, 1536], box: [0, 0, 1024, 1536] };
+  const rec = await app.ledger.create({ state: "ready", idempotency_key: "q_split", fingerprint: "f_split", target, outputs: [] });
+  await assert.rejects(app.runner.place(rec.local_id), (e) => e.type === "DocumentClosed");
+  const done = await app.runner.place(rec.local_id, { current_document: true });
+  assert.equal(done.state, "applied");
+  assert.deepEqual(calls, [9]);
+  // Another canvas size: refused, nothing placed.
+  const rec2 = await app.ledger.create({ state: "ready", idempotency_key: "q_split2", fingerprint: "f_split2", target: { ...target, canvas: [800, 600] }, outputs: [] });
+  await assert.rejects(app.runner.place(rec2.local_id, { current_document: true }));
+  assert.deepEqual(calls, [9]);
+});
+
+test("Relight's mask grows past the layer's outline, so the original's soft edge under the take does not show as a line", async () => {
+  // Live 2026-10-23: a relit keeper drawn a little narrower than the
+  // original left a dull line of the original coat around her.
+  const { createCapture } = require("../../plugin/src/capture/capture.js");
+  const W = 200;
+  const disc = (x, y) => ((x - 100) ** 2 + (y - 100) ** 2 <= 60 ** 2 ? 255 : 0);
+  const host = {
+    readPixels: async (req) => {
+      const n = W * W;
+      if (req.layer_id === 5) {
+        const d = new Uint8Array(n * 4);
+        for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) d[(y * W + x) * 4 + 3] = disc(x, y);
+        return { width: W, height: W, components: 4, data: d };
+      }
+      return { width: W, height: W, components: 3, data: new Uint8Array(n * 3).fill(90) };
+    },
+    encodeJpeg: async () => new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    ensureDataDir: async () => {},
+    writeDataBinary: async () => {},
+    writeDataText: async () => {}
+  };
+  const cap = createCapture({ host });
+  const box = { left: 0, top: 0, width: W, height: W };
+  const got = await cap.edit({ document_id: 7, canvas: { width: W, height: W }, layer_id: null, box, upload: { width: W, height: W }, selection: box, mask_layer_id: 5, capture_input: "image", mask_input: null, jpeg_ok: true });
+  const m = got.memo.placement_mask;
+  const at = (x, y) => m.data[(y - m.top) * m.width + (x - m.left)];
+  assert.equal(at(100, 100), 255);
+  assert.equal(at(162, 100), 255, "2 px past the outline: still the take");
+  assert.equal(at(100, 40 - 2), 255, "above it too");
+  assert.equal(at(170, 100), 0, "well outside: the original layer's own (empty) pixels");
 });

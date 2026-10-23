@@ -1278,7 +1278,10 @@ function createRunner(o) {
     var t = rec.target || {};
     var active = o.host.activeDocumentId();
     if (!placer.anyDocument) {
-      var home = homeDoc(rec);
+      // Place in current document (Jobs) is the person's choice: the job's
+      // own document may be gone (a split of an unsaved file after a
+      // restart). The canvas size check below still applies.
+      var home = opts.current_document && active !== null && active !== undefined ? { id: active, how: "current" } : homeDoc(rec);
       if (!home) throw err("DocumentClosed", "Open " + docTitle(rec) + " to place this result there.");
       if (home.id !== active) {
         if (opts.auto) return o.ledger.get(id);

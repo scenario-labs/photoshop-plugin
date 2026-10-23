@@ -188,6 +188,40 @@ test("Split into layers finds each element where it was: the element frame lands
   assert.ok(Math.abs(p.width - (s.at.w + 10) * k) <= 3 * k, `width ${p.width}`);
 });
 
+test("a backdrop element (fully opaque, as a sky) spans the picture: it is not matched to a small patch of itself", () => {
+  // Live 2026-10-23: Seedream Layerize returned the sky as a 1200 x 670
+  // opaque band, redrawn without the keeper and the kite in front of it; it
+  // was placed at 84 x 47 px on a patch of plain blue.
+  const W = 256;
+  const H = 384;
+  const SKY = 150;
+  let seed = 3;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const skyAt = (x, y) => [70 + Math.floor(y / 3), 120 + Math.floor(y / 4), 230 - Math.floor(y / 6)];
+  const orig = new Uint8Array(W * H * 3);
+  const back = new Uint8Array(W * H * 3);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 3;
+    const c = y < SKY ? skyAt(x, y) : [120 + Math.floor(rnd() * 90), 90 + Math.floor(rnd() * 60), 50 + Math.floor(rnd() * 40)];
+    back.set(c, i);
+    // A figure and a kite in front of the sky.
+    const front = (x >= 150 && x < 200 && y >= 60) || (x >= 40 && x < 90 && y >= 20 && y < 60);
+    orig.set(y < SKY && front ? [90, 50, 30] : c, i);
+  }
+  // The sky alone, redrawn at 1.17x, every pixel opaque.
+  const ew = Math.round(W * 1.17);
+  const eh = Math.round(SKY * 1.17);
+  const el = new Uint8Array(ew * eh * 4);
+  for (let y = 0; y < eh; y++) for (let x = 0; x < ew; x++) {
+    const i = (y * ew + x) * 4;
+    el.set([...skyAt(x / 1.17, y / 1.17), 255], i);
+  }
+  const m = match.findElement({ width: W, height: H, components: 3, data: orig }, { width: ew, height: eh, components: 4, data: el }, { width: W, height: H, components: 3, data: back });
+  assert.ok(m, "a match");
+  assert.ok(m.box.width >= W * 0.9, `spans the picture (width ${m.box.width})`);
+  assert.ok(m.box.top <= 8, `at the top (top ${m.box.top})`);
+});
+
 test("an element with nothing opaque is not placed", () => {
   const blank = { width: 10, height: 10, components: 4, data: new Uint8Array(400) };
   assert.equal(match.findElement(scene().original, blank, null), null);

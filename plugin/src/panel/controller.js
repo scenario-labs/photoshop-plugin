@@ -1999,7 +1999,13 @@ function createController(o) {
 
   // What the labels need from a priced view: sizes and the factor.
   function viewFacts(v) {
-    if (!v) return { factor: st.factor || "2x" };
+    if (!v) {
+      // No price yet (no prompt): New layer in a selection still lands
+      // inside it; the line read "at canvas size" until the first price.
+      var f = { factor: st.factor || "2x" };
+      if (st.ctx && st.ctx.kind === "selection" && st.action === "new_layer") f.within = "selection";
+      return f;
+    }
     var out = { factor: (v.controls && v.controls.factor) || st.factor || "2x" };
     // An upscale view built for a model without a factor setting: the last
     // factor chosen on another model does not apply (P-Image Upscale and

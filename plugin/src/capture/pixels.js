@@ -349,6 +349,30 @@ function placeInto(gray, width, height, x, y) {
   return { width: width, height: height, components: 1, data: out };
 }
 
+// A gray mask grown by r px (the largest value in a (2r+1) square: two
+// passes, rows then columns).
+function growGray(gray, r) {
+  var w = gray.width, h = gray.height;
+  if (!(r > 0)) return gray;
+  var mid = new Uint8Array(w * h);
+  var out = new Uint8Array(w * h);
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      var m = 0;
+      for (var dx = Math.max(0, x - r); dx <= Math.min(w - 1, x + r); dx++) if (gray.data[y * w + dx] > m) m = gray.data[y * w + dx];
+      mid[y * w + x] = m;
+    }
+  }
+  for (var x2 = 0; x2 < w; x2++) {
+    for (var y2 = 0; y2 < h; y2++) {
+      var m2 = 0;
+      for (var dy = Math.max(0, y2 - r); dy <= Math.min(h - 1, y2 + r); dy++) if (mid[dy * w + x2] > m2) m2 = mid[dy * w + x2];
+      out[y2 * w + x2] = m2;
+    }
+  }
+  return { width: w, height: h, components: 1, data: out };
+}
+
 // An image with a layer mask kept in its alpha (Photoshop's getPixels leaves
 // a layer's own mask out); the mask is resampled to the image's size.
 function keepMask(img, gray) {
@@ -361,6 +385,7 @@ function keepMask(img, gray) {
 }
 
 module.exports = {
+  growGray: growGray,
   keepMask: keepMask,
   sampleRegion: sampleRegion,
   resize: resize,

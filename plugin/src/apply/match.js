@@ -18,6 +18,13 @@ var MIN_LONG = 6;
 var STEP = 1.05;
 // Mean difference per channel (0 to 255) above which a match is doubtful.
 var DOUBTFUL = 38;
+// An element opaque over this share of its image is a backdrop (a sky, a
+// sea): it is redrawn whole, without what stood in front of it, so a small
+// plain patch of it matches better than its real place. It is searched at
+// BACKDROP_MIN of the picture's width or more (live 2026-10-23: a sky landed
+// at 84 x 47 px).
+var BACKDROP = 0.98;
+var BACKDROP_MIN = 0.9;
 
 function at(img, x, y, c) {
   return img.data[(y * img.width + x) * img.components + Math.min(c, img.components - 1)];
@@ -42,6 +49,15 @@ function opaqueBounds(el) {
   }
   if (x1 < 0) return null;
   return { left: x0, top: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
+}
+
+// The share of the element's pixels that are opaque (alpha 128 and up).
+function opaqueShare(el) {
+  if (el.components !== 4) return 1;
+  var n = el.width * el.height;
+  var k = 0;
+  for (var i = 0; i < n; i++) if (el.data[i * 4 + 3] >= 128) k++;
+  return n ? k / n : 0;
 }
 
 // Up to n samples of the element's solid pixels (alpha 200 and up), spread
@@ -201,6 +217,7 @@ function findElement(original, el, rebuilt) {
   var pc = samples(el, b, COARSE_SAMPLES);
   var minW = Math.max(aspect >= 1 ? MIN_LONG : MIN_LONG * aspect, Math.min(coarse.width, coarse.height * aspect) * MIN_FRACTION);
   var maxW = Math.min(coarse.width, coarse.height * aspect);
+  if (opaqueShare(el) >= BACKDROP) minW = Math.max(minW, maxW * BACKDROP_MIN);
   var cands = search(coarse, pc, aspect, minW, maxW, STEP, 1, null, CANDIDATES);
   if (!cands.length) return null;
   var fine = original;

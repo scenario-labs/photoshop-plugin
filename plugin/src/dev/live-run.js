@@ -438,9 +438,10 @@ function start(app, hostRequire, o) {
     return path;
   }
 
-  async function composite(docId, path) {
+  // long_side: up to 4096 (a document copied at its size); else evidence size.
+  async function composite(docId, path, longSide) {
     try {
-      var img = await host.readPixels({ document_id: docId, layer_id: null, bounds: null, long_side: EVIDENCE_LONG });
+      var img = await host.readPixels({ document_id: docId, layer_id: null, bounds: null, long_side: longSide ? num(longSide, 64, 4096) : EVIDENCE_LONG });
       return await savePng(path, img);
     } catch (e) {
       log("dev live run: composite not read (" + ((e && e.message) || e) + ")");

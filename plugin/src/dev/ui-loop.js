@@ -399,7 +399,7 @@ function start(o) {
       case "inspect":
         return await live().inspect(own(cmd.document_id));
       case "composite":
-        return { path: await live().composite(own(cmd.document_id), String(cmd.path || "dev-live/panel-composite.png")) };
+        return { path: await live().composite(own(cmd.document_id), String(cmd.path || "dev-live/panel-composite.png"), cmd.long_side) };
       case "front":
         return { document_id: await live().front(own(cmd.document_id)) };
       case "savedoc": {
