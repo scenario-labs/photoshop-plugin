@@ -420,7 +420,7 @@ function createMorePlacers(host, o) {
           group_id: null,
           history: null,
           masked: false,
-          notes: ["The clip is open as a new document; the MP4 is in the output folder."],
+          notes: ["The clip is open as a new document; the MP4 is in the output folder." + (rec.target && rec.target.without_titles ? " Type layers were left out of the clip, so lettering does not warp." : "")],
           badges: [],
           landed: { kind: "video", document_id: doc ? doc.id : null }
         };

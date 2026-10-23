@@ -81,6 +81,9 @@ test("Formats: the placement's pixels, sparse text and the default thinking leve
 test("Animate: a motion prompt, 5 s at 480P within the model's range, the picture as the first frame, in the panel's Video lane", () => {
   assert.equal(moreLanes.toolView("video", schemaOf("video"), CTX, {}).blocked, "Describe the motion.");
   const v = moreLanes.toolView("video", schemaOf("video"), CTX, { prompt: "water ripples", duration: 10 });
+  // Live 2026-10-23: a poster's title would warp in the clip; it is left out.
+  assert.equal(v.capture.spec.without_titles, true);
+  assert.equal(v.request.target.without_titles, true);
   assert.equal(v.lane, "video");
   assert.equal(v.request.parameters.duration, 10);
   assert.equal(v.request.parameters.resolution, "480P");

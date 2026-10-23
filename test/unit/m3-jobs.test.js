@@ -296,3 +296,13 @@ test("references: a chosen file is stripped of its metadata; a file of 4 MB or m
   assert.equal(await app.references.chooseFile(FLARE), null);
   await assert.rejects(app.references.capture("selection", 7, FLARE), (e) => /There is no selection/.test(e.message));
 });
+
+test("runner: the record keeps a read without titles, so the landing can say the titles were left out", async (t) => {
+  // Live 2026-10-23: Animate left the poster's title out of the clip, but the
+  // record dropped the flag and the landing note did not say so.
+  const { app } = await bootGenerate(t, { docs: [] });
+  const req = { model_id: FLARE, lane: "image", parameters: { prompt: "a quiet harbor", width: 1024, height: 1024, quality: "low" }, takes: 1, pending: {}, target: { kind: "new_document", width: 1024, height: 1024, without_titles: true } };
+  const q = await app.quotes.estimate(req);
+  const rec = await app.runner.start({ req, quote: q, refs: [], model_name: "GPT Image 2.5 Flare" });
+  assert.equal(app.ledger.get(rec.record.local_id).target.without_titles, true);
+});

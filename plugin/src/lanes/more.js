@@ -171,7 +171,10 @@ function toolView(tool, schema, ctx, o) {
   if (!v.sizes) v.sizes = { source: { width: box.width, height: box.height }, read: { width: read.width, height: read.height } };
   v.request = { lane: LANE[tool], model_id: schema.model_id, parameters: params, takes: null, target: target, source_size: { width: read.width, height: read.height }, references: 0, mask: false };
   v.capture = { kind: "source", spec: { document_id: doc.id, document_title: doc.title, layer_id: src.layer_id, box: box, read_long: Math.max(read.width, read.height), capture_input: capInput, jpeg_ok: tool === "video" || common.jpegOk(schema.model_id) } };
-  if (tool === "reframe" && src.kind === "visible") v.capture.spec.without_titles = true;
+  // Formats lays the titles out again; a clip would warp them, so Animate
+  // leaves them out too and they stay in the document.
+  if ((tool === "reframe" || tool === "video") && src.kind === "visible") v.capture.spec.without_titles = true;
+  if (tool === "video" && src.kind === "visible") target.without_titles = true;
   return v;
 }
 
