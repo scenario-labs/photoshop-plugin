@@ -700,7 +700,7 @@ function createAgentTools(o) {
       var n = want[w];
       var out = outs[n - 1];
       if (!out) throw invalid("This job has " + outs.length + " take(s).");
-      var row = { take: n, asset_id: out.asset_id, aspect_ok: null, edited: null, seam_bias: null, seam_residual: null, seam_ok: null, polarity_suspect: null, note: null };
+      var row = { take: n, asset_id: out.asset_id, aspect_ok: null, edited: null, seam_bias: null, seam_residual: null, seam_ok: null, polarity_suspect: null, shift_px: null, badges: null, note: null };
       if (out.state !== "saved" || !out.path) {
         row.note = "Not downloaded yet (" + rec.state + ").";
         takes.push(row);
@@ -734,6 +734,10 @@ function createAgentTools(o) {
           row.seam_bias = c.seam ? c.seam.bias : null;
           row.seam_residual = c.seam ? c.seam.residual : null;
           row.seam_ok = c.seam_ok;
+          // shift_px tells a misaligned take from one the model redrew
+          // around the edit; badges are the takes card's words for both.
+          row.shift_px = typeof c.shift_px === "number" ? Math.round(c.shift_px * 10) / 10 : null;
+          row.badges = checksMod.badges(c, null, { masked: true });
         } else if (rec.lane === "expand") {
           row.note = "The Expand seam check runs at placement.";
         }
@@ -893,6 +897,7 @@ function createAgentTools(o) {
     if (given(args.local_id) === given(args.library_asset_id)) throw invalid("Pass one of local_id or library_asset_id.");
     var rec;
     var warnings = [];
+    var unmasked = false;
     if (given(args.library_asset_id)) {
       if (!assetsMod.validAssetId(args.library_asset_id)) throw invalid("Not a Scenario asset id.");
       if (purpose !== "new_layer" && purpose !== "new_document") throw invalid("Library assets land with new_layer or new_document.");
@@ -936,6 +941,7 @@ function createAgentTools(o) {
       var home = rec.target && given(rec.target.document_id) ? o.runner.docOf(rec) : null;
       if (!docId) docId = home ? home.id : scope.readDoc(null);
       if (home && home.id !== docId && purpose !== "new_layer") throw invalid("This result lands in the document it was made from.");
+      if (!home && rec.target && given(rec.target.document_id) && (purpose === "edit_selection" || purpose === "expand" || purpose === "cutout_mask")) throw fail("DocumentClosed", "The document this result was made from is not open. Open it to land the result there, or open the result with new_document.");
       if (!home || home.id !== docId || rec.lane === "library") opts.current_document = true;
       if (purpose === "new_layer" && fit !== "cover") opts.fit = "box";
       if (given(t.box)) {
@@ -954,6 +960,12 @@ function createAgentTools(o) {
         var o0 = rec.outputs[0];
         if (Math.abs(o0.width / o0.height - rec.target.upload[0] / rec.target.upload[1]) > 0.01 * (rec.target.upload[0] / rec.target.upload[1])) warnings.push("may_be_misaligned");
       }
+      // The selection mask lives in memory: after a panel reload or a
+      // Photoshop restart the edit lands unmasked over the capture box.
+      if (purpose === "edit_selection" && rec.target.kind === "selection" && !(o.runner.memoFor(rec.local_id) || {}).placement_mask) {
+        unmasked = true;
+        warnings.push("lands_unmasked");
+      }
     }
     var kind = planMod.kindOf(rec.lane);
     var history = (planMod.HISTORY[kind] || "Scenario: Place " + kind).replace(/^Scenario: /, "Scenario agent: ");
@@ -964,7 +976,7 @@ function createAgentTools(o) {
     var where = purpose === "new_document" ? "a new document" : '"' + (docTitle || "the document") + '"' + (opts.box ? " at " + [opts.box.left, opts.box.top, opts.box.width, opts.box.height].join(", ") : rec.target && rec.target.box && !opts.current_document ? " over the capture box " + rec.target.box.join(", ") : " over the canvas");
     return {
       application_id: id,
-      review: "Places " + n + " take" + (n > 1 ? "s" : "") + " of " + (rec.model_name || rec.lane) + " into " + where + " as " + will.join(" and ") + ", in one History state \"" + history + "\".",
+      review: "Places " + n + " take" + (n > 1 ? "s" : "") + " of " + (rec.model_name || rec.lane) + " into " + where + " as " + will.join(" and ") + ", in one History state \"" + history + "\"." + (unmasked ? " Unmasked: the selection mask is gone after a panel reload or a Photoshop restart, so the take covers the whole capture box." : ""),
       target: { document_id: docId, purpose: purpose, fit: fit, box: opts.box ? [opts.box.left, opts.box.top, opts.box.width, opts.box.height] : rec.target && rec.target.box ? rec.target.box : null },
       checks: null,
       will_create: will,
@@ -1080,7 +1092,15 @@ function createAgentTools(o) {
     }
     if (a.document_id !== null) scope.changeDoc(a.document_id);
     a.used = true;
-    var r = await runApplication(a);
+    var r;
+    try {
+      r = await runApplication(a);
+    } catch (e) {
+      // Thrown before anything was placed (busy, not active, canvas
+      // changed): the same application_id can be applied again.
+      a.used = false;
+      throw e;
+    }
     record(ctx, r.outcome === "committed" ? "Placed a result" : "Placement rolled back", a.history);
     return r;
   }
