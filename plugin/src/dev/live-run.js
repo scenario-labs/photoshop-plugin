@@ -894,6 +894,10 @@ function start(app, hostRequire, o) {
     },
     delete_layer: function () {
       return [{ _obj: "delete", _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }] }];
+    },
+    // Stamp Visible: the visible layers merged into one new layer on top.
+    stamp_visible: function () {
+      return [{ _obj: "mergeVisible", duplicate: true }];
     }
   };
 
