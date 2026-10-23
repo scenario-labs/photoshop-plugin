@@ -105,7 +105,7 @@ With no selection, the panel works on the active layer, or the whole image for a
 
 **Remove text** (More > Finish): the same image without its text, as a new layer above. **Split text** (More > Layers) gives the clean base and the text on its own layer instead.
 
-**Formats**: reframes the image to Story 9:16, Feed 4:5, Square 1:1 or Wide 16:9 (Scenario Smart Reframe), as an artboard in a new "<title> formats" document. Type layers stay out of the reframe: each title is laid out again on the artboard at its place in the frame, still editable.
+**Formats**: reframes the image to Story 9:16, Feed 4:5, Square 1:1 or Wide 16:9 (Scenario Smart Reframe), as an artboard in a new "<title> formats" document. Type layers stay out of the reframe: each title is laid out again on the artboard at its place in the frame, still editable. Each new format is added to the same document, beside the others. If a subject gets cut at the edge, name it in the prompt ("keep the kite and the keeper whole in frame") and run that format again.
 
 **Animate** (More > Animate): a short clip from the image and your prompt (Minimax H3 Fast, 5 s by default). The clip opens as a new document and the MP4 is saved in the output folder. **Frame to layer** brings its last frame back as a layer.
 

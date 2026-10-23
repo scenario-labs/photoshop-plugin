@@ -261,8 +261,12 @@ function createMorePlacers(host, o) {
         artboardRect: { _obj: "classFloatRect", top: u(rect.top), left: u(rect.left), bottom: u(rect.top + rect.height), right: u(rect.left + rect.width) }
       }
     ]);
-    var ab = doc.activeLayers && doc.activeLayers[0];
-    if (ab && ab.id !== layer.id) ab.name = name;
+    // The artboard is the placed layer's parent: after a make in a
+    // document that has an artboard already, Photoshop leaves the placed
+    // layer selected (live 27.11, 2026-10-23).
+    var ab = layer.parent && layer.parent.id !== layer.id ? layer.parent : doc.activeLayers && doc.activeLayers[0];
+    if (!ab || ab.id === layer.id) return null;
+    ab.name = name;
     return ab;
   }
 
@@ -276,6 +280,7 @@ function createMorePlacers(host, o) {
       var tl = titles[i];
       var layer = I.findLayer(src, tl.id);
       if (!layer || typeof layer.duplicate !== "function") continue;
+      var was = I.boundsOf(layer);
       var copy = await layer.duplicate(doc);
       if (!copy) continue;
       if (artboard && EP && typeof copy.move === "function") {
@@ -284,12 +289,16 @@ function createMorePlacers(host, o) {
       }
       var fit = morePlan.titleFit(tl.box, { width: src.width, height: src.height }, rect);
       var b = I.boundsOf(copy);
+      // Where the title is on the copy: a copy into a document with
+      // artboards does not keep its source place (live 27.11, 2026-10-23).
+      var bx = tl.box.left + tl.box.width / 2 + (b.left - was.left);
+      var by = tl.box.top + tl.box.height / 2 + (b.top - was.top);
       var pcx = b.left + b.width / 2;
       var pcy = b.top + b.height / 2;
       await copy.scale(fit.scale * 100, fit.scale * 100);
       // The title's center after scaling about the layer's own center.
-      var tcx = pcx + (tl.box.left + tl.box.width / 2 - pcx) * fit.scale;
-      var tcy = pcy + (tl.box.top + tl.box.height / 2 - pcy) * fit.scale;
+      var tcx = pcx + (bx - pcx) * fit.scale;
+      var tcy = pcy + (by - pcy) * fit.scale;
       await copy.translate(fit.center_x - tcx, fit.center_y - tcy);
       ids.push(copy.id);
     }
@@ -297,13 +306,36 @@ function createMorePlacers(host, o) {
     return ids;
   }
 
+  // The formats document of a source still open from before a reload: the
+  // open document of that name, with the right edge of its artboards.
+  function openFormatsDoc(name) {
+    var docs = ps.app.documents || [];
+    for (var i = 0; i < docs.length; i++) {
+      var d = docs[i];
+      if (!d || String(d.title || "").replace(/\.psd$/i, "") !== name) continue;
+      var right = 0;
+      for (var j = 0; j < (d.layers || []).length; j++) {
+        var b = I.boundsOf(d.layers[j]);
+        if (b && b.left + b.width > right) right = b.left + b.width;
+      }
+      if (right > 0) return { id: d.id, right: right };
+    }
+    return null;
+  }
+
   var reframe = {
     anyDocument: true,
     place: function (rec, ctx) {
       var t = rec.target || {};
       var d0 = I.findDoc(t.document_id);
+      var title = d0 ? d0.title : t.document_title;
+      if (!(formatsDocs[t.document_id] && I.findDoc(formatsDocs[t.document_id].id))) {
+        var open = openFormatsDoc(morePlan.reframe(rec, { title: title }).document_name);
+        if (open) formatsDocs[t.document_id] = open;
+        else delete formatsDocs[t.document_id];
+      }
       var existing = formatsDocs[t.document_id] ? I.findDoc(formatsDocs[t.document_id].id) : null;
-      var plan = morePlan.reframe(rec, { version: ctx.version, title: d0 ? d0.title : t.document_title, formats_document_id: existing ? existing.id : null });
+      var plan = morePlan.reframe(rec, { version: ctx.version, title: title, formats_document_id: existing ? existing.id : null });
       return I.modal(plan.history_name, async function (mctx) {
         var notes = [];
         var doc = existing;
@@ -337,6 +369,7 @@ function createMorePlacers(host, o) {
           layerId = layer.id;
           try {
             artboard = await makeArtboard(doc, layer, rect, plan.artboard_name);
+            if (!artboard) notes.push("Placed as a layer: the artboard Photoshop made was not found.");
           } catch (e) {
             artboard = null;
             log("formats: artboard not made (" + ((e && e.message) || e) + ")");

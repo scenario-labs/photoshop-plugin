@@ -489,3 +489,44 @@ test("Relight's mask grows past the layer's outline, so the original's soft edge
   assert.equal(at(100, 40 - 2), 255, "above it too");
   assert.equal(at(170, 100), 0, "well outside: the original layer's own (empty) pixels");
 });
+
+test("Formats: the title lands inside each artboard, the second one too, even when the copy does not keep its place", async () => {
+  // Live 2026-10-23: the 4:5 artboard, added beside a 9:16 one, got its
+  // title outside the artboard and at the top of the stack: Photoshop
+  // left the placed layer selected after the make, and the duplicated
+  // title did not keep its source place.
+  const { webcrypto } = require("node:crypto");
+  const hostMod = require("../../plugin/src/host.js");
+  const { createMorePlacers } = require("../../plugin/src/host-more.js");
+  const { createFakePhotoshop } = require("../helpers/fake-photoshop.js");
+  const { solidPng } = require("../helpers/fixture-scenario.js");
+  const SRC = { id: 7, title: "keeper.psd", width: 1024, height: 1536, layers: [{ name: "THE KITE KEEPER", kind: "text", frame: { left: 68, top: 1369, width: 890, height: 61 } }, { name: "Key art", kind: "pixel", frame: { left: 0, top: 0, width: 1024, height: 1536 } }] };
+  const ps = createFakePhotoshop({ docs: [SRC], active: 7 });
+  ps.duplicateShift = { x: 1061, y: -635 };
+  const host = hostMod.createHost(ps.require, { setTimeout, clearTimeout, crypto: webcrypto });
+  let placers = createMorePlacers(host);
+  const rec = (format, w, h) => {
+    const path = `Scenario/out/${w}x${h}.png`;
+    ps.files.set(path, new Uint8Array(solidPng(w, h)));
+    return { local_id: "f" + h, job_id: "job_f", model_id: "model_scenario-smart-reframe", lane: "more", parameters: {}, target: { kind: "reframe", format, output: [w, h], document_id: 7 }, outputs: [{ asset_id: "a" + h, path, width: w, height: h }] };
+  };
+  const inside = (b, r) => b.left >= r.left && b.top >= r.top && b.right <= r.left + r.width && b.bottom <= r.top + r.height;
+  const docs = [];
+  for (const [format, w, h] of [["9:16", 1080, 1920], ["4:5", 1080, 1350], ["1:1", 1080, 1080]]) {
+    // The plugin reloads before 1:1: the open formats document is found again.
+    if (format === "1:1") placers = createMorePlacers(host);
+    ps.app.activeDocument = ps.doc(7);
+    const done = await placers.reframe.place(rec(format, w, h), { version: "0.7.1" });
+    const doc = ps.doc(done.document_id);
+    docs.push(doc.id);
+    const ab = doc.layers.find((l) => l.id === done.group_id);
+    assert.ok(ab && ab.artboard, format + ": the artboard is the group that landed");
+    const title = ab.layers.find((l) => l.kind === "text");
+    assert.ok(title, format + ": the title is inside its artboard, not at the top of the stack");
+    assert.ok(inside(title.bounds, ab.frame), format + ": the title is within the artboard: " + JSON.stringify([title.bounds, ab.frame]));
+    assert.ok(title.bounds.top > ab.frame.top + ab.frame.height * 0.8, format + ": near the bottom, where it was on the picture");
+  }
+  assert.equal(new Set(docs).size, 1, "one formats document, after a reload too");
+  const frames = ps.doc(docs[0]).layers.filter((l) => l.artboard).map((l) => l.frame);
+  for (const a of frames) for (const b of frames) if (a !== b) assert.ok(a.left + a.width <= b.left || b.left + b.width <= a.left, "the artboards do not overlap");
+});

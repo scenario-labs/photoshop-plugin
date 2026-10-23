@@ -167,6 +167,19 @@ function createFakePhotoshop(opts = {}) {
       async translate(dx, dy) {
         if (!inModal) throw new Error("translate needs a modal scope");
         this.frame = { ...this.frame, left: this.frame.left + dx, top: this.frame.top + dy };
+      },
+      // Layer.duplicate(document): a copy at the top of that document. Live
+      // 27.11 (2026-10-23): into a document with artboards the copy does not
+      // keep its place; ps.duplicateShift models that offset.
+      async duplicate(target) {
+        if (!inModal) throw new Error("duplicate needs a modal scope");
+        const to = target || doc;
+        const s = ps.duplicateShift || { x: 0, y: 0 };
+        const c = makeLayer(to, { name: this.name, kind: this.kind, visible: this.visible, frame: { ...this.frame, left: this.frame.left + s.x, top: this.frame.top + s.y } });
+        c.xmp = this.xmp;
+        to.layers.unshift(c);
+        to.activeLayers = [c];
+        return c;
       }
     };
     // A group given as specs (a document opened with a group in it): its
@@ -394,6 +407,26 @@ function createFakePhotoshop(opts = {}) {
       if (!layer) throw new Error("fake: no such layer");
       ps.xmpReads = (ps.xmpReads || 0) + 1;
       return layer.xmp ? { XMPMetadataAsUTF8: layer.xmp } : {};
+    }
+    if (d._obj === "make" && d._target && d._target[0] && d._target[0]._ref === "artboardSection") {
+      // Layer > New > Artboard from Layers: the active layer goes into a new
+      // artboard at artboardRect. Live 27.11 (2026-10-23): the first artboard
+      // of a document is selected after the make; a later one leaves the
+      // placed layer selected.
+      if (!inModal) throw new Error("an artboard needs a modal scope");
+      const target = app.activeDocument;
+      const layer = target.activeLayers[0];
+      if (!layer) throw new Error("fake: no active layer");
+      const had = allLayers(target).some((l) => l.artboard);
+      const r = d.artboardRect;
+      const at = Math.max(0, target.layers.indexOf(layer));
+      removeLayer(target, layer);
+      const ab = makeLayer(target, { name: "Artboard", kind: "group", frame: { left: r.left, top: r.top, width: r.right - r.left, height: r.bottom - r.top }, layers: [layer] });
+      ab.artboard = true;
+      layer.parent = ab;
+      target.layers.splice(at, 0, ab);
+      target.activeLayers = had ? [layer] : [ab];
+      return {};
     }
     if (d._obj === "make" && d.new && d.new._class === "channel" && d.at && d.at._value === "mask") {
       // Layer > Layer Mask > Hide All on the active layer: everything hidden
