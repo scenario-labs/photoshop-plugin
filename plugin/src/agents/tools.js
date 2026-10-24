@@ -145,6 +145,35 @@ function createAgentTools(o) {
     return { state: "none", history_state: null, layer_ids: [] };
   }
 
+  // Panel action names in a job's error, in the agent's terms.
+  var AGENT_WORDS = [
+    ["Use Place unmasked or Open as document.", "Land it with prepare_result_application purpose new_document."],
+    ["use Place in current document or Open as document", "land it with purpose new_layer or new_document"],
+    ["Use Place in current document or Open as document.", "Land it with purpose new_layer or new_document."],
+    ["use Place in current document", "land it with purpose new_layer"],
+    ["use Open as document", "land it with purpose new_document"],
+    ["Resume download fetches it again.", "recover_local_job fetches it again."],
+    ["Resolve it in Jobs first.", "Check it with list_local_jobs and recover_local_job first."]
+  ];
+
+  function agentError(msg) {
+    if (!msg) return null;
+    for (var i = 0; i < AGENT_WORDS.length; i++) msg = msg.split(AGENT_WORDS[i][0]).join(AGENT_WORDS[i][1]);
+    return msg;
+  }
+
+  // Where an expand result grows the canvas, so a wrong anchor shows.
+  function growthOf(t) {
+    var e = t && t.expand;
+    if (!e || !Array.isArray(e.offset) || !Array.isArray(t.canvas)) return null;
+    var g = { left: e.offset[0], top: e.offset[1], right: e.width - t.canvas[0] - e.offset[0], bottom: e.height - t.canvas[1] - e.offset[1] };
+    var parts = [];
+    ["left", "right", "top", "bottom"].forEach(function (k) {
+      if (g[k] > 0) parts.push(Math.round(g[k]) + " px " + k);
+    });
+    return "The canvas grows to " + e.width + " x " + e.height + ": " + (parts.length ? parts.join(", ") : "no side") + ".";
+  }
+
   function jobOut(rec, ctx) {
     var outs = (rec.outputs || []).map(function (x, i) {
       return { asset_id: x.asset_id, take: i + 1, file_state: x.state === "saved" ? "saved" : x.state || "pending", path: x.state === "saved" ? x.path : null };
@@ -166,7 +195,7 @@ function createAgentTools(o) {
       approval: { state: rec.approval ? rec.approval.state : "none" },
       outputs: outs,
       application: applicationOf(rec),
-      error: rec.error || null,
+      error: agentError(rec.error),
       revision: rec.revision || 0,
       actions: actionsFor(rec, ctx)
     };
@@ -972,11 +1001,11 @@ function createAgentTools(o) {
     var n = assets ? assets.length : outs.length || 1;
     var will = purpose === "new_document" ? ["a new document"] : purpose === "cutout_mask" ? ["a layer mask from the cutout (or a cutout layer when the layer cannot take one)"] : purpose === "expand" ? ["a larger canvas", "a masked smart object"] : n > 1 ? ["a group of " + n + " takes (smart objects)"] : ["one smart object layer"];
     var id = newApplicationId();
-    applications[id] = { id: id, local_id: rec.local_id, purpose: purpose, opts: opts, native: fit === "native" && purpose === "new_layer", document_id: docId, created_at: now(), used: false, session: ctx.session, client_name: ctx.client_name, history: history, canvas: docId ? o.host.documentSize(docId) : null };
+    applications[id] = { id: id, local_id: rec.local_id, purpose: purpose, opts: opts, native: fit === "native" && purpose === "new_layer", document_id: docId, created_at: now(), used: false, session: ctx.session, client_name: ctx.client_name, history: history, canvas: docId ? o.host.documentSize(docId) : null, unmasked: unmasked };
     var where = purpose === "new_document" ? "a new document" : '"' + (docTitle || "the document") + '"' + (opts.box ? " at " + [opts.box.left, opts.box.top, opts.box.width, opts.box.height].join(", ") : rec.target && rec.target.box && !opts.current_document ? " over the capture box " + rec.target.box.join(", ") : " over the canvas");
     return {
       application_id: id,
-      review: "Places " + n + " take" + (n > 1 ? "s" : "") + " of " + (rec.model_name || rec.lane) + " into " + where + " as " + will.join(" and ") + ", in one History state \"" + history + "\"." + (unmasked ? " Unmasked: the selection mask is gone after a panel reload or a Photoshop restart, so the take covers the whole capture box." : ""),
+      review: "Places " + n + " take" + (n > 1 ? "s" : "") + " of " + (rec.model_name || rec.lane) + " into " + where + " as " + will.join(" and ") + ", in one History state \"" + history + "\"." + (unmasked ? " Unmasked: the selection mask is gone after a panel reload or a Photoshop restart, so the take covers the whole capture box." : "") + (purpose === "expand" && growthOf(rec.target) ? " " + growthOf(rec.target) : ""),
       target: { document_id: docId, purpose: purpose, fit: fit, box: opts.box ? [opts.box.left, opts.box.top, opts.box.width, opts.box.height] : rec.target && rec.target.box ? rec.target.box : null },
       checks: null,
       will_create: will,
@@ -1056,7 +1085,10 @@ function createAgentTools(o) {
       session: ctx.session,
       client_name: ctx.client_name,
       title: ctx.client_name + " proposes a change",
-      lines: [(rec.model_name || rec.lane) + " result into " + (a.document_id === null ? "a new document" : '"' + (title || "the document") + '"'), "History: " + a.history],
+      lines: [(rec.model_name || rec.lane) + " result into " + (a.document_id === null ? "a new document" : '"' + (title || "the document") + '"')]
+        .concat(a.unmasked ? ["Lands unmasked: the selection mask is gone after a panel reload, so the take covers the whole capture box."] : [])
+        .concat(a.purpose === "expand" && growthOf(rec.target) ? [growthOf(rec.target)] : [])
+        .concat(["History: " + a.history]),
       approve_label: "Apply",
       decline_label: "Dismiss",
       data: { local_id: a.local_id, application_id: a.id, document_id: a.document_id, asset_id: (a.opts.assets || [])[0] || ((rec.outputs || [])[0] || {}).asset_id || null },

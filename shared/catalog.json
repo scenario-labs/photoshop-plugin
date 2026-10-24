@@ -1170,7 +1170,7 @@
     {
       "name": "job_status",
       "title": "Job status",
-      "description": "One job of the plugin's ledger by local_id, or by job_id. Free, read-only. Returns local_id, job_id, status, remote_status, progress, cu_quoted, cu_quoted_max, price_kind, cu_record, cu_charged, refunded, no_refund, origin {kind, client}, approval {state}, outputs [{asset_id, take, file_state}], application {state, history_state, layer_ids}, error, revision and actions.",
+      "description": "One job of the plugin's ledger by local_id, or by job_id. Free, read-only. Returns local_id, job_id, status, remote_status, progress, cu_quoted, cu_quoted_max, price_kind, cu_record, cu_charged, refunded, no_refund, origin {kind, client}, approval {state}, outputs [{asset_id, take, file_state}], application {state, history_state, layer_ids}, error (in agent terms: purposes and tools, not panel buttons), revision and actions.",
       "release": "v1",
       "annotations": {
         "title": "Job status",
@@ -1893,7 +1893,7 @@
     {
       "name": "prepare_result_application",
       "title": "Prepare result application",
-      "description": "Plans how a result lands, without changing the document. Free. One of local_id (a ready job, with expected_revision) or library_asset_id. purpose: new_layer (default), edit_selection (a job made from an edit capture), expand, cutout_mask (a Remove BG job), new_document. takes (default all) or asset_id. target {document_id, insert (auto, top, above_layer), layer_id, fit (cover, contain, native), box}. Returns application_id (single use, 10 minutes), review (document, position, layer names, History name), target, checks, will_create, warnings (may_be_misaligned; lands_unmasked when the selection mask is gone after a panel reload or a Photoshop restart) and requires_approval. edit_selection, expand and cutout_mask refuse with DocumentChanged after a canvas size change and DocumentClosed when their document is gone; new_document still lands the result. Then apply_result_application.",
+      "description": "Plans how a result lands, without changing the document. Free. One of local_id (a ready job, with expected_revision) or library_asset_id. purpose: new_layer (default), edit_selection (a job made from an edit capture), expand, cutout_mask (a Remove BG job), new_document. takes (default all) or asset_id. target {document_id, insert (auto, top, above_layer), layer_id, fit (cover, contain, native), box}. Returns application_id (single use, 10 minutes), review (document, position, layer names, History name; for expand, where the canvas grows), target, checks, will_create, warnings (may_be_misaligned; lands_unmasked when the selection mask is gone after a panel reload or a Photoshop restart) and requires_approval. edit_selection, expand and cutout_mask refuse with DocumentChanged after a canvas size change and DocumentClosed when their document is gone; new_document still lands the result. Then apply_result_application.",
       "release": "v1",
       "annotations": {
         "title": "Prepare result application",
