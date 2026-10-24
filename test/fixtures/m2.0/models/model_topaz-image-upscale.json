@@ -1,0 +1,110 @@
+{
+ "model": {
+  "id": "model_topaz-image-upscale",
+  "name": "Topaz Image Upscale",
+  "shortDescription": "Topaz Image Upscale by Topaz Labs enlarges photos up to 6x with five specialized enhancement modes, subject detection, and face enhancement controls.",
+  "type": "custom",
+  "privacy": "public",
+  "capabilities": [
+   "img2img"
+  ],
+  "tags": [
+   "Enhance",
+   "Topaz Labs",
+   "image-upscale",
+   "photography",
+   "sc:third-party"
+  ],
+  "status": "trained",
+  "createdAt": "2025-08-12T14:31:35.348Z",
+  "inputs": [
+   {
+    "description": "Image to enhance",
+    "kind": "image",
+    "label": "Image",
+    "name": "image",
+    "costImpact": true,
+    "parent": true,
+    "required": {
+     "always": true
+    },
+    "type": "file"
+   },
+   {
+    "allowedValues": [
+     "Standard V2",
+     "Low Resolution V2",
+     "CGI",
+     "High Fidelity V2",
+     "Text Refine"
+    ],
+    "description": "Model to use: Standard V2 (general purpose), Low Resolution V2 (for low-res images), CGI (for digital art), High Fidelity V2 (preserves details), Text Refine (optimized for text)",
+    "default": "Standard V2",
+    "label": "Model",
+    "name": "enhanceModel",
+    "costImpact": false,
+    "type": "string"
+   },
+   {
+    "allowedValues": [
+     "None",
+     "2x",
+     "4x",
+     "6x"
+    ],
+    "description": "How much to upscale the image",
+    "default": "2x",
+    "label": "Scaling Factor",
+    "name": "upscaleFactor",
+    "costImpact": true,
+    "type": "string"
+   },
+   {
+    "allowedValues": [
+     "None",
+     "All",
+     "Foreground",
+     "Background"
+    ],
+    "description": "Subject detection",
+    "default": "None",
+    "label": "Subject Detection",
+    "name": "subjectDetection",
+    "costImpact": false,
+    "type": "string"
+   },
+   {
+    "description": "Enhance faces in the image",
+    "default": false,
+    "label": "Face Enhancement",
+    "name": "faceEnhancement",
+    "costImpact": false,
+    "type": "boolean"
+   },
+   {
+    "description": "Choose the level of creativity for face enhancement from 0 to 1. Defaults to 0, and is ignored if face_enhancement is false.",
+    "default": 0,
+    "group": "Face Enhancement",
+    "label": "Creativity",
+    "max": 1,
+    "min": 0,
+    "name": "faceEnhancementCreativity",
+    "costImpact": false,
+    "type": "number"
+   },
+   {
+    "description": "Control how sharp the enhanced faces are relative to the background from 0 to 1. Defaults to 0.8, and is ignored if face_enhancement is false.",
+    "default": 0.8,
+    "group": "Face Enhancement",
+    "label": "Strength",
+    "max": 1,
+    "min": 0,
+    "name": "faceEnhancementStrength",
+    "costImpact": false,
+    "type": "number"
+   }
+  ],
+  "custom": true,
+  "source": "other"
+ }
+}

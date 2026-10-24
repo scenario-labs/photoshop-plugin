@@ -1,0 +1,2280 @@
+/* The Scenario panel. Compact like Photoshop's own panels (11 and 12 px
+   text, 24 px controls, an 8 px grid) and colored only through the UXP host
+   variables, so it follows the four interface brightness themes. Measured in
+   UXP 9.4 (AGENTS.md, "Panel UI"): flexbox, absolute positioning, calc(),
+   width media queries and inline SVG work; CSS grid, gap, position: sticky
+   and aspect-ratio do not, so spacing uses margins and the pinned prompt bar
+   comes from a flex column whose middle part scrolls. No transitions. */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  color: var(--uxp-host-text-color);
+  background-color: var(--uxp-host-background-color);
+  font-size: 12px;
+}
+
+/* The whole panel is one column: header, the shown view (its own middle
+   part scrolls), nothing below. */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.mark {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+}
+
+.spacer {
+  flex: 1 1 auto;
+  min-width: 4px;
+}
+
+.dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--uxp-host-text-color-secondary);
+  background-color: transparent;
+}
+
+.dot.on {
+  border-color: #2d9d78;
+  background-color: #2d9d78;
+}
+
+.dot.warn {
+  border-color: #e68619;
+  background-color: #e68619;
+}
+
+/* ---- icons ---- */
+
+.ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+.ico.big {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 8px;
+  opacity: 0.6;
+}
+
+.chev svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ---- views ---- */
+
+.view,
+.banner,
+.subview,
+.menu,
+.details {
+  display: none;
+}
+
+.view,
+.subview {
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.subhead {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  height: 32px;
+  padding: 0 8px 0 4px;
+  border-bottom: 1px solid var(--uxp-host-border-color);
+}
+
+.title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: bold;
+  margin-left: 4px;
+}
+
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.seg-label {
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+@media (max-width: 299px) {
+  .seg .seg-label {
+    display: none;
+  }
+  .seg .on .seg-label {
+    display: inline;
+  }
+}
+
+.seg {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  margin-bottom: 8px;
+}
+
+.seg > * {
+  margin-right: 2px;
+}
+
+/* ---- text ---- */
+
+.text {
+  font-size: 12px;
+}
+
+.strong {
+  font-weight: bold;
+}
+
+.note {
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.warn {
+  color: #e68619;
+}
+
+.center {
+  text-align: center;
+}
+
+.one-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mono {
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.pre {
+  white-space: pre-wrap;
+  margin: 4px 0;
+}
+
+.grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ---- blocks ---- */
+
+.section {
+  margin-bottom: 16px;
+}
+
+.section-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.section-head .section-title {
+  margin-bottom: 0;
+}
+
+.sub-title {
+  font-size: 11px;
+  font-weight: bold;
+  margin: 8px 0 2px 0;
+}
+
+.help {
+  padding-top: 8px;
+  margin-top: 16px;
+  border-top: 1px solid var(--uxp-host-border-color);
+}
+
+.row,
+.actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.row {
+  margin: 4px 0;
+}
+
+.actions {
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.actions > * {
+  margin: 0 4px 4px 0;
+}
+
+.actions.end {
+  justify-content: flex-end;
+}
+
+.progress {
+  margin-left: 8px;
+}
+
+.field {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.field-label {
+  font-size: 11px;
+  margin: 4px 0 2px 0;
+}
+
+.banner {
+  margin-bottom: 8px;
+  padding: 6px 4px 6px 8px;
+  border-radius: 4px;
+  border-left: 2px solid #378ef0;
+  background-color: rgba(0, 0, 0, 0.12);
+}
+
+.banner-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.close {
+  flex: 0 0 auto;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 8px;
+  text-align: center;
+}
+
+.empty .text,
+.empty .note {
+  margin-bottom: 8px;
+}
+
+.model-thumb,
+.job-thumb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.thumb-img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  object-fit: cover;
+}
+
+.chips {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.menu {
+  margin: 0 0 8px 0;
+  padding: 4px 0;
+  border-radius: 4px;
+  border: 1px solid var(--uxp-host-border-color);
+  background-color: rgba(0, 0, 0, 0.12);
+}
+
+.opts {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.opt {
+  flex: 0 0 auto;
+  margin-right: 8px;
+}
+
+.opt.grow {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-right: 0;
+}
+
+.picker {
+  width: 100%;
+}
+
+/* ---- lists: projects, jobs, models ---- */
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 28px;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.list-row:hover {
+  background-color: var(--uxp-host-widget-hover-background-color);
+}
+
+.list-row .ico {
+  margin-right: 4px;
+}
+
+.list-row .name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.list-row.current .name {
+  font-weight: bold;
+}
+
+.list-row .key {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.job-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--uxp-host-border-color);
+}
+
+.job-thumb {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.job-thumb .thumb-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 3px;
+}
+
+.job-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.job-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.job-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.job-status {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.job-status.attention {
+  color: #e68619;
+}
+
+.model-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 6px 4px;
+  border-radius: 4px;
+}
+
+.model-row:hover {
+  background-color: var(--uxp-host-widget-hover-background-color);
+}
+
+.model-row.off {
+  opacity: 0.55;
+}
+
+.model-thumb {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  margin-right: 8px;
+  border-radius: 3px;
+  overflow: hidden;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.model-thumb .thumb-img {
+  width: 32px;
+  height: 32px;
+}
+
+.model-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.model-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.model-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: bold;
+}
+
+.star {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.star.on {
+  color: #e68619;
+}
+
+.star svg {
+  width: 14px;
+  height: 14px;
+}
+
+.picker-top {
+  flex: 0 0 auto;
+  padding: 8px 8px 0 8px;
+  border-bottom: 1px solid var(--uxp-host-border-color);
+}
+
+.picker-top .seg,
+.picker-top .chips {
+  margin-bottom: 4px;
+}
+
+.picker-top .opts {
+  margin-bottom: 4px;
+}
+
+.chips.wrap > * {
+  margin: 0 4px 4px 0;
+}
+
+/* ---- Settings ---- */
+
+.status-line {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.status-line .dot {
+  margin-right: 8px;
+}
+
+.disclosure {
+  margin-top: 4px;
+}
+
+.details {
+  padding: 4px 0 0 8px;
+  border-left: 1px solid var(--uxp-host-border-color);
+}
+
+.details > * {
+  margin-bottom: 4px;
+}
+
+.kv {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+/* ---- the creation panel (FLOWS v2; SPEC 3) ----
+   The prototype's look on the host theme: its raised, field and line tones
+   are translucent layers over the host background (prototype values on
+   Photoshop's medium gray in brackets), so the panel follows the four
+   brightness themes. One accent, Photoshop's blue, for the selected chip,
+   the shown take and the button; green and amber only for checks and the
+   agent dot. 13 px titles, 12 px body, 11 px notes; 24 px chips, 26 px
+   buttons, a 32 px button to generate; radius 8 for cards, 6 for chips and
+   pictures. No grid and no gap in UXP 9.4: spacing is margins. */
+
+.app {
+  position: relative;
+}
+
+.ico svg {
+  display: block;
+}
+
+/* Header, one row of 36 px: mark, project, then agent and Jobs. */
+.hd {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  height: 36px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--uxp-host-border-color);
+}
+
+.hd .mark {
+  margin-right: 6px;
+}
+
+.proj {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 5px;
+}
+
+.proj:hover,
+.hbtn:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.project-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.proj .chev {
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+}
+
+.hbtn {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 24px;
+  padding: 0 6px;
+  margin-left: 2px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.hbtn .ico {
+  width: 16px;
+  height: 16px;
+}
+
+.hbtn .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  margin-left: 4px;
+  border: 0;
+  background-color: var(--uxp-host-text-color-secondary);
+  opacity: 0.8;
+}
+
+.hbtn .dot.on {
+  background-color: #7fd17f;
+  opacity: 1;
+}
+
+.hbtn .dot.warn {
+  background-color: #f2b45a;
+  opacity: 1;
+}
+
+.hbtn .hname {
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.hbtn .hl {
+  white-space: nowrap;
+}
+
+.hbtn .n {
+  min-width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  color: var(--uxp-host-text-color);
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.hbtn .n.run {
+  color: #ffffff;
+  background-color: #2c7be5;
+}
+
+.hbtn .n.attention {
+  color: #1b1b1b;
+  background-color: #f2b45a;
+}
+
+/* The main view (AGENTS.md, Panel UI, "Short panels"): the context card
+   and the action chips on top never scroll and never shrink, so every chip
+   row shows whole; the composer is pinned at the bottom; only the middle
+   (#sc-body: Takes, Recent) scrolls, with the height left between them
+   (flex basis 0, so it gives up its room first). The top sits outside
+   #sc-body: inside it, #sc-body shrank below the top's height when the top
+   and the composer did not fit, and clipped the second chip row at the
+   composer's edge (live 2026-10-21: a layer card with its Select field and
+   two chip rows at about 300 px). When even an empty middle leaves too
+   little room, the last chips go into More (fitTop() in create-view.js),
+   down to one row; only then does the top scroll (.squeezed), never the
+   composer. */
+
+.cp .sc-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cp .sc-top {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 12px 12px 8px 12px;
+}
+
+.cp .ctx {
+  position: relative;
+  overflow: hidden;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  background-color: rgba(0, 0, 0, 0.11);
+}
+
+.cp .ctx-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.cp .ctx-thumb {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-right: 8px;
+  overflow: hidden;
+  border-radius: 6px;
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .ctx-thumb.chk {
+  background-color: rgba(255, 255, 255, 0.72);
+  color: #555555;
+}
+
+.cp .ctx-thumb .ico {
+  width: 20px;
+  height: 20px;
+}
+
+.cp .cov {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.cp .ctx-thumb .cnt {
+  display: none;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 16px;
+  text-align: center;
+  color: #ffffff;
+  background-color: rgba(24, 24, 24, 0.74);
+}
+
+.cp .ctx-txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cp .ctx-title {
+  font-size: 13px;
+  font-weight: bold;
+  line-height: 17px;
+  /* One line, as in the prototype; the full title is the tooltip. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cp .ctx-detail {
+  margin-top: 1px;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+/* F14: the plan card's steps, one row each, the price on the right. */
+.cp .plan-step {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.cp .plan-step .pc {
+  color: var(--uxp-host-text-color-secondary);
+}
+
+/* The Library grid (Open from Library, + Reference > Library). */
+.cp .lib {
+  flex-direction: column;
+  margin-bottom: 6px;
+}
+
+.cp .lib-head {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.cp .lib-x {
+  color: var(--uxp-host-link-text-color, #4b9cf5);
+}
+
+.cp .lib-note {
+  font-size: 11px;
+  margin-bottom: 4px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .lib-grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.cp .lib-tile {
+  position: relative;
+  overflow: hidden;
+  margin: 0 4px 4px 0;
+  border-radius: 3px;
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+/* M7: the Library's search field, filters and Show more. */
+.cp .lib-search {
+  display: flex;
+  flex-direction: row;
+  margin-bottom: 4px;
+}
+
+.cp .lib-search .lib-field {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.cp .lib-filters {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.cp .lib-f {
+  font-size: 11px;
+  line-height: 18px;
+  height: 20px;
+  padding: 0 7px;
+  margin: 0 4px 4px 0;
+  border-radius: 10px;
+  border: 1px solid var(--uxp-host-border-color, #4a4a4a);
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .lib-f.on {
+  color: var(--uxp-host-text-color);
+  border-color: var(--uxp-host-link-text-color, #4b9cf5);
+}
+
+.cp .lib-body {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+}
+
+.cp .lib-more {
+  font-size: 11px;
+  margin-bottom: 4px;
+  color: var(--uxp-host-link-text-color, #4b9cf5);
+}
+
+/* Upscale's 100% compare: two tiles side by side, a label under each. */
+.cp .cmp {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.cp .cmp-col {
+  display: flex;
+  flex-direction: column;
+  margin-right: 6px;
+}
+
+/* The 100% crops are enlarged pictures: their box clips them (without it
+   UXP drew the picture over the whole panel, seen live on 27.11). */
+.cp .cmp .tw {
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+.cp .cmp-l {
+  font-size: 11px;
+  margin-top: 2px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+/* Select by description (F8): the Select… field under a layer's title.
+   The row keeps its height while the field hides under a popover. */
+.cp .ctx-sel {
+  display: flex;
+  flex-direction: row;
+  height: 26px;
+  margin-top: 6px;
+}
+
+.cp .ctx-sel .sel-field {
+  width: 100%;
+}
+
+.cp .ctx-detail.run {
+  color: var(--uxp-host-text-color);
+}
+
+.cp .prog {
+  display: none;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 0;
+  background-color: #2c7be5;
+}
+
+/* Action chips: one row that wraps, at most six, then More. */
+.cp .acts {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin: 8px 0 -6px 0;
+}
+
+.cp .chip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  margin: 0 6px 6px 0;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.265);
+  background-color: rgba(0, 0, 0, 0.19);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cp .chip:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .chip.on {
+  color: #ffffff;
+  border-color: #2c7be5;
+  background-color: #2c7be5;
+}
+
+.cp .chip.more {
+  padding: 0 6px 0 10px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .chip.more.on {
+  color: #ffffff;
+}
+
+.cp .chip .ml {
+  display: block;
+  max-width: 150px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cp .chip .chev {
+  width: 12px;
+  height: 12px;
+  margin-left: 4px;
+}
+
+/* The middle: the Takes card, Recent, the empty line. */
+.cp .sc-mid {
+  flex: 1 1 0px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 4px 12px 12px 12px;
+}
+
+.cp .sc-mid > * {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+
+.cp .mid-card {
+  display: none;
+}
+
+.cp .card {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  background-color: rgba(0, 0, 0, 0.11);
+}
+
+.cp .card > * {
+  margin-bottom: 8px;
+}
+
+.cp .card-h {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-width: 0;
+}
+
+.cp .card-h .h3 {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.cp .card-h .meta {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .by {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  margin-left: 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.cp .by .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  border: 0;
+  margin-right: 4px;
+  background-color: #7fd17f;
+}
+
+.cp .card-sub {
+  margin-top: -4px;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .tiles {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+}
+
+.cp .tile {
+  flex: 0 0 auto;
+  margin-bottom: 8px;
+}
+
+.cp .tile.l {
+  margin-right: 8px;
+}
+
+.cp .tile .tw {
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .tile:hover .tw {
+  border-color: rgba(255, 255, 255, 0.11);
+}
+
+.cp .tile.on .tw {
+  border-color: #2c7be5;
+}
+
+.cp .tile .num {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 18px;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #ffffff;
+  background-color: rgba(24, 24, 24, 0.74);
+}
+
+.cp .tile.on .num {
+  background-color: #2c7be5;
+}
+
+.cp .tile .num .eye {
+  width: 12px;
+  height: 12px;
+  margin-right: 3px;
+}
+
+.cp .chk-b {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px 0 4px;
+  border-radius: 5px;
+  font-size: 11px;
+  white-space: nowrap;
+  color: #a5d6a0;
+  background-color: rgba(24, 24, 24, 0.74);
+}
+
+.cp .chk-b.warn {
+  color: #f2b45a;
+}
+
+.cp .chk-b .ico {
+  width: 12px;
+  height: 12px;
+  margin-right: 3px;
+}
+
+.cp .btnrow {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: -6px;
+}
+
+.cp .btnrow.end {
+  justify-content: flex-end;
+}
+
+.btn {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  margin: 0 6px 6px 0;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background-color: rgba(0, 0, 0, 0.19);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.btn .bl {
+  display: block;
+  white-space: nowrap;
+}
+
+.btn.pri {
+  color: #2a2a2a;
+  font-weight: bold;
+  border-color: var(--uxp-host-text-color);
+  background-color: var(--uxp-host-text-color);
+}
+
+.btn.blue {
+  color: #ffffff;
+  font-weight: bold;
+  border-color: #2c7be5;
+  background-color: #2c7be5;
+}
+
+/* An approval going through: the button stays, without a click. */
+.btn.blue.off,
+.btn.blue.off:hover {
+  opacity: 0.55;
+}
+
+.btn.blue:hover {
+  background-color: #3d89f2;
+}
+
+.btn.sm {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-size: 11px;
+}
+
+.cp .btnrow.end .btn {
+  margin: 0 0 6px 6px;
+}
+
+.cp .single {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.cp .single .tw {
+  position: relative;
+  flex: 0 0 auto;
+  overflow: hidden;
+  margin-right: 8px;
+  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .single .txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .single .txt .warn {
+  color: #f2b45a;
+}
+
+.cp .single .txt .brow {
+  display: flex;
+  flex-direction: row;
+  margin-bottom: 3px;
+}
+
+.cp .single .txt .brow .chk-b {
+  position: static;
+}
+
+.cp .single .txt .checks {
+  margin-top: 2px;
+}
+
+.cp .recent {
+  display: none;
+}
+
+.cp .recent .h4 {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .rrow {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: -6px;
+}
+
+.cp .rthumb {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 6px 6px 0;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+/* Recent, when its full row does not fit under the Takes card: one row
+   of smaller thumbnails, as many as fit (create-view.js fitMid). */
+.cp .recent.compact {
+  margin-bottom: 4px;
+}
+
+.cp .recent.compact .h4 {
+  margin-bottom: 4px;
+}
+
+.cp .recent.compact .rrow {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+.cp .recent.compact .rthumb {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 0;
+}
+
+.cp .rthumb:hover {
+  border-color: rgba(255, 255, 255, 0.11);
+}
+
+.cp .emptymid {
+  display: none;
+  padding: 4px 2px;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+  opacity: 0.8;
+}
+
+/* The composer, pinned. */
+.cp .composer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px 12px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.28);
+}
+
+.cp .composer > * {
+  margin-bottom: 8px;
+}
+
+.cp .composer > .ccard {
+  margin-bottom: 0;
+}
+
+.cp .ccard {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  background-color: rgba(0, 0, 0, 0.11);
+}
+
+.cp .ccard > * {
+  margin-bottom: 8px;
+}
+
+.cp .ccard > .gorow {
+  margin-bottom: 0;
+}
+
+.cp .ccard > .cnote#go-reason,
+.cp .ccard > .cnote#c-message {
+  margin: 8px 0 0 0;
+}
+
+.cp .refs {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.cp .refs > * {
+  margin: 0 6px 0 0;
+}
+
+.cp .ref {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .ref .rx {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.cp .dref {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 30px;
+  padding: 0 8px 0 3px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.265);
+  background-color: rgba(0, 0, 0, 0.19);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.cp .dref:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .dref .th {
+  width: 24px;
+  height: 24px;
+  margin-right: 6px;
+  border-radius: 4px;
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .dref.off {
+  opacity: 0.5;
+}
+
+.cp .dref.off .rl {
+  text-decoration: line-through;
+}
+
+.cp .ref-add {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.11);
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .ref-add:hover {
+  color: var(--uxp-host-text-color);
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .ref-add .ico {
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+}
+
+.cp .refs .hint {
+  display: block;
+  flex: 1 1 0px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+  opacity: 0.8;
+}
+
+/* The prompt box draws the field: its border and fill are the native
+   field's own (#5c5c5c and the quiet field's #323232, measured on 27.11's
+   medium gray theme), the field inside is quiet and borderless, and its
+   wrapper clips the quiet field's underline. Suggest sits in the box's
+   footer at its bottom right, 5 px in from the inner edges like the text
+   (UXP draws a field above anything placed over it, so nothing can
+   overlap the text itself). */
+.cp .pbox {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 4px;
+  border: 1px solid #5c5c5c;
+  background-color: #323232;
+}
+
+.cp .pfield {
+  position: relative;
+  overflow: hidden;
+  height: 44px;
+}
+
+.cp .pfield .prompt {
+  height: 48px;
+}
+
+.cp .pfoot {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  padding: 0 5px 5px 5px;
+}
+
+/* Suggest (Prompt Spark): sized and drawn like the composer chips. */
+.cp .sug {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  margin: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.265);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--uxp-host-text-color);
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.cp .sug:hover {
+  color: var(--uxp-host-text-color);
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .sug .ico {
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .composer.covered .sug {
+  opacity: 0;
+}
+
+.cp .pbox .prompt-ghost {
+  border-color: transparent;
+  background-color: transparent;
+}
+
+/* A proposal: up to three lines, then cut (no line-clamp in UXP). */
+.pop .mi.sp3 {
+  align-items: flex-start;
+  padding: 6px 8px;
+}
+
+.pop .mi.sp3 .mn {
+  white-space: normal;
+  max-height: 48px;
+  overflow: hidden;
+  line-height: 16px;
+}
+
+.cp .prompt {
+  width: 100%;
+  font-size: 12px;
+}
+
+/* The prompt's stand-in while a popover is open (create-view.js cover). */
+.cp .prompt-ghost {
+  display: none;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  background-color: rgba(0, 0, 0, 0.3);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.cp .prompt-ghost.ph {
+  font-style: italic;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+/* One line under the refs row (Replace inside with a reference). */
+.cp .refs-note {
+  display: none;
+  margin: 2px 0 2px 0;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+/* Text in the refs row was seen drawn through an open popover on 27.11. */
+.cp .composer.covered .ref-add span,
+.cp .composer.covered .refs .hint,
+.cp .composer.covered .refs-note {
+  color: transparent;
+}
+
+.cp .noprompt,
+.cp .cnote {
+  display: none;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 2px;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .noprompt .ico,
+.cp .cnote .ico {
+  width: 14px;
+  height: 14px;
+  margin: 1px 6px 0 0;
+}
+
+.cp .noprompt .ct,
+.cp .cnote .ct {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cp .cchips {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.cp .cc {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  margin: 0 6px 6px 0;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.265);
+  background-color: rgba(0, 0, 0, 0.19);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cp .cc:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .cc > * {
+  margin-right: 5px;
+}
+
+.cp .cc > *:last-child {
+  margin-right: 0;
+}
+
+.cp .cc .ci {
+  width: 14px;
+  height: 14px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .cc .th {
+  position: relative;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .cc .mono,
+.pop .mono {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: bold;
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+.cp .cc .k {
+  color: var(--uxp-host-text-color-secondary);
+  opacity: 0.85;
+}
+
+.cp .cc .v {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* At 280 px the Style and Model chips share a row: the model's name ends
+   with an ellipsis (its full name is the chip's tooltip). */
+@media (max-width: 299px) {
+  .cp .cc-model .v {
+    max-width: 100px;
+  }
+}
+
+.cp .sref .sx {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 6px;
+  border-radius: 7px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .sref .sx:hover {
+  color: var(--uxp-host-text-color);
+  background-color: rgba(255, 255, 255, 0.11);
+}
+
+.cp .confirm {
+  display: none;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+}
+
+.cp .confirm > * {
+  margin-bottom: 6px;
+}
+
+.cp .gorow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.cp .go {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 12px;
+  overflow: hidden;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: bold;
+  color: #ffffff;
+  background-color: #2c7be5;
+}
+
+.cp .go:hover {
+  background-color: #3d89f2;
+}
+
+.cp .go.off,
+.cp .go.off:hover {
+  font-weight: normal;
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.cp .go .lbl {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cp .go .cu {
+  display: none;
+  flex: 0 0 auto;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.cp .gear {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.cp .gear:hover {
+  color: var(--uxp-host-text-color);
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.cp .gear .ico {
+  width: 16px;
+  height: 16px;
+}
+
+/* F5: an agent's request to spend waits above the composer. */
+.cp .agentcard {
+  display: none;
+  flex-direction: column;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background-color: rgba(0, 0, 0, 0.11);
+}
+
+.cp .agentcard > * {
+  margin-bottom: 8px;
+}
+
+/* Upload and proposal cards (ui/agent-cards.js) show for as long as they
+   wait: each is an .agentcard inside #agent-cards, which agent-cards.js
+   hides when empty. The F5 card above is shown by create-view.js. */
+.cp .agentcards .agentcard {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.cp .agentcards .agentcard .actions {
+  justify-content: flex-end;
+  margin-bottom: -4px;
+}
+
+.cp .agentcard .who {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.cp .agentcard .who .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  border: 0;
+  margin-right: 6px;
+  background-color: #7fd17f;
+}
+
+.cp .agentcard .what {
+  font-size: 12px;
+}
+
+.cp .agentcard .q {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.cp .agentcard .meta {
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .declined {
+  display: none;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+  background-color: rgba(0, 0, 0, 0.11);
+}
+
+/* ---- popovers: chip menus, More, Advanced, the agent ---- */
+
+.pop-scrim {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.pop {
+  display: none;
+  position: absolute;
+  flex-direction: column;
+  padding: 4px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.44);
+  background-color: var(--uxp-host-background-color);
+}
+
+/* A long menu scrolls: its rows keep their height instead of shrinking
+   into each other (seen live on 27.11). */
+.pop > * {
+  flex-shrink: 0;
+}
+
+.pop .h5 {
+  margin: 6px 8px 2px 8px;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--uxp-host-text-color-secondary);
+  opacity: 0.85;
+}
+
+.pop .mi {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 5px;
+}
+
+.pop .mi:hover {
+  color: #ffffff;
+  background-color: #2c7be5;
+}
+
+.pop .mi:hover .ms,
+.pop .mi:hover .tag {
+  color: #ffffff;
+}
+
+.pop .mi[aria-disabled="true"] {
+  opacity: 0.55;
+}
+
+.pop .chkm {
+  flex: 0 0 auto;
+  width: 16px;
+  margin-right: 8px;
+}
+
+.pop .chkm .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.pop .mi .th {
+  position: relative;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  overflow: hidden;
+  border-radius: 5px;
+  background-color: rgba(0, 0, 0, 0.265);
+}
+
+/* A model's letters under its picture (create-view.js mi and chipEl). */
+.pop .mi .th .tm,
+.cp .cc .th .tm {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.cp .cc .th .tm {
+  font-size: 8px;
+}
+
+.pop .mi .mono {
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  font-size: 11px;
+}
+
+.pop .mt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pop .mn {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.pop .ms {
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.pop .tag {
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #3d89f2;
+}
+
+.pop .r {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.pop .mrow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.pop .mrow .mi {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pop .pin {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 2px;
+  border-radius: 5px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.pop .pin:hover {
+  color: var(--uxp-host-text-color);
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.pop .pin.on {
+  color: #3d89f2;
+}
+
+.pop .pin.off {
+  opacity: 0.35;
+}
+
+.pop .pin .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.pop .sep {
+  height: 1px;
+  margin: 3px 4px;
+  background-color: rgba(0, 0, 0, 0.44);
+}
+
+.pop .ptxt {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
+.pop .row {
+  display: flex;
+  flex-direction: column;
+  padding: 5px 8px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.pop .row .rk {
+  margin-bottom: 4px;
+}
+
+.pop .presets {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.pop .pb {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 8px;
+  margin: 0 4px 4px 0;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  font-size: 11px;
+  line-height: 20px;
+  white-space: nowrap;
+  background-color: rgba(0, 0, 0, 0.19);
+}
+
+.pop .pb:hover {
+  background-color: rgba(255, 255, 255, 0.064);
+}
+
+.pop .pb.on {
+  color: #ffffff;
+  border-color: #2c7be5;
+  background-color: #2c7be5;
+}
+
+.pop .mi.attention .ms {
+  color: #e68619;
+}
+
+/* Short panels: last in the file so these override the rules above. */
+/* The top's own parts keep their height; the top as a whole gives way
+   only below about 400 px. */
+.cp .sc-top > * {
+  flex-shrink: 0;
+}
+
+.cp .sc-top.squeezed {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Short panels (Photoshop docks the panel at 420 px): a tighter context
+   card, two-line prompt and tighter composer, so the three chip rows of a
+   280 px panel and the button fit from about 380 px up. */
+@media (max-height: 599px) {
+  .cp .sc-top {
+    padding: 8px 12px 4px 12px;
+  }
+  .cp .ctx {
+    padding: 6px;
+  }
+  .cp .ctx-thumb {
+    width: 36px;
+    height: 36px;
+  }
+  .cp .acts {
+    margin-top: 6px;
+  }
+  .cp .composer {
+    padding: 6px 12px 8px 12px;
+  }
+  .cp .ccard {
+    padding: 6px;
+  }
+  .cp .ccard > * {
+    margin-bottom: 6px;
+  }
+  .cp .prompt-ghost {
+    padding: 4px 8px;
+  }
+}
+
+/* Docked at 420 px or less (Photoshop's default dock): the 22 px chip
+   height and 4 px gaps, so a 280 px panel keeps its three chip rows and
+   the button whole down to about 380 px. */
+@media (max-height: 439px) {
+  .cp .sc-top {
+    padding: 6px 12px 2px 12px;
+  }
+  .cp .ctx-thumb {
+    width: 32px;
+    height: 32px;
+  }
+  .cp .acts {
+    margin-bottom: -4px;
+  }
+  .cp .chip {
+    height: 22px;
+    margin: 0 4px 4px 0;
+    border-radius: 11px;
+  }
+  .cp .sc-mid {
+    padding: 0 12px 0 12px;
+  }
+  .cp .composer {
+    padding: 4px 12px 6px 12px;
+  }
+  .cp .ccard {
+    padding: 4px 6px;
+  }
+  .cp .ccard > * {
+    margin-bottom: 4px;
+  }
+  .cp .cc {
+    height: 22px;
+    margin: 0 4px 4px 0;
+    border-radius: 11px;
+  }
+  .cp .sug {
+    height: 22px;
+  }
+}
+
+

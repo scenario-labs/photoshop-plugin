@@ -1,0 +1,350 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <header class="hd" id="header">
+        <span class="mark" id="mark" data-icon="mark" title="Scenario"></span>
+        <div class="proj" id="project" title="Projects"><span class="project-label" id="project-label">Not signed in</span><span class="ico chev" data-icon="chevron-down" data-size="12"></span></div>
+        <span class="spacer"></span>
+        <div class="hbtn" id="agent-hit" title="No agent connected"><span class="ico" data-icon="agent" data-size="16"></span><span class="dot off" id="agent-dot"></span><span class="hname" id="agent-name"></span></div>
+        <div class="hbtn" id="jobs" title="Jobs"><span class="hl">Jobs</span><span class="n" id="jobs-badge">0</span></div>
+      </header>
+
+      <!-- Sign-in: the key fields and Save and test first, the help on getting a key after. -->
+      <section class="view" id="view-signin">
+        <div class="subhead">
+          <sp-action-button quiet size="s" class="back" id="signin-back" title="Back"><span class="ico" data-icon="chevron-left"></span></sp-action-button>
+          <span class="title" id="signin-title"></span>
+        </div>
+        <div class="scroll" id="signin-scroll">
+          <div class="note" id="signin-disclosure"></div>
+          <div class="text" id="signin-step2"></div>
+          <div class="field-label">API key</div>
+          <sp-textfield size="s" class="field" id="signin-key" placeholder="Paste key, or key:secret"></sp-textfield>
+          <div class="field-label">API secret</div>
+          <sp-textfield size="s" class="field" type="password" id="signin-secret"></sp-textfield>
+          <div class="row">
+            <sp-button variant="cta" size="s" id="signin-save">Save and test</sp-button>
+            <span class="note progress" id="signin-progress"></span>
+          </div>
+          <div class="note" id="signin-storage"></div>
+
+          <div class="banner" id="signin-status">
+            <div class="text strong" id="signin-status-text"></div>
+            <div class="note" id="signin-status-detail"></div>
+            <div class="actions">
+              <sp-action-button size="s" id="signin-act-enter_again"></sp-action-button>
+              <sp-action-button size="s" id="signin-act-create_key"></sp-action-button>
+              <sp-action-button size="s" id="signin-act-open_plans"></sp-action-button>
+              <sp-action-button size="s" id="signin-act-copy_admin_request"></sp-action-button>
+              <sp-action-button size="s" id="signin-act-copy_error"></sp-action-button>
+              <sp-action-button size="s" id="signin-act-retry"></sp-action-button>
+            </div>
+            <div class="actions" id="signin-links">
+              <sp-action-button quiet size="s" id="signin-report">Report a problem</sp-action-button>
+              <sp-action-button quiet size="s" id="signin-help">Get help</sp-action-button>
+            </div>
+          </div>
+
+          <div class="section help">
+            <div class="section-title" id="signin-help-title"></div>
+            <div class="text" id="signin-step1"></div>
+            <div class="actions">
+              <sp-button variant="secondary" size="s" id="signin-create-key">Create an API key</sp-button>
+            </div>
+            <div class="note" id="signin-admins"></div>
+            <div class="actions">
+              <sp-action-button size="s" id="signin-copy-request">Copy a request for your admin</sp-action-button>
+            </div>
+            <div class="note" id="signin-note"></div>
+            <div class="note" id="signin-no-account"></div>
+            <div class="note" id="signin-plan"></div>
+            <div class="actions">
+              <sp-action-button size="s" id="signin-see-plans">See plans</sp-action-button>
+              <sp-action-button size="s" id="signin-create-account">Create a Scenario account</sp-action-button>
+            </div>
+            <div class="actions">
+              <sp-action-button quiet size="s" id="signin-privacy">Privacy</sp-action-button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main: lane tabs, a body that scrolls, the tray and the prompt bar pinned at the bottom. -->
+      <section class="view cp" id="view-main">
+        <!-- What Photoshop has now, and the actions that fit it (FLOWS v2). -->
+        <div class="sc-top" id="sc-top">
+          <div class="ctx" id="ctx">
+            <div class="ctx-row">
+              <div class="ctx-thumb" id="ctx-thumb"><span class="ico" id="ctx-icon" data-icon="file" data-size="20"></span><img class="cov" id="ctx-img" alt="" /><span class="cnt" id="ctx-count"></span></div>
+              <div class="ctx-txt">
+                <div class="ctx-title" id="ctx-title">No document open</div>
+                <div class="ctx-detail" id="ctx-detail"></div>
+              </div>
+            </div>
+            <!-- Select by description (F8): a layer's Select… field. -->
+            <div class="ctx-sel" id="ctx-sel"><sp-textfield size="s" class="sel-field" id="ctx-select" placeholder="Select…"></sp-textfield></div>
+            <div class="prog" id="ctx-prog"></div>
+          </div>
+          <div class="acts" id="acts"></div>
+        </div>
+
+        <!-- The middle: the only part that gives way when the panel is
+             short. The context and the chips above keep their full height. -->
+        <div class="sc-body" id="sc-body">
+        <!-- The run's takes and the document's recent runs scroll here. -->
+        <div class="sc-mid" id="mid">
+          <div class="banner" id="account-banner">
+            <div class="banner-row">
+              <div class="grow">
+                <div class="text strong" id="account-banner-1"></div>
+                <div class="note" id="account-banner-2"></div>
+                <div class="note" id="account-banner-3"></div>
+              </div>
+              <div class="close" id="account-banner-close" title="Close"><span class="ico" data-icon="close" data-size="14"></span></div>
+            </div>
+          </div>
+          <div class="mid-card" id="mid-card"></div>
+          <div class="recent" id="recent">
+            <div class="h4">Recent on this document</div>
+            <div class="rrow" id="recent-row"></div>
+          </div>
+          <div class="emptymid" id="mid-empty"></div>
+        </div>
+        </div>
+
+        <!-- The composer, pinned: references, prompt, chips, the button. -->
+        <div class="composer" id="composer">
+          <!-- F14: an agent's multi-step plan, only while one waits. -->
+          <div class="agentcard" id="plan-card">
+            <div class="who"><span class="dot on"></span><span id="plan-who"></span></div>
+            <div class="plan-steps" id="plan-steps"></div>
+            <div class="btnrow end" id="plan-btns">
+              <div class="btn" id="plan-decline"><span class="bl">Decline</span></div>
+              <div class="btn" id="plan-steps-btn"><span class="bl">Step by step</span></div>
+              <div class="btn blue" id="plan-all"><span class="bl" id="plan-all-label">Approve all</span></div>
+            </div>
+          </div>
+          <div class="agentcard" id="agent-card">
+            <div class="who"><span class="dot on"></span><span id="agent-who"></span></div>
+            <div class="what" id="agent-what"></div>
+            <div class="q" id="agent-q"></div>
+            <div class="meta" id="agent-meta"></div>
+            <div class="btnrow end">
+              <div class="btn" id="agent-decline"><span class="bl">Decline</span></div>
+              <div class="btn blue" id="agent-approve"><span class="bl" id="agent-approve-label">Approve</span></div>
+            </div>
+          </div>
+          <!-- M6: upload and proposal cards, a second client's request, the allowance line (ui/agent-cards.js). -->
+          <div class="agentcards" id="agent-cards"></div>
+          <div class="declined" id="declined"></div>
+          <div class="ccard" id="ccard">
+            <div class="cnote" id="c-note"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="c-note-text"></span></div>
+            <!-- Open from Library and + Reference > Library: the project's images. -->
+            <div class="lib" id="lib">
+              <div class="lib-top" id="lib-top"></div>
+              <!-- M7: search and filters; the field is static so typing keeps its focus. -->
+              <div class="lib-search" id="lib-search-row"><sp-textfield size="s" class="lib-field" id="lib-search" placeholder="Search this project"></sp-textfield></div>
+              <div class="lib-filters" id="lib-filters"></div>
+              <div class="lib-body" id="lib-body"></div>
+            </div>
+            <div class="refs" id="refs"></div>
+            <div class="refs-note" id="refs-note"></div>
+            <div class="noprompt" id="noprompt"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="noprompt-text"></span></div>
+            <!-- The prompt box: the field, then Suggest at its bottom right. -->
+            <div class="pbox" id="pbox">
+              <div class="pfield"><sp-textarea quiet class="prompt" id="prompt" placeholder="Describe the image"></sp-textarea><div class="prompt-ghost" id="prompt-ghost"></div></div>
+              <div class="pfoot" id="pfoot"></div>
+            </div>
+            <div class="cchips" id="cchips"></div>
+            <div class="confirm" id="confirm-card">
+              <div class="text" id="confirm-text"></div>
+              <div class="note" id="confirm-detail"></div>
+              <div class="btnrow end">
+                <div class="btn" id="confirm-cancel"><span class="bl">Cancel</span></div>
+                <div class="btn blue" id="confirm-ok"><span class="bl" id="confirm-ok-label">Generate</span></div>
+              </div>
+            </div>
+            <div class="gorow" id="gorow">
+              <div class="go off" id="go" aria-disabled="true"><span class="lbl" id="go-label">Fill in the prompt to see the price</span><span class="cu" id="go-cu"></span></div>
+              <div class="gear" id="gear" title="Advanced settings"><span class="ico" data-icon="settings" data-size="16"></span></div>
+            </div>
+            <div class="cnote" id="go-reason"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="go-reason-text"></span></div>
+            <div class="cnote" id="c-message"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="c-message-text"></span></div>
+          </div>
+        </div>
+
+        <!-- The model picker takes the main view's place while it is open. -->
+        <div class="subview" id="view-picker">
+          <div class="subhead">
+            <sp-action-button quiet size="s" class="back" id="picker-back" title="Back"><span class="ico" data-icon="chevron-left"></span></sp-action-button>
+            <span class="title">Models</span>
+            <span class="spacer"></span>
+            <sp-action-button quiet size="s" class="icon-btn" id="picker-refresh" title="Refresh the model list"><span class="ico" data-icon="refresh"></span></sp-action-button>
+          </div>
+          <div class="picker-top">
+            <sp-textfield size="s" class="field" id="picker-search" placeholder="Search models"></sp-textfield>
+            <div class="seg" id="picker-tabs">
+              <sp-action-button quiet size="s" id="picker-tab-image">Image</sp-action-button>
+              <sp-action-button quiet size="s" id="picker-tab-edit">Edit</sp-action-button>
+              <sp-action-button quiet size="s" id="picker-tab-enhance">Enhance</sp-action-button>
+              <sp-action-button quiet size="s" id="picker-tab-trained">Trained</sp-action-button>
+            </div>
+            <div class="chips wrap" id="picker-chips"></div>
+            <div class="opts">
+              <div class="opt grow" title="Filter by tag">
+                <sp-picker size="s" quiet class="picker" id="picker-tags" label="Tags"></sp-picker>
+              </div>
+              <sp-action-button quiet size="s" id="picker-clear">Clear filters</sp-action-button>
+            </div>
+          </div>
+          <div class="scroll" id="picker-scroll">
+            <div class="note" id="picker-status"></div>
+            <div class="list" id="picker-list"></div>
+            <div class="actions">
+              <sp-action-button size="s" id="picker-more">Load more</sp-action-button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-jobs">
+        <div class="subhead">
+          <sp-action-button quiet size="s" class="back" id="jobs-back" title="Back"><span class="ico" data-icon="chevron-left"></span></sp-action-button>
+          <span class="title">Jobs</span>
+          <span class="spacer"></span>
+          <span class="note" id="jobs-tab">On this computer</span>
+        </div>
+        <div class="scroll" id="jobs-scroll">
+          <div class="list" id="jobs-list"></div>
+          <div class="empty" id="jobs-empty-box">
+            <span class="ico big" data-icon="jobs"></span>
+            <div class="note center" id="jobs-empty"></div>
+          </div>
+          <div class="note" id="jobs-note"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-projects">
+        <div class="subhead">
+          <sp-action-button quiet size="s" class="back" id="projects-back" title="Back"><span class="ico" data-icon="chevron-left"></span></sp-action-button>
+          <span class="title">Projects</span>
+        </div>
+        <div class="scroll" id="projects-scroll">
+          <div class="list" id="projects-list"></div>
+          <div class="actions">
+            <sp-action-button quiet size="s" id="projects-add"><span class="ico" data-icon="plus"></span><span>Add a key for another project</span></sp-action-button>
+          </div>
+          <div class="note" id="projects-note"></div>
+          <div class="note warn" id="projects-error"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-settings">
+        <div class="subhead">
+          <sp-action-button quiet size="s" class="back" id="settings-back" title="Back"><span class="ico" data-icon="chevron-left"></span></sp-action-button>
+          <span class="title">Settings</span>
+        </div>
+        <div class="scroll" id="settings-scroll">
+          <div class="section" id="settings-account">
+            <div class="section-title">Account</div>
+            <div class="list" id="settings-accounts"></div>
+            <div class="note" id="settings-none"></div>
+            <div class="actions">
+              <sp-action-button quiet size="s" id="settings-add"><span class="ico" data-icon="plus"></span><span>Add a key for another project</span></sp-action-button>
+            </div>
+            <div class="actions">
+              <sp-action-button size="s" id="settings-test">Test connection</sp-action-button>
+              <sp-action-button size="s" id="settings-signout">Sign out</sp-action-button>
+              <span class="note progress" id="settings-progress"></span>
+            </div>
+            <div class="note" id="settings-signout-note"></div>
+            <div class="note" id="settings-note"></div>
+            <div class="banner" id="settings-status">
+              <div class="text strong" id="settings-status-text"></div>
+              <div class="note" id="settings-status-detail"></div>
+              <div class="actions">
+                <sp-action-button size="s" id="settings-act-enter_again"></sp-action-button>
+                <sp-action-button size="s" id="settings-act-create_key"></sp-action-button>
+                <sp-action-button size="s" id="settings-act-open_plans"></sp-action-button>
+                <sp-action-button size="s" id="settings-act-copy_admin_request"></sp-action-button>
+                <sp-action-button size="s" id="settings-act-copy_error"></sp-action-button>
+                <sp-action-button size="s" id="settings-act-retry"></sp-action-button>
+              </div>
+              <div class="actions" id="settings-links">
+                <sp-action-button quiet size="s" id="settings-report">Report a problem</sp-action-button>
+                <sp-action-button quiet size="s" id="settings-help">Get help</sp-action-button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section" id="settings-agents">
+            <div class="section-title">Connect an AI agent</div>
+            <div class="status-line">
+              <span class="dot off" id="link-dot"></span>
+              <span class="text" id="link-headline">Starting</span>
+            </div>
+            <div class="note" id="agents-intro"></div>
+            <div class="sub-title">Pair a client</div>
+            <div class="note" id="agents-pair"></div>
+            <div class="actions">
+              <sp-action-button size="s" id="token-copy">Copy pairing token</sp-action-button>
+            </div>
+            <div class="note" id="token-note"></div>
+            <!-- M6: Connect a client (ui/connect-client.js) and the agent switches, spending and activity log (ui/agents-settings.js). -->
+            <div class="connect" id="connect-client"></div>
+            <div class="agents-controls" id="agents-controls"></div>
+            <sp-action-button quiet size="s" class="disclosure" id="agents-details-toggle"><span class="ico" id="agents-details-icon" data-icon="chevron-right"></span><span>Details</span></sp-action-button>
+            <div class="details" id="agents-details">
+              <div class="note" id="link-detail"></div>
+              <div class="note" id="agents-tech"></div>
+              <div class="kv">
+                <span class="note">Pairing token</span>
+                <span class="mono" id="token-value">Not created yet</span>
+              </div>
+              <div class="actions">
+                <sp-action-button size="s" id="token-show">Show</sp-action-button>
+                <sp-action-button size="s" id="token-reset">Reset</sp-action-button>
+              </div>
+            </div>
+          </div>
+
+          <div class="section" id="settings-diagnostics">
+            <div class="section-title">Diagnostics</div>
+            <div class="actions">
+              <sp-action-button size="s" id="diag-copy">Copy diagnostics</sp-action-button>
+            </div>
+            <div class="banner" id="diag-preview">
+              <div class="note">This text will be copied. It holds no prompts, names, ids, paths, keys or tokens.</div>
+              <div class="mono pre" id="diag-text"></div>
+              <div class="actions end">
+                <sp-action-button size="s" id="diag-cancel">Cancel</sp-action-button>
+                <sp-action-button size="s" id="diag-confirm">Copy</sp-action-button>
+              </div>
+            </div>
+            <div class="note" id="diag-note"></div>
+          </div>
+
+          <div class="section" id="settings-about-section">
+            <div class="section-title">About</div>
+            <div class="text" id="version"></div>
+            <div class="note" id="settings-about"></div>
+            <div class="actions">
+              <sp-action-button quiet size="s" id="settings-privacy">Privacy</sp-action-button>
+              <sp-action-button quiet size="s" id="settings-get-help">Get help</sp-action-button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- Chip menus and More: one popover over the panel, closed by a click outside. -->
+      <div class="pop-scrim" id="pop-scrim"></div>
+      <div class="pop" id="pop"></div>
+    </div>
+
+    <script src="dist/main.js"></script>
+  </body>
+</html>

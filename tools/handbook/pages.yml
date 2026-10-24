@@ -1,0 +1,54 @@
+# GitHub Pages publish for the handbook at https://photoshop.scenario.com.
+# Disabled: GitHub runs only files under .github/workflows/. To publish, once
+# the go is given:
+#   1. Copy this file to .github/workflows/pages.yml (npm test checks it there).
+#   2. Repository Settings > Pages: Source "GitHub Actions"; Custom domain
+#      photoshop.scenario.com; Enforce HTTPS once the certificate is issued.
+#   3. DNS for scenario.com: CNAME photoshop -> scenario-labs.github.io.
+#   4. Actions > Handbook > Run workflow (manual only, from main).
+# The build writes build/handbook/CNAME as well, for a branch-based publish.
+name: Handbook
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run handbook
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: build/handbook
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

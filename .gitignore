@@ -1,0 +1,5 @@
+node_modules/
+plugin/dist/
+build/
+*.ccx
+.DS_Store
