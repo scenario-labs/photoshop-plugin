@@ -41,7 +41,7 @@ From top to bottom:
 - **Context card**: a picture of what the panel will work on and where the result lands ("Lands inside the selection, masked", "Lands as a new layer"), with the progress during a run. Its **Select…** field is [Select by description](#actions).
 - **Action chips**: the actions for this context, at most six, then **More** for the others, grouped. A pin in **More** adds an action to the chips.
 - **Takes and Recent**: the last run's takes, then the other runs placed in this document.
-- **Composer**, pinned at the bottom: **+ Reference**, the prompt (with **Suggest**), the chips that set the model and its options (each shows its value), and the action button with its price. The gear icon holds the quality level and advanced options.
+- **Composer**, pinned at the bottom: **+ Reference**, the prompt (with **Suggest**), the chips that set the model and its options (each shows its value), and the action button with its price. The gear icon holds the quality level and advanced options. To write a longer prompt, drag the grip on the composer's top edge up to make the box taller; double-click the grip to go back. The panel keeps the height for next time.
 
 <img src="media/screens/more-menu.png" width="320" alt="The More menu: Finish, Select and cut, Layers, Make variants and Animate groups, each action with its price">
 

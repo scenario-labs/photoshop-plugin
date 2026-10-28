@@ -4,6 +4,10 @@ All notable changes to this project are written here. The format follows [Keep a
 
 ## Unreleased
 
+### Added
+
+- The prompt box's height: drag the grip on the composer's top edge, as between two Photoshop panels, to make the prompt taller; double-click the grip to go back. The takes area above keeps at least 64 px, and the height is kept on this computer. *Tested automated*; the grip checked in place live on Photoshop 27.11, the drag not yet pressed live.
+
 ### Fixed
 
 Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures). Re-tested live on 2026-10-21 (development build, one run each at the default model); the result ends each line.
