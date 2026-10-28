@@ -1,0 +1,1822 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Scenario for Photoshop: Scenario image models in a Photoshop panel that reads your selection, prices each action on its button and lands results as layers.">
+<meta property="og:title" content="Scenario for Photoshop">
+<meta property="og:image" content="assets/img/og-red-horizon.jpg">
+<link rel="icon" href="assets/scenario-logo.svg">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
+<title>Scenario for Photoshop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Scenario plugin handbook look: warm paper, terracotta, Instrument Serif headings, mono eyebrows, a plain
+   contents rail. Photoshop touches: the PHOTOSHOP chip in Photoshop blue, a PHOTOSHOP + SCENARIO = RESULT
+   band per chapter, the plugin's own interface drawn in Photoshop grey with its blue action button.
+   Light only: every color is set here. */
+:root {
+  --bg: #faf8f7; --fg: #252322; --card: #f5f2f0; --surface: #f0edea; --border: #e8e4e0; --line: #dcd6d0;
+  --primary: #a94e36; --primary-hover: #923f2a; --primary-light: #da9078; --primary-soft: #f6e9e4; --primary-fg: #faf8f7;
+  --muted: #645e59;
+  --amber-soft: #fdf1dc; --amber-text: #8a4b00; --amber-line: #f3d9a8; --amber: #c98a12;
+  /* Photoshop blue, for the Photoshop side only */
+  --psb: #1f6fd1; --psb-ink: #12457f; --psb-soft: #eaf2fd; --psb-line: #c3d9f5;
+  /* how a claim was checked */
+  --live: #2f6b38; --live-bg: #e7f2e8; --live-line: #c4e0c7;
+  --none: #8f2f2f; --none-bg: #f8e8e6; --none-line: #edc8c3;
+  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius: 4px; --header: 64px;
+  --shadow: 0 1px 2px rgba(37,35,34,.05), 0 24px 48px -24px rgba(37,35,34,.22);
+  /* the plugin's own interface, as Photoshop draws it */
+  --ps-app: #1f1f1f; --ps-bg: #444444; --ps-card: #4b4b4b; --ps-line: #5a5a5a; --ps-field: #333333;
+  --ps-text: #ececec; --ps-dim: #b4b4b4; --ps-go: #4379df; --ps-blue: #378ef0;
+  --check-a: #dcdad5; --check-b: #f4f3f0;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--header) + 1rem); }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition: none !important; animation: none !important; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: var(--primary); text-decoration: underline; text-decoration-color: var(--primary-light); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--primary); }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 2px; }
+img, video { max-width: 100%; height: auto; display: block; }
+figure { margin: 0; }
+code, kbd, pre { font-family: var(--mono); font-variant-ligatures: none; }
+code { font-size: .84em; background: var(--surface); color: var(--fg); border-radius: 3px; padding: .12em .38em; overflow-wrap: anywhere; }
+kbd { font-size: .78em; background: var(--card); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 3px; padding: 0 .35em; }
+pre { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; margin: .8rem 0 1.1rem; overflow-x: auto; line-height: 1.55; }
+pre code { background: none; padding: 0; font-size: .82rem; white-space: pre; overflow-wrap: normal; }
+td pre { padding: .7rem .8rem; }
+td pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+mark { background: var(--primary-soft); color: var(--fg); border-radius: 2px; padding: 0 .1em; }
+strong, b { font-weight: 600; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.skip { position: absolute; left: -10000px; }
+.skip:focus { left: 1rem; top: .75rem; z-index: 40; background: var(--bg); padding: .5rem .75rem; border: 1px solid var(--border); }
+
+/* type */
+h1, h2, h3 { font-family: var(--serif); font-weight: 400; color: var(--fg); text-wrap: balance; letter-spacing: -.01em; }
+h1 { font-size: clamp(2.6rem, 5.5vw, 4.25rem); line-height: 1.02; letter-spacing: -.02em; margin: .9rem 0 1.6rem; }
+h1 .it { font-style: italic; color: var(--primary); }
+h2 { font-size: 2.35rem; line-height: 1.1; margin: 0 0 1rem; }
+h2 .it { font-style: italic; }
+h3 { font-size: 1.6rem; line-height: 1.2; margin: 2.6rem 0 .6rem; }
+h4 { font: 600 1rem/1.35 var(--sans); margin: 1.4rem 0 .4rem; }
+:is(h2, h3):target { color: var(--primary); }
+p { margin: 0 0 .9rem; }
+.lede { font-size: 1.15rem; line-height: 1.6; color: var(--muted); max-width: 680px; }
+.small { font-size: .875rem; }
+.muted { color: var(--muted); }
+.col { max-width: 720px; }
+ul.list, ol.list { margin: 0 0 1rem; padding-left: 1.3rem; }
+ul.list li, ol.list li { margin: .3rem 0; }
+ul.list li::marker { color: var(--primary-light); }
+ol.list li::marker { font: 500 .8rem var(--mono); color: var(--primary); }
+.eyebrow { font: 500 .7rem/1.3 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--primary); margin: 0 0 .9rem; }
+
+/* how a claim was checked */
+.v { display: inline-block; font: 400 .7rem/1.3 var(--mono); padding: .08rem .38rem; border: 1px solid; border-radius: 3px; vertical-align: 1px; white-space: nowrap; }
+.v.live { color: var(--live); background: var(--live-bg); border-color: var(--live-line); }
+.v.auto { color: var(--amber-text); background: var(--amber-soft); border-color: var(--amber-line); }
+.v.none { color: var(--none); background: var(--none-bg); border-color: var(--none-line); }
+
+/* the plugin's buttons and chips, drawn as the panel draws them */
+.go { display: inline-block; font: 600 .86em/1.2 var(--sans); color: #fff; background: var(--ps-go); border-radius: 5px; padding: .22em .6em; white-space: nowrap; }
+.pill { display: inline-block; font: 500 .86em/1.2 var(--sans); color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: .14em .6em; white-space: nowrap; }
+
+/* page buttons */
+.button, .btn-go, .btn-pill { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; font: 600 .9rem/1.65 var(--sans); text-decoration: none; border-radius: var(--radius); cursor: pointer; white-space: nowrap; }
+.button, .btn-go { background: var(--primary); color: var(--primary-fg); border: 0; padding: .6rem 1.1rem; }
+.button:hover, .btn-go:hover { background: var(--primary-hover); color: var(--primary-fg); }
+.btn-pill { background: var(--bg); color: var(--fg); border: 1px solid var(--border); font-weight: 500; padding: .6rem 1rem; }
+.btn-pill:hover { background: var(--card); border-color: var(--line); }
+.cta .btn-go, .cta .btn-pill, .kit-act .btn-go, .kit-act .btn-pill { min-height: 44px; padding-inline: 1.15rem; }
+
+/* ---------- header ---------- */
+.site-header { position: sticky; top: 0; z-index: 30; background: rgba(250,248,247,.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
+.site-header .bar { max-width: 1240px; margin: 0 auto; padding: 0 max(2rem, env(safe-area-inset-right, 0px)) 0 max(2rem, env(safe-area-inset-left, 0px)); height: var(--header); display: flex; align-items: center; gap: 1.5rem; }
+.brand { display: flex; align-items: center; gap: .6rem; text-decoration: none; color: var(--fg); flex-shrink: 0; }
+.wordmark { display: block; width: 112px; height: 28px; color: var(--fg); }
+.chip { font: 500 .62rem/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; padding: .36rem .5rem; border-radius: 3px; border: 1px solid; white-space: nowrap; }
+.chip.product { color: var(--psb); background: var(--psb-soft); border-color: var(--psb-line); }
+.chip.version { color: var(--amber-text); background: var(--amber-soft); border-color: var(--amber-line); letter-spacing: .08em; }
+.site-nav { display: flex; align-items: center; gap: 1.4rem; margin-left: auto; font-size: .9rem; }
+.site-nav a { color: var(--muted); text-decoration: none; white-space: nowrap; }
+.site-nav a:hover { color: var(--fg); }
+.site-nav a.button, .site-nav a.button:hover { color: var(--primary-fg); }
+
+/* search */
+.search { position: relative; flex: 0 1 300px; min-width: 0; }
+.search input { width: 100%; font: inherit; font-size: .9rem; color: var(--fg); background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: .5rem 2.2rem .5rem .8rem; outline: none; -webkit-appearance: none; appearance: none; }
+.search input::placeholder { color: var(--muted); }
+.search input:focus { background: var(--bg); border-color: var(--primary-light); box-shadow: 0 0 0 3px var(--primary-soft); }
+.search input::-webkit-search-cancel-button { display: none; }
+.search-key { position: absolute; right: .55rem; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--muted); }
+.search input:focus + .search-key { display: none; }
+.search-panel { position: absolute; top: calc(100% + .5rem); left: 0; width: min(540px, calc(100vw - 2rem)); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow); overflow: hidden; z-index: 35; }
+.search-panel ul { list-style: none; margin: 0; padding: .35rem; max-height: min(460px, 65vh); overflow-y: auto; }
+.search-panel ul:empty { display: none; }
+.search-panel li a { display: flex; flex-direction: column; gap: .1rem; padding: .6rem .75rem; border-radius: 4px; color: var(--fg); text-decoration: none; }
+.search-panel li[aria-selected="true"] a, .search-panel li a:hover { background: var(--card); }
+.s-trail { font: 500 .62rem/1.3 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--primary); }
+.s-title { font-family: var(--serif); font-size: 1.2rem; line-height: 1.25; }
+.s-snip { font-size: .84rem; line-height: 1.5; color: var(--muted); }
+.search-status { margin: 0; padding: .55rem 1.1rem; font-size: .8rem; color: var(--muted); border-top: 1px solid var(--border); }
+.search-panel ul:empty + .search-status { border-top: 0; padding: 1rem 1.1rem; }
+.search-status:empty { display: none; }
+
+/* ---------- page and contents rail ---------- */
+.page { max-width: 1240px; margin: 0 auto; padding: 3.5rem max(2rem, env(safe-area-inset-right, 0px)) 5rem max(2rem, env(safe-area-inset-left, 0px)); display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 4rem; }
+main { min-width: 0; }
+.toc { position: sticky; top: calc(var(--header) + 2rem); align-self: start; max-height: calc(100vh - var(--header) - 3rem); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; font-size: .875rem; padding-right: .5rem; }
+.toc summary { list-style: none; cursor: default; padding-bottom: .9rem; margin: 0; }
+.toc summary::-webkit-details-marker { display: none; }
+.toc ul { list-style: none; margin: 0; padding: 0; }
+.toc ul ul { padding-left: .9rem; margin: .1rem 0 .35rem; border-left: 1px solid var(--border); }
+.toc a { display: block; padding: .28rem 0; color: var(--muted); text-decoration: none; line-height: 1.35; }
+.toc ul ul a { padding: .22rem 0 .22rem .2rem; font-size: .84rem; }
+.toc a:hover { color: var(--primary); }
+.toc a.in, .toc a[aria-current] { color: var(--fg); }
+.toc ul ul a[aria-current] { color: var(--primary); }
+
+/* ---------- sections ---------- */
+section { margin-top: 4.5rem; padding-top: 2.5rem; border-top: 1px solid var(--border); }
+.chap-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .2rem 1.25rem; align-items: end; margin-bottom: .4rem; }
+.chap-no { font: italic 400 clamp(3.4rem, 6vw, 4.6rem)/.8 var(--serif); color: var(--primary); grid-row: span 2; letter-spacing: -.02em; }
+.chap-head .eyebrow { margin: 0 0 .35rem; }
+.chap-head h2 { margin: 0; }
+@media (max-width: 560px) { .chap-head { grid-template-columns: minmax(0, 1fr); } .chap-no { grid-row: auto; font-size: 3rem; margin-bottom: .4rem; } }
+.part { margin: 5.5rem 0 0; padding: 1.1rem 0 0; border-top: 2px solid var(--fg); display: flex; justify-content: space-between; align-items: baseline; gap: .5rem 1rem; flex-wrap: wrap; }
+.part span { font: 500 .7rem var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--primary); }
+.part em { font: italic 400 1.35rem var(--serif); color: var(--muted); }
+.part + section { border-top: 0; margin-top: 0; padding-top: 2rem; }
+
+/* ---------- hero ---------- */
+.cta { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1.6rem 0 2.2rem; }
+.film { position: relative; border-radius: 6px; overflow: hidden; background: #1a1817; border: 1px solid var(--border); box-shadow: var(--shadow); aspect-ratio: 16 / 9; }
+.film video { width: 100%; height: 100%; object-fit: cover; }
+.film-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: .7rem; padding: .7rem 1.3rem .7rem .7rem; border: 0; border-radius: 999px; background: rgba(250,248,247,.95); color: var(--fg); font: 600 1rem/1 var(--sans); cursor: pointer; box-shadow: 0 12px 30px -10px rgba(0,0,0,.55); min-height: 48px; white-space: nowrap; }
+.film-play:hover { background: #fff; }
+.film-play .tri { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); display: grid; place-items: center; }
+.film-play .tri::before { content: ""; border-left: 10px solid #fff; border-top: 6px solid transparent; border-bottom: 6px solid transparent; margin-left: 3px; }
+@media (max-width: 520px) { .film-play { font-size: .875rem; padding: .5rem 1rem .5rem .5rem; min-height: 44px; gap: .55rem; } .film-play .tri { width: 28px; height: 28px; } }
+.film-tag { position: absolute; left: 12px; top: 12px; font: 500 .62rem/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: #fff; background: rgba(37,35,34,.62); padding: .42rem .55rem; border-radius: 3px; }
+.film[data-state="playing"] .film-play, .film[data-state="playing"] .film-tag { display: none; }
+@media (max-width: 640px) { .film-tag { top: auto; bottom: 10px; } }
+.film-msg { position: absolute; left: 50%; top: calc(50% + 40px); transform: translateX(-50%); font: 500 .84rem var(--sans); color: #fff; background: rgba(37,35,34,.75); padding: .5rem .8rem; border-radius: 4px; white-space: nowrap; display: none; }
+.film[data-state="missing"] .film-msg { display: block; }
+figcaption { font-size: .84rem; color: var(--muted); margin-top: .6rem; line-height: 1.5; max-width: 760px; }
+.strip { display: flex; flex-wrap: wrap; gap: .4rem 1.4rem; margin: 1.4rem 0 0; padding: .9rem 1.1rem; background: var(--card); border: 1px solid var(--border); border-radius: 6px; font-size: .875rem; color: var(--muted); }
+.strip b { color: var(--fg); }
+
+/* ---------- the story in eight steps ---------- */
+.steps8 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; margin-top: 1.6rem; }
+@media (max-width: 1180px) { .steps8 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.step { display: flex; flex-direction: column; text-decoration: none; color: var(--fg); background: #fff; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; min-width: 0; transition: border-color .15s, box-shadow .15s; }
+.step:hover { border-color: var(--primary-light); box-shadow: var(--shadow); }
+.step .ph { aspect-ratio: 4 / 3; background: var(--surface); overflow: hidden; }
+.step .ph img { width: 100%; height: 100%; object-fit: cover; }
+.step .ph.top img { object-position: top; }
+.step .ph.fit { background: #efe8dc; }
+.step .ph.fit img { object-fit: contain; }
+.step .tx { padding: .65rem .8rem .8rem; display: flex; flex-direction: column; gap: .15rem; }
+.step .tx b { font-size: 1rem; display: flex; gap: .5rem; align-items: baseline; }
+.step .tx b span { font: italic 400 1.35rem/1 var(--serif); color: var(--primary); }
+.step .tx small { font-size: .8rem; color: var(--muted); line-height: 1.4; }
+.step .tx small i { font-style: normal; color: var(--primary-light); }
+
+/* ---------- PHOTOSHOP + SCENARIO = RESULT ---------- */
+.band { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 28px minmax(0, 1fr); align-items: stretch; margin: 1.8rem 0 2rem; }
+.band > div:not(.op) { border: 1px solid; border-radius: 6px; padding: .85rem 1rem 1rem; min-width: 0; }
+.band .k { display: flex; align-items: center; gap: .45rem; font: 500 .62rem/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; margin-bottom: .65rem; }
+.band .k svg { width: 13px; height: 13px; flex: none; }
+.band b { display: block; font: 400 1.3rem/1.15 var(--serif); letter-spacing: -.005em; margin-bottom: .35rem; }
+.band p { margin: 0; font-size: .84rem; line-height: 1.5; }
+.band .ps { background: var(--psb-soft); border-color: var(--psb-line); color: var(--psb-ink); }
+.band .ps .k { color: var(--psb); }
+.band .ps p { color: #3f5672; }
+.band .sc { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.band .sc .k { color: var(--primary-light); }
+.band .sc p { color: #d6cfc9; }
+.band .rs { background: var(--card); border-color: var(--border); color: var(--fg); }
+.band .rs .k { color: var(--primary); }
+.band .rs p { color: var(--muted); }
+.band .op { display: grid; place-items: center; font: 400 1.6rem/1 var(--serif); color: var(--muted); }
+@media (max-width: 760px) { .band { grid-template-columns: minmax(0, 1fr); } .band .op { height: 28px; font-size: 1.4rem; } }
+
+/* ---------- media layouts ---------- */
+.row { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1.6rem; align-items: start; margin: 1.1rem 0; }
+.row.wide-side { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.row.rev { grid-template-columns: 280px minmax(0, 1fr); }
+.row > * { min-width: 0; }
+.stack { display: grid; gap: .9rem; align-content: start; }
+@media (max-width: 860px) {
+  .row, .row.rev, .row.wide-side { grid-template-columns: minmax(0, 1fr); }
+  .stack.pcs { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+}
+.q2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.q2 > * { min-width: 0; }
+.tile { position: relative; border-radius: 6px; overflow: hidden; background: var(--card); border: 1px solid var(--border); }
+.tile img { width: 100%; }
+.lab { position: absolute; left: 7px; top: 7px; font: 500 .62rem/1 var(--mono); letter-spacing: .06em; color: #fff; background: rgba(37,35,34,.7); padding: .36rem .45rem; border-radius: 3px; max-width: calc(100% - 14px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.checker { background: repeating-conic-gradient(var(--check-a) 0 25%, var(--check-b) 0 50%) 0 0 / 16px 16px; }
+.cell { aspect-ratio: 1 / 1; display: grid; place-items: center; }
+.cell img { position: absolute; inset: 4%; width: 92%; height: 92%; max-width: none; object-fit: contain; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr); align-items: center; }
+.pair > * { min-width: 0; }
+.arrow { text-align: center; color: var(--muted); font: 400 1.1rem var(--mono); }
+.pc { max-width: 300px; }
+.pc.wide { max-width: none; }
+.pc img { border-radius: 6px; box-shadow: 0 0 0 1px rgba(37,35,34,.3), var(--shadow); background: #444; width: 100%; }
+.shot img { border-radius: 6px; border: 1px solid var(--border); box-shadow: var(--shadow); width: 100%; background: var(--card); }
+.k-note { font-size: .9rem; color: var(--muted); margin-top: .7rem; }
+.k-note b { color: var(--fg); }
+
+/* wipe */
+.wipe { position: relative; border-radius: 6px; overflow: hidden; background: var(--surface); border: 1px solid var(--border); touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.wipe img { width: 100%; display: block; }
+.wipe img.over { position: absolute; inset: 0; height: 100%; object-fit: cover; clip-path: inset(0 0 0 var(--cut, 50%)); }
+.wipe .line { position: absolute; top: 0; bottom: 0; left: var(--cut, 50%); width: 2px; background: #fff; transform: translateX(-1px); box-shadow: 0 0 12px rgba(0,0,0,.35); pointer-events: none; }
+.wipe .knob { position: absolute; top: 50%; left: var(--cut, 50%); width: 40px; height: 40px; transform: translate(-50%, -50%); border-radius: 50%; background: var(--bg); display: grid; place-items: center; font: 600 .875rem var(--mono); color: var(--primary); pointer-events: none; box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+.wipe input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; margin: 0; }
+.wipe .lab.r { left: auto; right: 7px; }
+.wipe.tall { max-width: 480px; }
+
+/* edit modes, badges */
+.modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin: 1.1rem 0; }
+.mode { border: 1px solid var(--border); border-radius: 6px; padding: .85rem 1rem; background: var(--card); min-width: 0; }
+.mode h4 { margin: 0 0 .1rem; font: 400 1.3rem/1.2 var(--serif); }
+.mode .model { font: 400 .75rem var(--mono); color: var(--muted); display: block; margin-bottom: .5rem; }
+.mode p { font-size: .9rem; margin: 0; color: var(--muted); }
+@media (max-width: 640px) { .modes { grid-template-columns: minmax(0, 1fr); } }
+.badges { display: flex; flex-wrap: wrap; gap: .4rem; margin: .6rem 0 .9rem; }
+.badge { font: 500 .75rem/1 var(--sans); padding: .4rem .65rem; border-radius: 999px; background: var(--ps-bg); color: var(--ps-text); }
+.badge.ok::before { content: "✓ "; color: #85d6a8; }
+.badge.warn::before { content: "! "; color: #f0c36e; font-weight: 700; }
+
+/* annotated panel */
+.anno { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 2.2rem; align-items: start; margin-top: 1.2rem; }
+.anno-pic { position: relative; max-width: 280px; }
+.pin { position: absolute; right: -12px; width: 24px; height: 24px; border-radius: 50%; background: var(--primary); color: var(--primary-fg); font: 600 .75rem/24px var(--mono); text-align: center; box-shadow: 0 0 0 3px var(--bg); transform: translateY(-50%); }
+.anno ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; counter-reset: a; }
+.anno li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: .6rem; font-size: .95rem; }
+.anno li::before { counter-increment: a; content: counter(a); width: 24px; height: 24px; border-radius: 50%; background: var(--primary-soft); color: var(--primary); font: 600 .75rem/24px var(--mono); text-align: center; }
+@media (max-width: 760px) { .anno { grid-template-columns: minmax(0, 1fr); } }
+
+/* tables */
+.tbl { overflow-x: auto; margin: 1rem 0 1.2rem; }
+table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: .9rem; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
+th, td { text-align: left; padding: .65rem .9rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font: 500 .66rem/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); background: var(--surface); }
+thead tr:first-child th:first-child { border-top-left-radius: var(--radius); }
+thead tr:first-child th:last-child { border-top-right-radius: var(--radius); }
+td:first-child { font-weight: 500; min-width: 140px; }
+@media (max-width: 520px) { table { font-size: .84rem; } th, td { padding: .55rem .7rem; } td:first-child { min-width: 108px; } }
+
+/* cards, notes */
+.cards3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; margin: 1.1rem 0; }
+@media (max-width: 860px) { .cards3 { grid-template-columns: minmax(0, 1fr); } }
+.card { border: 1px solid var(--border); border-radius: 6px; padding: .9rem 1rem; background: var(--card); min-width: 0; font-size: .9rem; }
+.card b { display: block; margin-bottom: .3rem; font: 400 1.3rem/1.2 var(--serif); }
+.card p { margin: 0; color: var(--muted); }
+.cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.8rem; }
+.cols2 > * { min-width: 0; }
+@media (max-width: 760px) { .cols2 { grid-template-columns: minmax(0, 1fr); gap: 0; } }
+.note { border: 1px solid var(--border); border-left: 3px solid var(--primary-light); background: var(--card); padding: .8rem 1rem; border-radius: 0 var(--radius) var(--radius) 0; font-size: .9rem; margin: 1rem 0; }
+.note p:last-child { margin: 0; }
+.req { display: flex; flex-wrap: wrap; gap: .4rem; margin: .3rem 0 1rem; }
+
+/* ---------- the Photoshop window (contexts) ---------- */
+.ps-win { margin-top: 1.5rem; background: var(--ps-app); border-radius: 6px; overflow: hidden; border: 1px solid #0c0c0c; box-shadow: var(--shadow); }
+.ps-bar { display: flex; align-items: center; gap: 6px; padding: 9px 12px; background: #2b2b2b; border-bottom: 1px solid #111; }
+.ps-bar i { width: 11px; height: 11px; border-radius: 50%; background: #555; display: block; flex: none; }
+.ps-bar span { margin-left: 10px; font: 400 11.5px var(--mono); color: var(--ps-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ctx-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; background: #262626; border-bottom: 1px solid #111; }
+.ctx-tabs button { font: 500 13px/1 var(--sans); color: var(--ps-text); background: #3a3a3a; border: 1px solid #505050; border-radius: 999px; padding: 9px 13px; cursor: pointer; min-height: 36px; }
+.ctx-tabs button:hover { background: #474747; }
+.ctx-tabs button[aria-pressed="true"] { background: var(--ps-go); border-color: var(--ps-go); color: #fff; }
+.ps-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
+.ps-canvas { display: grid; place-items: center; padding: 24px; background: #282828; min-width: 0; }
+.ps-doc { position: relative; width: min(100%, 300px); aspect-ratio: 2 / 3; background: #fff; box-shadow: 0 0 0 1px #111, 0 10px 30px rgba(0,0,0,.4); }
+.ps-doc img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ps-doc.checker { background: repeating-conic-gradient(#cfcfcf 0 25%, #fff 0 50%) 0 0 / 14px 14px; }
+.ps-doc.checker img { object-fit: contain; padding: 8% 10%; }
+.ps-doc .lbox { position: absolute; inset: -1px; outline: 2px solid var(--ps-blue); display: none; }
+.ps-doc svg.ants { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+.ants .a { fill: none; stroke: #fff; stroke-width: 4; }
+.ants .b { fill: none; stroke: #000; stroke-width: 4; stroke-dasharray: 14 14; animation: march .8s linear infinite; }
+@keyframes march { to { stroke-dashoffset: -28; } }
+.ps-panel { background: var(--ps-bg); color: var(--ps-text); border-left: 1px solid #111; display: flex; flex-direction: column; min-width: 0; font-size: 12.5px; }
+.pp-tab { display: flex; justify-content: space-between; align-items: center; background: #3a3a3a; padding: 7px 10px; font-weight: 600; font-size: 12px; border-bottom: 1px solid #2f2f2f; }
+.pp-tab span { width: 14px; height: 9px; border-top: 1.5px solid #aaa; border-bottom: 1.5px solid #aaa; position: relative; }
+.pp-head { display: flex; align-items: center; gap: 8px; padding: 9px 10px; }
+.pp-head svg { width: 15px; height: 15px; color: #ddd; flex: none; }
+.pp-head .blur { height: 11px; width: 92px; border-radius: 2px; background: linear-gradient(90deg, #8a8a8a 0 18%, #6f6f6f 18% 31%, #9a9a9a 31% 52%, #777 52% 70%, #8c8c8c 70% 86%, #6a6a6a 86%); opacity: .8; }
+.pp-head .jobs { margin-left: auto; font-size: 12px; color: var(--ps-text); display: flex; gap: 6px; align-items: center; }
+.pp-head .jobs i { font-style: normal; background: #5a5a5a; border-radius: 999px; padding: 2px 7px; font-size: 11px; }
+.pp-sec { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 9px; }
+.ctx-card { background: var(--ps-card); border: 1px solid var(--ps-line); border-radius: 8px; padding: 9px; display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 3px 9px; }
+.ctx-card .cth { width: 38px; height: 38px; border-radius: 5px; background: #fff center / cover no-repeat; grid-row: span 2; }
+.ctx-card b { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctx-card span { color: #d6d6d6; font-size: 11.5px; line-height: 1.35; }
+.ctx-card .sel { grid-column: 1 / -1; background: var(--ps-field); border-radius: 5px; color: #9a9a9a; font-style: italic; font-size: 11.5px; padding: 5px 8px; margin-top: 5px; }
+.pchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pchip { font: 500 12px/1 var(--sans); padding: 6px 10px; border-radius: 999px; background: transparent; border: 1px solid #5d5d5d; color: var(--ps-text); white-space: nowrap; }
+.pchip.on { background: var(--ps-go); border-color: var(--ps-go); color: #fff; }
+.takes-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.takes-row span { aspect-ratio: 2 / 3; border-radius: 4px; background: #222 center / cover; position: relative; }
+.takes-row span.on { outline: 2px solid var(--ps-blue); outline-offset: 1px; }
+.takes-row span b { position: absolute; left: 3px; top: 3px; font: 600 9px/1 var(--mono); background: var(--ps-blue); color: #fff; border-radius: 3px; padding: 2px 3px; }
+.composer { margin-top: auto; border-top: 1px solid #3a3a3a; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: #404040; }
+.composer .prompt { background: var(--ps-field); border-radius: 6px; padding: 8px 9px 24px; font-size: 12px; line-height: 1.4; color: #e6e6e6; min-height: 54px; position: relative; overflow-wrap: anywhere; }
+.composer .prompt.empty { color: #8f8f8f; font-style: italic; }
+.composer .prompt::after { content: "Suggest"; position: absolute; right: 8px; bottom: 6px; font-size: 11px; font-style: normal; color: #cfcfcf; }
+.composer .pchip { font-size: 11.5px; padding: 5px 9px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pbtn { text-align: center; font: 600 13px/1 var(--sans); background: var(--ps-go); color: #fff; padding: 11px 10px; border-radius: 6px; }
+.pbtn.wait { background: #5a5a5a; color: #d0d0d0; font-weight: 500; }
+.ctx-note { padding: 13px 16px 15px; background: #262626; border-top: 1px solid #111; color: #d4d4d4; font-size: 14px; line-height: 1.5; }
+.ctx-note b { color: #fff; }
+@media (max-width: 760px) {
+  .ps-body { grid-template-columns: minmax(0, 1fr); }
+  .ps-panel { border-left: 0; border-top: 1px solid #111; }
+  .ps-doc { width: min(100%, 220px); }
+}
+
+/* ---------- agents: the 29 tools on a light diagram card ---------- */
+.tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: .6rem; margin: 1.1rem 0; padding: .75rem; border: 1px solid var(--border); border-radius: 6px; background-color: var(--card); background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 32px 32px; }
+.tool-family { display: grid; gap: .55rem; align-content: start; padding: .8rem .9rem .9rem; background: #fff; border: 1px solid var(--line); border-radius: 5px; min-width: 0; }
+@media (min-width: 1180px) { .tool-family.wide { grid-column: span 2; } }
+.tf-head { display: flex; align-items: baseline; gap: .55rem; font-weight: 600; line-height: 1.1; }
+.tf-head b { font-size: 1.9rem; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+.tool-family.sw .tf-head b { color: var(--amber-text); }
+.tool-family p { margin: 0; font-size: .84rem; line-height: 1.5; color: var(--muted); }
+.sq { display: flex; flex-wrap: wrap; gap: 4px; }
+.sq i { width: 18px; height: 18px; border-radius: 3px; background: var(--primary); cursor: help; }
+.sq.sw i { background: repeating-linear-gradient(135deg, var(--amber) 0 4px, #e7bf6f 4px 8px); }
+.sq i:hover, .sq i:focus { outline: 2px solid var(--fg); outline-offset: 1px; }
+.tool-names { font: 400 .68rem/1.65 var(--mono); color: var(--muted); overflow-wrap: break-word; }
+.flowv { list-style: none; margin: 1.1rem 0; padding: 0; display: grid; gap: 0; }
+.flowv li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: .75rem; align-items: start; padding-bottom: .75rem; position: relative; }
+.flowv li::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--line); margin: 6px 0 0 6px; }
+.flowv li::after { content: ""; position: absolute; left: 10px; top: 18px; bottom: 0; width: 2px; background: var(--border); }
+.flowv li:last-child::after { display: none; }
+.flowv li.card-stop::before { background: var(--primary); box-shadow: 0 0 0 4px var(--primary-soft); }
+.flowv code { font-size: .8rem; }
+.flowv .who { font: 500 .62rem var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-left: .4rem; }
+.flowv .stop { display: block; font-size: .875rem; color: var(--muted); margin-top: .2rem; }
+.flowv .stop b { color: var(--fg); }
+
+.anat { display: flex; flex-wrap: wrap; gap: 16px 18px; align-items: flex-start; margin: 1rem 0 1.4rem; padding: 18px; background: var(--ps-bg); border-radius: 6px; }
+.anat > div { display: flex; flex-direction: column; gap: 7px; align-items: flex-start; }
+.anat small { font: 400 11.5px var(--mono); color: var(--ps-dim); }
+.anat .pbtn { padding: 11px 16px; font-size: 14px; }
+.addr { font-family: var(--mono); font-size: .8rem; user-select: all; }
+
+/* ---------- the film and the guide ---------- */
+.kit { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.6rem; }
+@media (max-width: 860px) { .kit { grid-template-columns: 1fr; } }
+.kit-card { min-width: 0; display: flex; flex-direction: column; background: #fff; border: 1px solid var(--border); border-radius: 6px; box-shadow: var(--shadow); overflow: hidden; }
+.kit-media { position: relative; display: block; width: 100%; padding: 0; border: 0; border-bottom: 1px solid var(--border); background: var(--card); cursor: pointer; }
+.kit-film .kit-media { aspect-ratio: 16 / 9; }
+.kit-film .kit-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.kit-media .kit-play { position: absolute; left: 16px; bottom: 16px; width: 56px; height: 56px; border-radius: 50%; background: rgba(250,248,247,.95); display: grid; place-items: center; box-shadow: 0 12px 30px -10px rgba(0,0,0,.55); }
+.kit-media .kit-play::before { content: ""; border-left: 17px solid var(--primary); border-top: 10px solid transparent; border-bottom: 10px solid transparent; margin-left: 5px; }
+.kit-body { padding: 1.1rem 1.2rem 1.2rem; display: flex; flex-direction: column; gap: .6rem; flex: 1; }
+.kit-body h3 { margin: 0; font-size: 1.5rem; line-height: 1.15; }
+.kit-body p { margin: 0; color: var(--muted); font-size: .95rem; }
+.kit-meta { font: 500 .62rem/1.3 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--primary); }
+.kit-act { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: auto; padding-top: .4rem; }
+.kit-note { font-size: .8rem; color: var(--muted); }
+.kit-one { grid-template-columns: minmax(0, 1fr); }
+.kit-guide .kit-media { overflow: hidden; background-color: var(--card); background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 32px 32px; }
+.kit-guide.wide { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.kit-guide.wide .kit-media { border-bottom: 0; border-right: 1px solid var(--border); min-height: 360px; }
+.kit-guide .kit-media img { position: absolute; top: 9%; left: 50%; height: 82%; width: auto; display: block; border-radius: 3px; box-shadow: 0 14px 30px -14px rgba(37,35,34,.45); transition: transform .25s ease; }
+.kit-guide .kit-media .pg-c { z-index: 2; transform: translateX(-50%); }
+.kit-guide .kit-media .pg-l { transform: translateX(-112%) rotate(-5deg) scale(.88); }
+.kit-guide .kit-media .pg-r { transform: translateX(12%) rotate(5deg) scale(.88); }
+.kit-guide .kit-media:hover .pg-c { transform: translateX(-50%) translateY(-6px); }
+@media (max-width: 860px) { .kit-guide.wide { grid-template-columns: minmax(0, 1fr); } .kit-guide.wide .kit-media { border-right: 0; border-bottom: 1px solid var(--border); min-height: 0; aspect-ratio: 4 / 3; } }
+.reader { position: fixed; inset: 0; z-index: 50; background: #161413; display: flex; flex-direction: column; color: #f4f2ef;
+  padding: env(safe-area-inset-top, 0px) max(16px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(16px, env(safe-area-inset-left, 0px)); }
+.reader-bar { display: flex; align-items: center; gap: 12px; min-height: 56px; }
+.reader-bar b { font: 400 1.25rem var(--serif); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reader-bar span { font: 500 .75rem var(--mono); letter-spacing: .08em; color: #c9c2bc; }
+.reader button { cursor: pointer; border: 1px solid rgba(255,255,255,.3); background: rgba(37,35,34,.75); color: #fff; border-radius: 999px; min-height: 44px; min-width: 44px; padding: 0 16px; font: 500 .875rem var(--sans); }
+.reader button:hover { background: var(--primary); }
+.reader button:focus-visible { outline: 2px solid #fff; }
+.reader-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 12px; padding-bottom: 16px; }
+.reader-stage img { max-height: 100%; max-width: calc(100% - 128px); width: auto; height: auto; object-fit: contain; background: #fff; border-radius: 3px; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+@media (max-width: 640px) { .reader-stage { flex-wrap: wrap; align-content: center; } .reader-stage img { max-width: 100%; max-height: calc(100% - 64px); order: -1; flex-basis: 100%; object-fit: contain; } }
+
+
+/* ---------- RED HORIZON steps, source labels ---------- */
+.src { display: inline-flex; align-items: center; font: 600 .6rem/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--primary); background: #fff; border: 1px solid var(--primary-light); border-radius: 3px; padding: .45rem .55rem; white-space: nowrap; }
+.src.l { color: var(--fg); background: var(--surface); border-color: var(--line); }
+p .src, figcaption .src { padding: .28rem .42rem; vertical-align: 1px; }
+figcaption .src { margin-right: .5rem; }
+figcaption .go { margin-top: .2rem; }
+.lab.b { top: auto; bottom: 7px; }
+.vers4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; align-content: start; }
+.vers4 > * { min-width: 0; }
+@media (max-width: 520px) { .vers4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rh-open { margin-top: 1.6rem; align-items: start; }
+.rh-steps { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); counter-reset: rh; }
+.rh-steps li { counter-increment: rh; display: grid; grid-template-columns: 2.2rem minmax(0, 1fr); column-gap: .5rem; padding: .62rem 0 .66rem; border-bottom: 1px solid var(--border); }
+.rh-steps li::before { content: counter(rh, decimal-leading-zero); font: italic 400 1.35rem/1.05 var(--serif); color: var(--primary); grid-row: span 2; }
+.rh-steps a { color: var(--fg); text-decoration: none; font-weight: 600; font-size: .95rem; line-height: 1.35; }
+.rh-steps a:hover { color: var(--primary); }
+.rh-steps small { font-size: .8rem; line-height: 1.45; color: var(--muted); }
+.rh-steps small i { font-style: normal; color: var(--primary-light); }
+.rh-steps small em { font: normal 400 .74rem var(--mono); color: var(--muted); }
+.recipe { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: .3rem 0 1.2rem; }
+.recipe .r { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .5rem; font: 500 .84rem/1.3 var(--sans); padding: .42rem .65rem; border-radius: 5px; border: 1px solid; min-width: 0; }
+.recipe .r .k { font: 500 .58rem/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; }
+.recipe .ps { background: var(--psb-soft); border-color: var(--psb-line); color: var(--psb-ink); }
+.recipe .ps .k { color: var(--psb); }
+.recipe .sc { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.recipe .sc .k { color: var(--primary-light); }
+.recipe .op { font: 400 1.2rem/1 var(--serif); color: var(--muted); }
+.recipe .mdl { font: 400 .74rem/1.4 var(--mono); color: var(--muted); }
+.tile.dark { background: #1a1c1e; border-color: #1a1c1e; }
+.tile .lab.r { left: auto; right: 7px; }
+@media (max-width: 560px) { .recipe .op { display: none; } }
+
+/* ---------- footer ---------- */
+.site-footer { background: var(--surface); border-top: 1px solid var(--border); }
+.site-footer .bar { max-width: 1240px; margin: 0 auto; padding: 2.5rem max(2rem, env(safe-area-inset-right, 0px)) calc(2.5rem + env(safe-area-inset-bottom, 0px)) max(2rem, env(safe-area-inset-left, 0px)); display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.6rem; font-size: .85rem; color: var(--muted); }
+.site-footer .wordmark { width: 92px; height: 23px; margin-right: .6rem; }
+.site-footer a { color: var(--muted); text-decoration: none; }
+.site-footer a:hover { color: var(--primary); }
+.site-footer .legal { margin-left: auto; }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 960px) {
+  html { scroll-padding-top: 1rem; }
+  .site-header { position: static; }
+  .site-header .bar { height: auto; flex-wrap: wrap; padding: .7rem max(1rem, env(safe-area-inset-right, 0px)) .7rem max(1rem, env(safe-area-inset-left, 0px)); gap: .7rem .9rem; }
+  .wordmark { width: 92px; height: 23px; }
+  .search { order: 3; flex: 1 1 100%; }
+  .site-nav { gap: 1rem; }
+  .site-nav .optional { display: none; }
+  .page { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; padding: 2rem max(1rem, env(safe-area-inset-right, 0px)) 4rem max(1rem, env(safe-area-inset-left, 0px)); }
+  .toc { position: static; max-height: none; overflow: visible; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: .9rem 1rem; }
+  .toc summary { cursor: pointer; padding-bottom: 0; margin: 0; display: flex; justify-content: space-between; min-height: 24px; align-items: center; }
+  .toc summary::after { content: "+"; font-family: var(--mono); color: var(--muted); letter-spacing: 0; }
+  .toc details[open] summary { padding-bottom: .8rem; }
+  .toc details[open] summary::after { content: "\2212"; }
+  .toc a { padding: .4rem 0; }
+  .toc ul ul a { padding: .32rem 0 .32rem .2rem; }
+  h2 { font-size: 2rem; }
+  section { margin-top: 3rem; padding-top: 2rem; }
+  .part { margin-top: 4rem; }
+  .site-footer .bar { padding: 2rem max(1rem, env(safe-area-inset-right, 0px)) calc(2rem + env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px)); }
+  .site-footer .legal { margin-left: 0; }
+}
+@media (max-width: 480px) {
+  .chip.version { display: none; }
+  .site-nav { gap: .8rem; font-size: .85rem; }
+  .site-nav .button { padding: .45rem .7rem; font-size: .84rem; }
+  h2 { font-size: 1.85rem; }
+  h3 { font-size: 1.4rem; }
+  .q2 { gap: .45rem; }
+}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to the page</a>
+<header class="site-header">
+  <div class="bar">
+    <a class="brand" href="#top" aria-label="Scenario for Photoshop, top of the page">
+      <svg class="wordmark" viewBox="0 0 1024 252" role="img" aria-label="Scenario"><use href="#logo"></use></svg>
+      <span class="chip product">Photoshop</span>
+      <span class="chip version" title="Development build">0.7.1 dev build</span>
+    </a>
+    <div class="search" role="search" id="search">
+      <label class="visually-hidden" for="q">Search this page</label>
+      <input id="q" type="search" placeholder="Search this page" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="q-results" aria-autocomplete="list">
+      <kbd class="search-key" aria-hidden="true">/</kbd>
+      <div class="search-panel" id="q-panel" hidden>
+        <ul id="q-results" role="listbox" aria-label="Matching sections"></ul>
+        <p class="search-status" id="q-status" aria-live="polite"></p>
+      </div>
+    </div>
+    <nav class="site-nav" aria-label="Main">
+      <a class="optional" href="#story">The story</a>
+      <a href="#install">Install</a>
+      <a class="optional" href="#agents">Agents</a>
+      <a class="optional" href="https://github.com/scenario-labs/photoshop-plugin">GitHub</a>
+      <a class="button" href="https://app.scenario.com">App Login</a>
+    </nav>
+  </div>
+</header>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo" viewBox="0 0 1024 252"><g fill="currentColor"><path fill="currentColor" stroke="none" d="M 354.239441 173.185516 C 344.620941 173.543182 335.161591 170.654007 327.381531 164.982285 C 320.294006 159.668732 315.750183 151.630341 314.850098 142.813232 L 330.463593 142.813232 C 331.475464 147.651154 334.132813 151.987976 337.982452 155.084183 C 342.652588 158.741333 348.487274 160.583542 354.408783 160.270508 C 359.482178 160.697052 364.534637 159.23674 368.599792 156.1689 C 371.477661 153.758911 373.139832 150.195862 373.138184 146.440277 C 373.702637 141.898407 371.339844 137.49498 367.245026 135.457443 C 361.900085 133.209808 356.322906 131.561371 350.615479 130.542282 C 345.671875 129.530457 340.814056 128.136475 336.085785 126.372879 C 331.515472 124.720482 327.36438 122.081894 323.92691 118.644226 C 320.571045 115.133926 318.775452 110.414963 318.948212 105.559723 C 318.747406 98.094635 321.996216 90.95369 327.754089 86.204163 C 334.488037 80.906601 342.90744 78.222122 351.462189 78.644989 C 359.885895 78.29422 368.177216 80.829178 374.967102 85.831299 C 381.193268 90.82782 385.049042 98.201797 385.601898 106.169891 L 370.767395 106.169891 C 370.342102 101.916977 368.216614 98.016922 364.874207 95.356537 C 360.992584 92.588287 356.289978 91.214523 351.529938 91.458313 C 347.06076 91.163986 342.619598 92.355667 338.896912 94.848068 C 336.016571 96.96283 334.358002 100.35881 334.460114 103.932648 C 334.510376 107.662979 336.75473 111.012421 340.183899 112.474854 C 345.093201 114.928177 350.310944 116.706924 355.695801 117.762878 C 361.079468 118.903915 366.38504 120.387115 371.580231 122.203461 C 376.279083 123.761765 380.523956 126.450539 383.942322 130.033829 C 387.414246 134.221405 389.137115 139.588715 388.751678 145.016571 C 389.017792 152.77858 385.617401 160.213104 379.573242 165.083984 C 372.383728 170.758698 363.384613 173.636551 354.239441 173.185516 Z"/>
+    <path fill="currentColor" stroke="none" d="M 449.30899 173.185516 C 441.205994 173.32196 433.215698 171.272919 426.176636 167.253433 C 419.345886 163.356506 413.738739 157.627167 409.987366 150.71138 C 405.925903 143.084351 403.89624 134.538666 404.094208 125.898308 C 403.900574 117.269196 405.930115 108.735535 409.987366 101.119141 C 413.743805 94.215851 419.350494 88.498703 426.176636 84.610992 C 433.215698 80.591507 441.205994 78.54245 449.30899 78.678894 C 459.022003 78.358841 468.561859 81.306793 476.403992 87.051605 C 483.652802 92.520035 488.604034 100.49707 490.290131 109.424057 L 474.744385 109.424057 C 473.671692 104.051529 470.454376 99.350021 465.836914 96.407364 C 460.90686 93.259354 455.15567 91.643402 449.30899 91.763397 C 438.651154 91.6371 428.834259 97.540146 423.941284 107.017334 C 420.963348 112.852371 419.518066 119.349945 419.741577 125.898308 C 419.513763 132.457916 420.959106 138.967514 423.941284 144.813187 C 426.428558 149.597565 430.191711 153.598633 434.813141 156.372284 C 439.162598 158.940582 444.123566 160.287292 449.173492 160.270508 C 454.991486 160.434387 460.728638 158.878021 465.667603 155.796021 C 470.422882 152.807068 473.713684 147.964996 474.744385 142.440369 L 490.35788 142.440369 C 488.680664 151.307602 483.751953 159.226959 476.539429 164.643311 C 468.699524 170.511536 459.092926 173.525146 449.30899 173.185516 Z"/>
+    <path fill="currentColor" stroke="none" d="M 549.492737 173.185516 C 541.463196 173.334961 533.545837 171.283585 526.597412 167.253433 C 519.956665 163.324127 514.529846 157.634644 510.916168 150.81308 C 506.946564 143.122772 504.988953 134.55101 505.226257 125.898308 C 505.02832 117.300766 506.959808 108.787872 510.84848 101.119141 C 514.398071 94.23407 519.838501 88.50676 526.529663 84.610992 C 533.625671 80.549545 541.69281 78.498825 549.865234 78.678894 C 557.805847 78.465637 565.642517 80.523499 572.455688 84.610992 C 578.648743 88.362946 583.706177 93.729324 587.086975 100.136093 C 590.46106 106.514984 592.206238 113.630066 592.167297 120.847565 C 592.167297 122.203461 592.167297 123.525467 592.167297 124.847481 C 592.167297 126.169487 592.167297 127.694885 592.167297 129.389771 L 520.263977 129.389771 C 520.364624 135.436951 522.021057 141.356064 525.073303 146.575867 C 530.265198 155.078079 539.537231 160.22641 549.492737 160.134918 C 555.074707 160.351593 560.58728 158.836121 565.275513 155.796021 C 569.510254 152.915756 572.751648 148.795471 574.555542 143.999649 L 589.627136 143.999649 C 584.723755 161.917969 568.031799 174.01413 549.492737 173.083817 Z M 549.492737 91.559998 C 542.457825 91.51857 535.625183 93.913834 530.153625 98.339523 C 524.330994 103.130508 520.800903 110.159897 520.43335 117.695084 L 577.095703 117.695084 C 577.117188 110.438324 574.079773 103.509018 568.730103 98.610703 C 563.440857 93.907578 556.565796 91.387817 549.492737 91.559998 Z"/>
+    <path fill="currentColor" stroke="none" d="M 611.675659 170.982178 L 611.675659 80.848343 L 625.460266 80.848343 L 626.374756 97.017517 C 629.171631 91.392319 633.520386 86.686966 638.906128 83.458466 C 644.513672 80.149185 650.923279 78.448685 657.432373 78.543304 C 666.925354 78.094986 676.176819 81.619446 682.96936 88.271927 C 689.314087 94.757675 692.48645 104.723582 692.48645 118.169647 L 692.48645 170.982178 L 677.245544 170.982178 L 677.245544 119.932327 C 677.245544 101.107834 669.489604 91.706889 653.977722 91.729492 C 646.599121 91.566635 639.523926 94.667023 634.638733 100.203903 C 629.490621 105.830907 626.916565 113.853348 626.916565 124.271225 L 626.916565 170.982178 Z"/>
+    <path fill="currentColor" stroke="none" d="M 755.4823 173.185516 C 747.278259 173.334457 739.195801 171.185913 732.14679 166.982239 C 725.455322 162.91217 720.044312 157.038376 716.533264 150.033417 C 712.743286 142.477142 710.837463 134.114807 710.978821 125.661026 C 710.810669 117.302979 712.682434 109.030045 716.431702 101.559799 C 720.004639 94.565399 725.444275 88.69873 732.14679 84.610992 C 739.321472 80.392242 747.536865 78.277893 755.854858 78.509415 C 762.666016 78.3797 769.403198 79.940247 775.464844 83.051697 C 781.000366 85.953262 785.594238 90.37468 788.70752 95.797211 L 789.452637 80.712753 L 803.982361 80.712753 L 803.982361 170.982178 L 789.622009 170.982178 L 788.70752 156.101105 C 785.384766 160.853348 781.118835 164.869034 776.176147 167.897491 C 769.94165 171.643677 762.748047 173.481903 755.4823 173.185516 Z M 757.108032 159.897644 C 762.74762 160.057251 768.319641 158.636627 773.195679 155.796021 C 777.876465 152.935333 781.656433 148.811493 784.101379 143.897964 C 786.808594 138.352829 788.144409 132.237701 787.996338 126.067795 C 788.140259 119.90918 786.804504 113.806 784.101379 108.27153 C 781.656433 103.357986 777.876465 99.234146 773.195679 96.373459 C 768.337036 93.473602 762.763916 91.994003 757.108032 92.102356 C 751.518433 92.012177 746.015442 93.491837 741.223572 96.373459 C 736.552917 99.236206 732.784424 103.360367 730.351746 108.27153 C 727.636902 113.80307 726.28949 119.906387 726.422974 126.067795 C 726.2854 132.240479 727.632874 138.355743 730.351746 143.897964 C 732.784424 148.809128 736.552917 152.933273 741.223572 155.796021 C 746.032898 158.618347 751.534729 160.039001 757.108032 159.897644 Z"/>
+    <path fill="currentColor" stroke="none" d="M 827.554993 170.982178 L 827.554993 80.848343 L 841.3396 80.848343 L 842.626587 98.102249 C 845.361389 92.222336 849.782654 87.289932 855.327332 83.933029 C 861.714905 80.227585 869.015015 78.395126 876.393677 78.644989 L 876.393677 94.780273 L 872.227783 94.780273 C 867.190002 94.730957 862.192993 95.687439 857.528809 97.593781 C 853.003174 99.521408 849.232361 102.878723 846.79248 107.152908 C 843.849731 112.87265 842.470886 119.269653 842.795898 125.694923 L 842.795898 171.117767 Z"/>
+    <path fill="currentColor" stroke="none" d="M 902.20166 60.882645 C 899.377075 60.988342 896.636047 59.911636 894.63739 57.911224 C 892.638672 55.910797 891.562866 53.167511 891.668518 50.340469 C 891.608582 47.595734 892.702148 44.951752 894.6828 43.052475 C 896.69873 41.117142 899.40979 40.078217 902.20166 40.171188 C 904.967651 40.111557 907.645386 41.147018 909.652832 43.052475 C 911.680115 44.924744 912.803223 47.580444 912.734863 50.340469 C 912.798035 53.168762 911.681213 55.895584 909.652832 57.865753 C 907.677917 59.836899 904.990479 60.925018 902.20166 60.882645 Z M 894.716675 170.982178 L 894.716675 80.848343 L 909.957642 80.848343 L 909.957642 170.982178 Z"/>
+    <path fill="currentColor" stroke="none" d="M 974.816223 173.185516 C 966.804016 173.299042 958.904602 171.28743 951.921021 167.355118 C 945.132629 163.48233 939.560608 157.788116 935.833374 150.914764 C 931.760803 143.218658 929.731567 134.604645 929.940186 125.898308 C 929.730042 117.190338 931.796509 108.578461 935.934998 100.915741 C 939.773315 94.068985 945.436768 88.424164 952.293518 84.610992 C 966.592346 76.83493 983.852905 76.83493 998.151855 84.610992 C 1004.929932 88.485886 1010.490417 94.180359 1014.205566 101.051331 C 1018.247742 108.695282 1020.254028 117.25264 1020.031006 125.898308 C 1020.245483 134.617538 1018.178894 143.241455 1014.036255 150.914764 C 1010.245605 157.797836 1004.616821 163.490067 997.779236 167.355118 C 990.766113 171.275024 982.848267 173.285385 974.816223 173.185516 Z M 974.816223 160.101028 C 979.910828 160.117966 984.920715 158.797211 989.345947 156.270599 C 993.977234 153.554474 997.746338 149.582367 1000.217773 144.813187 C 1003.18457 138.961975 1004.629028 132.456421 1004.417542 125.898308 C 1004.621887 119.363266 1003.214355 112.878494 1000.319397 107.017334 C 997.903381 102.242126 994.164246 98.264435 989.549133 95.559921 C 985.181702 93.042755 980.228638 91.721603 975.188843 91.729492 C 970.094238 91.71254 965.084351 93.03331 960.659119 95.559921 C 956.027832 98.276047 952.258728 102.248138 949.787292 107.017334 C 946.785828 112.846176 945.3172 119.34407 945.519775 125.898308 C 945.291992 132.457916 946.737366 138.967514 949.719482 144.813187 C 952.175598 149.571167 955.919617 153.541565 960.523621 156.270599 C 964.859314 158.804977 969.795349 160.127838 974.816223 160.101028 Z"/>
+    <path fill="currentColor" stroke="none" opacity="0.85" d="M 122.61116 108.169846 L 241.253326 178.100677 L 122.61116 248.031494 L 3.968992 178.100677 Z"/>
+    <path fill="currentColor" stroke="none" opacity="0.55" d="M 122.61116 73.187469 L 241.253326 143.118301 L 122.61116 213.049133 L 3.968992 143.118301 Z"/>
+    <path fill="currentColor" stroke="none" opacity="0.35" d="M 122.61116 38.239014 L 241.253326 108.169846 L 122.61116 178.100677 L 3.968992 108.169846 Z"/>
+    <path fill="currentColor" stroke="none" opacity="0.15" d="M 122.61116 3.256653 L 241.253326 73.187469 L 122.61116 143.118301 L 3.968992 73.187469 Z"/></g></symbol>
+  <symbol id="mark" viewBox="0 0 245 252"><g fill="currentColor">
+    <path fill="currentColor" stroke="none" opacity="0.85" d="M 122.61116 108.169846 L 241.253326 178.100677 L 122.61116 248.031494 L 3.968992 178.100677 Z"/>
+    <path fill="currentColor" stroke="none" opacity="0.55" d="M 122.61116 73.187469 L 241.253326 143.118301 L 122.61116 213.049133 L 3.968992 143.118301 Z"/>
+    <path fill="currentColor" stroke="none" opacity="0.35" d="M 122.61116 38.239014 L 241.253326 108.169846 L 122.61116 178.100677 L 3.968992 108.169846 Z"/>
+    <path fill="currentColor" stroke="none" opacity="0.15" d="M 122.61116 3.256653 L 241.253326 73.187469 L 122.61116 143.118301 L 3.968992 73.187469 Z"/>
+</g></symbol>
+</svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-ps" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="3 2"/></symbol>
+  <symbol id="i-rs" viewBox="0 0 16 16"><rect x="5" y="1.5" width="9.5" height="9" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="1.5" y="5.5" width="9.5" height="9" rx="1.2" fill="currentColor"/></symbol>
+</svg>
+
+<div class="page">
+  <nav class="toc" aria-label="Contents" id="toc">
+    <details open>
+      <summary class="eyebrow">Contents</summary>
+      <ul>
+        <li><a href="#intro">Scenario, inside Photoshop</a></li>
+        <li><a href="#story">One picture, eight steps</a></li>
+        <li><a href="#contexts">The panel follows you</a></li>
+        <li><a href="#create">01 Create</a><ul>
+          <li><a href="#keep-one-take">Keep one take</a></li>
+          <li><a href="#from-a-sketch">Or start from a sketch</a></li>
+        </ul></li>
+        <li><a href="#select">02 Select</a><ul>
+          <li><a href="#livery">The rover in a new livery</a></li>
+          <li><a href="#outpost">An outpost in a lasso</a></li>
+          <li><a href="#inside-selection">Inside selection</a></li>
+        </ul></li>
+        <li><a href="#character">03 Character</a><ul>
+          <li><a href="#turnaround">Turn her around</a></li>
+          <li><a href="#prop">A prop inside a marquee</a></li>
+          <li><a href="#new-angle">New angle</a></li>
+        </ul></li>
+        <li><a href="#layers">04 Layers</a><ul>
+          <li><a href="#shadows">The shadows brought back</a></li>
+          <li><a href="#recolour">Every orange stripe</a></li>
+          <li><a href="#clipped">One adjustment per layer</a></li>
+          <li><a href="#split-text">Split text</a></li>
+        </ul></li>
+        <li><a href="#formats">05 Formats</a><ul>
+          <li><a href="#extend">Extend canvas</a></li>
+        </ul></li>
+        <li><a href="#print">06 Print</a></li>
+        <li><a href="#motion">07 Motion</a></li>
+        <li><a href="#agents">08 Agents</a><ul>
+          <li><a href="#agent-switches">What agents may do</a></li>
+          <li><a href="#agent-approvals">Where you approve</a></li>
+          <li><a href="#tools-29">The 29 tools</a></li>
+        </ul></li>
+        <li><a href="#gouache">The same steps on gouache</a></li>
+        <li><a href="#guide">The guide, both pictures</a></li>
+        <li><a href="#install">Install and sign in</a><ul>
+          <li><a href="#sign-in">Sign in</a></li>
+        </ul></li>
+        <li><a href="#panel">The panel, top to bottom</a><ul>
+          <li><a href="#chips">Chips by context</a></li>
+        </ul></li>
+        <li><a href="#models">Versions and models</a><ul>
+          <li><a href="#default-models">Default models</a></li>
+        </ul></li>
+        <li><a href="#prices">Prices</a></li>
+        <li><a href="#jobs">Jobs</a></li>
+        <li><a href="#library">Library</a></li>
+        <li><a href="#privacy">Privacy and files</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a><ul>
+          <li><a href="#troubleshooting-agents">Agents</a></li>
+        </ul></li>
+        <li><a href="#limits">Known limits</a></li>
+        <li><a href="#licence">Licence</a></li>
+      </ul>
+    </details>
+  </nav>
+
+  <main id="main">
+    <!-- ================================================================ HERO -->
+    <div class="hero" id="intro" data-toc="Scenario, inside Photoshop">
+      <p class="eyebrow">Scenario for Photoshop</p>
+      <h1>Scenario, <span class="it">inside</span> Photoshop.</h1>
+      <p class="lede">A Photoshop panel for Scenario's image, edit, upscale, layer and video models. It reads the selection, layer or takes you are working on, shows the price on the button, and lands every result as layers you can mask, transform and undo in one step.</p>
+      <div class="cta">
+        <a class="btn-go" href="#install">Install the development build</a>
+        <a class="btn-pill" href="#story">Follow one picture</a>
+        <a class="btn-pill" href="#guide">Read the guide</a>
+        <a class="btn-pill" href="https://github.com/scenario-labs/photoshop-plugin">Source on GitHub</a>
+      </div>
+      <figure>
+        <div class="film" id="film" data-state="poster">
+          <video id="film-v" src="assets/film/film-red-horizon.mp4" poster="assets/film/film-red-horizon-poster.jpg" preload="none" playsinline width="1280" height="720" aria-label="Scenario for Photoshop, the launch film on RED HORIZON"></video>
+          <span class="film-tag">Launch film</span>
+          <button class="film-play" type="button" id="film-play"><span class="tri" aria-hidden="true"></span>Watch the film</button>
+          <span class="film-msg" role="status">The film is not on this page yet.</span>
+        </div>
+        <figcaption>The launch film, 4 min: RED HORIZON, a photoreal poster for a science-fiction feature, from four takes on an empty document to a five-second clip and an agent, every step in the Scenario panel inside Photoshop. It ends on the rest of the Scenario suite: the web app, a workflow in the node editor and Scenario MCP.</figcaption>
+      </figure>
+      <div class="strip">
+        <span><b>Development build 0.7.1.</b> Not on the Adobe Marketplace yet: you build the <code>.ccx</code> from the repository.</span>
+        <span>Photoshop 2026, tested on 27.11 on macOS.</span>
+        <span>Open source, MIT.</span>
+      </div>
+    </div>
+
+    <!-- ================================================================ STORY -->
+    <section id="story" data-toc="One picture, eight steps">
+      <div class="col">
+        <p class="eyebrow">RED HORIZON</p>
+        <h2>One picture, <span class="it">eight steps</span>.</h2>
+        <p>RED HORIZON is a poster for a science-fiction feature: an explorer on Mars holding her helmet in both hands, her six-wheeled expedition rover, a red plain under rock arches. Each step pairs a Photoshop tool with a Scenario action. Photoshop does what it already does well, Scenario adds what those tools cannot do alone, and the result is Photoshop material the next tool works on at once.</p>
+      </div>
+      <div class="steps8">
+        <a class="step" href="#create"><span class="ph"><img src="assets/img/rh/take3.webp" alt="" loading="lazy" width="560" height="840"></span><span class="tx"><b><span>01</span>Create</b><small>File › New <i>+</i> Create image</small></span></a>
+        <a class="step" href="#select"><span class="ph"><img src="assets/img/rh/livery-after.webp" alt="" loading="lazy" width="570" height="380"></span><span class="tx"><b><span>02</span>Select</b><small>Expand, Feather, Lasso <i>+</i> Replace inside</small></span></a>
+        <a class="step" href="#character"><span class="ph fit"><img src="assets/img/rh/sheet.webp" alt="" loading="lazy" width="1500" height="844"></span><span class="tx"><b><span>03</span>Character</b><small>Lasso, Marquee, Type <i>+</i> Cut out, Make versions, New layer</small></span></a>
+        <a class="step" href="#layers"><span class="ph"><img src="assets/img/rh/liv-1.webp" alt="" loading="lazy" width="720" height="640"></span><span class="tx"><b><span>04</span>Layers</b><small>Layer mask, Hue/Saturation <i>+</i> Split into layers</small></span></a>
+        <a class="step" href="#formats"><span class="ph"><img src="assets/img/rh/fmt-169.webp" alt="" loading="lazy" width="800" height="800"></span><span class="tx"><b><span>05</span>Formats</b><small>Type tool, Move <i>+</i> Formats</small></span></a>
+        <a class="step" href="#print"><span class="ph"><img src="assets/img/rh/up-after.webp" alt="" loading="lazy" width="600" height="600"></span><span class="tx"><b><span>06</span>Print</b><small>Stamp Visible <i>+</i> Upscale</small></span></a>
+        <a class="step" href="#motion"><span class="ph"><img src="assets/img/rh/clip-poster.webp" alt="" loading="lazy" width="600" height="900"></span><span class="tx"><b><span>07</span>Motion</b><small>Timeline <i>+</i> Animate</small></span></a>
+        <a class="step" href="#agents"><span class="ph top"><img src="assets/img/connect-client.webp" alt="" loading="lazy" width="565" height="1040"></span><span class="tx"><b><span>08</span>Agents</b><small>History <i>+</i> the Scenario MCP</small></span></a>
+      </div>
+      <div class="row wide-side rh-open">
+        <div class="wipe" style="--cut:50%">
+          <img src="assets/img/rh/keyart.webp" alt="The kept take: the explorer holding her helmet beside a boxy, weathered rover on the red plain" loading="lazy" width="900" height="1350">
+          <img class="over" src="assets/img/rh/poster.webp" alt="The finished poster: the rover in a white and burnt-orange livery, a research outpost on the plain, the title RED HORIZON and five more lines of type" loading="lazy" width="900" height="1350">
+          <span class="lab">Take 3, kept</span><span class="lab r">The poster</span>
+          <span class="line"></span><span class="knob" aria-hidden="true">↔</span>
+          <input type="range" min="0" max="100" value="50" aria-label="Wipe between the kept take and the finished poster">
+        </div>
+        <div>
+          <p class="k-note" style="margin-top:0">Drag across the picture: the take Create image made on the left, the finished poster on the right. The models at each step, as the panel showed them:</p>
+          <ol class="rh-steps">
+            <li><a href="#create">Four takes on an empty document</a><small>File › New <i>+</i> Create image <em>· GPT Image 2.5 Flare</em></small></li>
+            <li><a href="#livery">The rover in a new livery</a><small>Expand, Feather <i>+</i> Select by description, Replace inside with Bolder <em>· SAM 3.1 Image, GPT Image 2.5 Flare</em></small></li>
+            <li><a href="#outpost">A research outpost in a lasso</a><small>Lasso <i>+</i> Replace inside with Bolder <em>· GPT Image 2.5 Flare</em></small></li>
+            <li><a href="#character">A turnaround sheet and her helmet</a><small>Lasso, Marquee, Type <i>+</i> Cut out subject, Make versions, New layer, Remove background <em>· 851 Labs Background Remover, GPT Image 2.5 Flare</em></small></li>
+            <li><a href="#layers">Four layers, the shadows brought back</a><small>Layer mask, Free Transform <i>+</i> Split into layers <em>· Seedream 5.0 Flash Layerize</em></small></li>
+            <li><a href="#recolour">Every orange stripe, one adjustment</a><small>Hue/Saturation <i>+</i> Select by description <em>· SAM 3.1 Image</em></small></li>
+            <li><a href="#formats">Six lines of type, four formats</a><small>Type tool, Move <i>+</i> Formats <em>· Smart Reframe</em></small></li>
+            <li><a href="#print">Twice the pixels, then a clip</a><small>Stamp Visible <i>+</i> Upscale ×2, Animate <em>· Topaz Image Upscale, Minimax H3</em></small></li>
+          </ol>
+        </div>
+      </div>
+      <p class="small muted" style="margin-top:18px">Every RED HORIZON picture is a real run in Photoshop 2026 through the development build's own driver, with the models the panel showed. Pictures from the <a href="#gouache">second film</a> carry the label <span class="src l">THE LAST KEEPER</span>; the others are RED HORIZON. Prices are the ones the buttons showed, or the run's charge where the button was not on screen; they vary by model, document and settings. Claims carry how they were checked: <span class="v live">verified live</span> in Photoshop, <span class="v auto">tested automated</span> by the test suite, or <span class="v none">not tested</span>. The project name in the panel is blurred.</p>
+    </section>
+
+    <!-- ================================================================ CONTEXTS -->
+    <section id="contexts" data-toc="The panel follows you">
+      <div class="col">
+        <p class="eyebrow">The panel</p>
+        <h2>Change what is selected, the panel <span class="it">follows</span>.</h2>
+        <p>There is no mode to switch. Click a layer, draw a selection or select a group of takes in the Layers panel, and the context card and its chips change with it. The action button carries the price before you click. Pick a context:</p>
+      </div>
+      <div class="ps-win" id="ctx">
+        <div class="ps-bar"><i></i><i></i><i></i><span id="ctx-title">Red Horizon @ 100% (RGB/8)</span></div>
+        <div class="ctx-tabs" role="group" aria-label="Context">
+          <button type="button" data-k="blank" aria-pressed="true">Blank canvas</button>
+          <button type="button" data-k="flat">Flat image</button>
+          <button type="button" data-k="layer">Layer</button>
+          <button type="button" data-k="selection">Selection</button>
+          <button type="button" data-k="cutout">Cut-out</button>
+          <button type="button" data-k="takes">Takes</button>
+        </div>
+        <div class="ps-body">
+          <div class="ps-canvas">
+            <div class="ps-doc" id="ctx-doc">
+              <img id="ctx-img" src="assets/img/rh/keyart.webp" alt="" width="900" height="1350">
+              <span class="lbox"></span>
+              <svg class="ants" viewBox="0 0 1024 1536" preserveAspectRatio="none" aria-hidden="true"><path class="a" d="M300 600 C330 560 520 543 640 550 C705 555 738 600 734 690 C730 770 742 862 702 914 C620 928 420 926 328 914 C292 860 290 700 300 600 Z"/><path class="b" d="M300 600 C330 560 520 543 640 550 C705 555 738 600 734 690 C730 770 742 862 702 914 C620 928 420 926 328 914 C292 860 290 700 300 600 Z"/></svg>
+            </div>
+          </div>
+          <div class="ps-panel" aria-live="polite">
+            <div class="pp-tab">Scenario <span aria-hidden="true"></span></div>
+            <div class="pp-head"><svg viewBox="0 0 245 252" aria-hidden="true"><use href="#mark"></use></svg><span class="blur" aria-label="Project name, blurred"></span><span class="jobs">Jobs <i>133</i></span></div>
+            <div class="pp-sec">
+              <div class="ctx-card"><span class="cth" id="ctx-th"></span><b id="ctx-card-t"></b><span id="ctx-card-l"></span><span class="sel">Select…</span></div>
+              <div class="pchips" id="ctx-chips"></div>
+              <div id="ctx-takes"></div>
+            </div>
+            <div class="composer" id="ctx-comp">
+              <div class="prompt" id="ctx-prompt"></div>
+              <div class="pchips" id="ctx-opts"></div>
+              <div class="pbtn" id="ctx-btn"></div>
+            </div>
+          </div>
+        </div>
+        <div class="ctx-note" id="ctx-note"></div>
+      </div>
+      <p class="small muted" style="margin-top:10px">Drawn from the panel's own context and chip lists in this build, on RED HORIZON's pictures, with the card texts, prompts and prices the panel showed in the RED HORIZON takes. A seventh context, the split element, offers Make versions, Relight to scene, New angle and Upscale on one layer made by Split into layers.</p>
+    </section>
+
+    <!-- ================================================================ 01 CREATE -->
+    <section id="create" data-toc="01 Create">
+      <div class="chap-head"><span class="chap-no">01</span><p class="eyebrow">Create</p><h2>An empty document, <span class="it">then four takes</span>.</h2></div>
+      <div class="band">
+        <div class="ps"><span class="k"><svg aria-hidden="true"><use href="#i-ps"></use></svg>Photoshop</span><b>File › New</b><p>A 1024 × 1536 portrait canvas, one white Background.</p></div>
+        <div class="op" aria-hidden="true">+</div>
+        <div class="sc"><span class="k"><svg viewBox="0 0 245 252" aria-hidden="true"><use href="#mark"></use></svg>Scenario</span><b>Create image</b><p>GPT Image 2.5 Flare, four takes at quality High, at the canvas's shape.</p></div>
+        <div class="op" aria-hidden="true">=</div>
+        <div class="rs"><span class="k"><svg aria-hidden="true"><use href="#i-rs"></use></svg>Result</span><b>The key art, four ways</b><p>One group of takes above the Background. Take 3 kept; the others stay on disk.</p></div>
+      </div>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>File › New, 1024 × 1536</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Create image, four takes</span><span class="mdl">GPT Image 2.5 Flare</span></div>
+      <div class="row">
+        <div>
+          <div class="q2">
+            <figure class="tile"><img src="assets/img/rh/take1.webp" alt="Take 1: the explorer at the left, a weathered rover behind her" loading="lazy" width="560" height="840"><span class="lab">Take 1</span></figure>
+            <figure class="tile"><img src="assets/img/rh/take2.webp" alt="Take 2: the same explorer and rover, composed another way" loading="lazy" width="560" height="840"><span class="lab">Take 2</span></figure>
+            <figure class="tile"><img src="assets/img/rh/take3.webp" alt="Take 3: the explorer holding her helmet in both hands at the waist, the rover to her right" loading="lazy" width="560" height="840"><span class="lab">Take 3, kept</span></figure>
+            <figure class="tile"><img src="assets/img/rh/take4.webp" alt="Take 4: the explorer and the rover under the arches, composed a fourth way" loading="lazy" width="560" height="840"><span class="lab">Take 4</span></figure>
+          </div>
+          <p class="k-note">"Vertical cinematic key art for a science-fiction feature film, a wide view": the same explorer, rover and arches, composed four ways. Take 3 is kept: she holds her helmet in both hands at the waist, so the helmet can sit in the same place in every view of the character sheet. No lettering in the art: the title comes later, as live type.</p>
+        </div>
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/rh/pc-blank.webp" alt="Context card: Blank canvas 1024 × 1536, lands above Background at canvas size; chips Create image and Place from Library" loading="lazy" width="610" height="350"><figcaption>A blank canvas opens on Create image.</figcaption></figure>
+          <figure class="pc"><img src="assets/img/rh/pc-create.webp" alt="The composer: the prompt, No style, GPT Image 2.5 Flare, 4 takes, and the button Create image · 47 CU" loading="lazy" width="610" height="480"><figcaption>The prompt, the model, four takes, the price.</figcaption></figure>
+        </div>
+      </div>
+      <ol class="list col">
+        <li>Type what you want, or click <span class="pill">Suggest</span>. The button shows the price once there is a prompt: <span class="go">Create image · 47 CU</span> for four takes at quality High, set in the gear.</li>
+        <li>Click it. The context card reads Queued, Generating 4 takes, Downloading.</li>
+        <li>The takes land as one group, take 1 visible, and the Takes card shows a tile per take. Click a tile to show that take, then <span class="pill">Keep take 3</span>.</li>
+      </ol>
+      <p class="small muted col">Create image on a blank document: the context and its price <span class="v live">verified live</span>; the landing as a layer above the Background <span class="v auto">tested automated</span>. The run pictured landed as a group of takes above the Background.</p>
+
+      <h3 id="keep-one-take">Keep one take</h3>
+      <div class="row wide-side">
+        <figure class="shot"><img src="assets/img/rh/takes.webp" alt="The Layers panel with the group of 4 takes above the Background, and the Scenario panel's Takes card with the four takes, take 3 shown, Keep take 3, Refine and More like this" loading="lazy" width="1122" height="1140"><figcaption>The group of four takes in the Layers panel, and the Takes card with take 3 shown.</figcaption></figure>
+        <div class="tbl" style="margin-top:0"><table>
+          <tbody>
+            <tr><td>Show a take</td><td>Click its tile; the document shows that take, in one History state.</td></tr>
+            <tr><td>Keep take N</td><td>Removes the other takes from the document. Their files stay in the output folder and in Jobs.</td></tr>
+            <tr><td>More like this</td><td>Runs again with the shown take as a reference.</td></tr>
+            <tr><td>Refine</td><td>Keeps the shown take, loads its selection back and opens Replace inside on it.</td></tr>
+            <tr><td>Later</td><td>Select the group in the Layers panel, even after a restart, and the card comes back from the layers' metadata. <span class="v live">verified live</span></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <h3 id="from-a-sketch">Or start from a sketch</h3>
+      <p class="col">Draw the layout on a layer, or place a scan, and choose <b>More › Make variants › Render sketch</b>. Describe the finish or leave the prompt empty: what was where in the drawing stays there.</p>
+      <div class="recipe"><span class="src">RED HORIZON, first layout</span><span class="r ps"><span class="k">Photoshop</span>A pencil layout on a layer</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Render sketch, two takes</span><span class="mdl">GPT Image 2.5 Sunburst</span></div>
+      <div class="wipe" style="--cut:50%">
+        <img src="assets/img/rh/sketch-in.webp" alt="A pencil layout: the explorer with her helmet under the rock arches, a rover with a dish to the right" loading="lazy" width="900" height="600">
+        <img class="over" src="assets/img/rh/sketch-out.webp" alt="The same layout rendered as a photoreal film still: red rock arches, a low sun, the explorer and the rover in their places" loading="lazy" width="900" height="600">
+        <span class="lab">Sketch layer</span><span class="lab r">Render sketch</span>
+        <span class="line"></span><span class="knob" aria-hidden="true">↔</span>
+        <input type="range" min="0" max="100" value="50" aria-label="Wipe between the sketch and the render">
+      </div>
+      <figcaption>Drag across the picture. The second of two takes, kept: the arches, the explorer and the rover keep their places. This is RED HORIZON's first layout, the one the film shows for Render sketch; the key art the rest of this page follows came from Create image.</figcaption>
+    </section>
+
+    <!-- ================================================================ 02 SELECT -->
+    <section id="select" data-toc="02 Select">
+      <div class="chap-head"><span class="chap-no">02</span><p class="eyebrow">Select</p><h2>Photoshop draws the selection, <span class="it">Scenario fills it</span>.</h2></div>
+      <div class="band">
+        <div class="ps"><span class="k"><svg aria-hidden="true"><use href="#i-ps"></use></svg>Photoshop</span><b>Expand, Feather, the Lasso</b><p>Select › Modify on the selection Scenario found; the Lasso around empty plain.</p></div>
+        <div class="op" aria-hidden="true">+</div>
+        <div class="sc"><span class="k"><svg viewBox="0 0 245 252" aria-hidden="true"><use href="#mark"></use></svg>Scenario</span><b>Select by description, Replace inside</b><p>SAM 3.1 Image finds the rover; Bolder on GPT Image 2.5 Flare paints its new livery, then an outpost in the lasso.</p></div>
+        <div class="op" aria-hidden="true">=</div>
+        <div class="rs"><span class="k"><svg aria-hidden="true"><use href="#i-rs"></use></svg>Result</span><b>New elements on masked layers</b><p>The rover in white and burnt orange, a research outpost on the plain. Everything outside stays as it was.</p></div>
+      </div>
+
+      <h3 id="livery" style="margin-top:0">The rover in a new livery</h3>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>Expand, Feather</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Select by description, Replace inside with Bolder</span><span class="mdl">SAM 3.1 Image, GPT Image 2.5 Flare</span></div>
+      <div class="row">
+        <figure>
+          <div class="wipe" style="--cut:36%">
+            <img src="assets/img/rh/livery-before.webp" alt="The rover as Create image drew it: boxy, weathered, off-white" loading="lazy" width="570" height="380">
+            <img class="over" src="assets/img/rh/livery-after.webp" alt="The rover after Bolder: white with broad burnt-orange bands and solar panels on the roof, in the same place" loading="lazy" width="570" height="380">
+            <span class="lab">Take 3</span><span class="lab r">Bolder</span>
+            <span class="line"></span><span class="knob" aria-hidden="true">↔</span>
+            <input type="range" min="0" max="100" value="36" aria-label="Wipe between the rover before and after Bolder">
+          </div>
+          <figcaption>Same place and size, six wheels and a dish; the body comes back white, with broad burnt-orange bands and solar panels on the roof.</figcaption>
+        </figure>
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/rh/pc-select.webp" alt="Context card: Selection 434 × 376 on the canvas, lands inside the selection, masked; Select by description, SAM 3.1 Image · 6 CU, selected 1 object, the rover" loading="lazy" width="610" height="615"><figcaption>"the rover" in the Select… field: one object found.</figcaption></figure>
+        </div>
+      </div>
+      <div class="row rev">
+        <figure class="pc"><img src="assets/img/rh/pc-bolder.webp" alt="The composer: Edit Bolder, No style, GPT Image 2.5 Flare, 2 takes, Replace inside · 23 CU" loading="lazy" width="610" height="480"></figure>
+        <ol class="list">
+          <li>Type what to select in the context card's <span class="pill">Select…</span> field, "the rover", and click <span class="pill">Select</span>. The masks the model finds become one Photoshop selection. Selecting is a run of its own: 6 CU here.</li>
+          <li>Photoshop: <b>Select › Modify › Expand</b>, then <b>Feather</b>, so the new livery has room and a soft edge. The card follows the new size.</li>
+          <li>Choose <span class="pill">Replace inside</span>, set <span class="pill">Edit</span> to Bolder and describe the change: "The same six-wheeled expedition rover, the same shape, size, wheels, dish antenna…". <span class="go">Replace inside · 23 CU</span> for two takes.</li>
+          <li>The kept take lands on its own layer with a mask in the selection's shape. <span class="pill">Try Inside selection</span> runs the other mode on the same selection.</li>
+        </ol>
+      </div>
+      <p class="small muted col">Bolder may let the new subject reach past the selection, and the mask then grows over what the model drew. Here it also reshaped parts of the rover's body: place, size, wheels and dish held.</p>
+
+      <h3 id="outpost">A research outpost in a lasso</h3>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>Lasso, Feather</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Replace inside with Bolder</span><span class="mdl">GPT Image 2.5 Flare</span></div>
+      <div class="row wide-side">
+        <figure>
+          <div class="wipe" style="--cut:50%">
+            <img src="assets/img/rh/outpost-before.webp" alt="The empty plain to the right of the rover" loading="lazy" width="600" height="400">
+            <img class="over" src="assets/img/rh/outpost-after.webp" alt="A research outpost on the plain: three domes, a mast and a row of solar panels" loading="lazy" width="600" height="400">
+            <span class="lab">The plain</span><span class="lab r">Bolder in a lasso</span>
+            <span class="line"></span><span class="knob" aria-hidden="true">↔</span>
+            <input type="range" min="0" max="100" value="50" aria-label="Wipe between the empty plain and the research outpost">
+          </div>
+          <figcaption>Three domes, a mast and a row of solar panels where the lasso was, their shadows falling to the right like the rover's.</figcaption>
+        </figure>
+        <div>
+          <ol class="list">
+            <li>Lasso a patch of empty plain to the right of the rover and feather it.</li>
+            <li>Run <span class="pill">Replace inside</span> with Bolder on GPT Image 2.5 Flare, two takes: "A small research outpost standing on the open plain in the middle distance…". <span class="go">Replace inside · 23 CU</span>.</li>
+            <li>The outpost lands inside the lasso's shape, on its own masked layer.</li>
+          </ol>
+          <div class="note"><p>Two earlier tries on this lasso used Inside selection on Ideogram 4.5 Precise Edit and were not kept: the first drew the outpost without shadows, the second with shadows too short for the light. The outpost kept is the Bolder run.</p></div>
+        </div>
+      </div>
+
+      <h3 id="inside-selection">Inside selection: a rowing boat on the sea</h3>
+      <div class="recipe"><span class="src l">THE LAST KEEPER</span><span class="r ps"><span class="k">Photoshop</span>Lasso on the open sea</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Replace inside with Inside selection</span><span class="mdl">Ideogram 4.5 Precise Edit</span></div>
+      <div class="row">
+        <div>
+          <div class="pair">
+            <figure class="tile"><img src="assets/img/gouache/boat-before.webp" alt="THE LAST KEEPER: a patch of open sea below the cliffs, waves and foam" loading="lazy" width="600" height="450"><span class="lab">The open sea</span><span class="lab b">THE LAST KEEPER</span></figure>
+            <div class="arrow" aria-hidden="true">→</div>
+            <figure class="tile"><img src="assets/img/gouache/boat-after.webp" alt="THE LAST KEEPER: a small red rowing boat with a rower inside the lassoed patch of sea" loading="lazy" width="600" height="450"><span class="lab">Inside selection</span><span class="lab b">THE LAST KEEPER</span></figure>
+          </div>
+          <p class="k-note">"A small wooden rowing boat out on the open sea, heading away from the island toward the horizon…". Ideogram 4.5 Precise Edit, the panel's recommended model for Replace inside, two takes, take 1 kept. The boat stays inside the lasso's shape; the waves around it are untouched.</p>
+          <div class="modes">
+            <div class="mode"><h4>Inside selection</h4><span class="model">Ideogram 4.5 Precise Edit</span><p>Changes only what is inside the selection. For a change that fits the shape you drew; an object taller than the selection is cut at its edge.</p></div>
+            <div class="mode"><h4>Bolder</h4><span class="model">GPT Image 2.5 Flare</span><p>A stronger change. The new subject may reach past the selection, and the mask of each take grows over it. For an object larger than the old one.</p></div>
+          </div>
+          <p class="small"><b>Remove</b>, a chip of the same context, clears what is inside the selection and fills it with what should be behind. No prompt.</p>
+        </div>
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/gouache/pc-inside.webp" alt="THE LAST KEEPER, the composer: the rowing boat prompt, Edit Inside selection, No style, Ideogram 4.5 Precise Edit, 2 takes, Replace inside · 80 CU" loading="lazy" width="610" height="460"><figcaption><span class="src l">THE LAST KEEPER</span><span class="go">Replace inside · 80 CU</span></figcaption></figure>
+        </div>
+      </div>
+      <h4>Check badges on a take</h4>
+      <div class="badges"><span class="badge ok">Edges ok</span><span class="badge warn">Edge may show</span><span class="badge warn">May not line up</span><span class="badge warn">Part unchanged</span><span class="badge warn">Spills past</span></div>
+      <p class="small muted col">The checks look at tone and alignment around the edge. They are hints, not a guarantee: look at the take at 100% before you keep it.</p>
+    </section>
+
+    <!-- ================================================================ 03 CHARACTER -->
+    <section id="character" data-toc="03 Character">
+      <div class="chap-head"><span class="chap-no">03</span><p class="eyebrow">Character</p><h2>Cut her out, turn her around, <span class="it">lay out the sheet</span>.</h2></div>
+      <div class="band">
+        <div class="ps"><span class="k"><svg aria-hidden="true"><use href="#i-ps"></use></svg>Photoshop</span><b>Lasso, Marquee, Type</b><p>A loose lasso around the explorer; a sheet with type labels; a marquee for her helmet.</p></div>
+        <div class="op" aria-hidden="true">+</div>
+        <div class="sc"><span class="k"><svg viewBox="0 0 245 252" aria-hidden="true"><use href="#mark"></use></svg>Scenario</span><b>Cut out subject, Make versions, New layer</b><p>The figure on its own layer, drawn again from the front, the side and the back, a helmet drawn inside the marquee.</p></div>
+        <div class="op" aria-hidden="true">=</div>
+        <div class="rs"><span class="k"><svg aria-hidden="true"><use href="#i-rs"></use></svg>Result</span><b>A turnaround sheet</b><p>Front, three-quarter, side and back views and her helmet, each on its own layer, the labels still live type.</p></div>
+      </div>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>Lasso</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Cut out subject</span><span class="mdl">851 Labs Background Remover</span></div>
+      <div class="row">
+        <div>
+          <div class="pair">
+            <figure class="tile"><img src="assets/img/rh/cut-lasso.webp" alt="A loose lasso around the explorer on the plain" loading="lazy" width="480" height="784"><span class="lab b">Lasso</span></figure>
+            <div class="arrow" aria-hidden="true">→</div>
+            <figure class="tile checker cell"><img src="assets/img/rh/cut-out.webp" alt="The explorer alone on her new layer, transparent around her" loading="lazy" width="363" height="980"><span class="lab b">Cut out subject</span></figure>
+          </div>
+          <p class="k-note">A loose lasso is enough: <b>Cut out subject</b> finds her inside it and puts her on a new layer with a transparent background. The original layer stays as it was and the selection is dropped, in one History state. The cut keeps the selection's own shape, a lasso or an ellipse, not only its box <span class="v auto">tested automated</span>. On the sheet, this cut-out is her three-quarter view.</p>
+        </div>
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/rh/pc-cut.webp" alt="Finds the main subject inside the selection and puts it on a new layer. No prompt needed. 851 Labs Background Remover, Cut out subject · 1 CU" loading="lazy" width="610" height="250"><figcaption>No prompt. <span class="go">Cut out subject · 1 CU</span></figcaption></figure>
+        </div>
+      </div>
+
+      <h3 id="turnaround">Turn her around with Make versions</h3>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>Type, Free Transform</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Make versions, Remove background</span><span class="mdl">GPT Image 2.5 Flare, 851 Labs Background Remover</span></div>
+      <figure class="shot"><img src="assets/img/rh/sheet.webp" alt="The character sheet RED HORIZON: the explorer from the front, three-quarter, side and back, and her helmet, on cream paper with live type labels" loading="lazy" width="1500" height="844"><figcaption>The finished sheet. Each view and the helmet are separate layers; the title and the labels FRONT, THREE-QUARTER, SIDE, BACK and PROP: HELMET are still live type.</figcaption></figure>
+      <div class="row rev" style="margin-top:22px">
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/rh/pc-versions.webp" alt="The composer: The same woman alone, in the same worn white and burnt-orange expedition spacesuit; No style, GPT Image 2.5 Flare, 2 takes, Make versions · 23 CU" loading="lazy" width="610" height="480"><figcaption>One Make versions run per view.</figcaption></figure>
+          <figure class="pc"><img src="assets/img/rh/pc-rbg.webp" alt="Keeps the subject and masks the rest. No prompt needed. 851 Labs Background Remover, Remove background · 1 CU" loading="lazy" width="610" height="250"><figcaption>On the kept take: <span class="go">Remove background · 1 CU</span></figcaption></figure>
+        </div>
+        <div>
+          <ol class="list">
+            <li>The sheet is a Photoshop document: cream paper, the title, and one type layer per label.</li>
+            <li><span class="pill">Make versions</span> on GPT Image 2.5 Flare, with a prompt per view, draws her from the front, in a 90° side profile and from the back: "The same woman alone, in the same worn white and burnt-orange expedition spacesuit…". <span class="go">Make versions · 23 CU</span> for two takes.</li>
+            <li>Keep a take, then <span class="pill">Remove background</span> on it, from the kept take's More. It lands as a mask, so the hidden pixels stay and you can paint the mask <span class="v live">verified live</span>.</li>
+            <li>Place each view on the sheet's ground line with <b>Edit › Free Transform</b>. No run touches the type layers.</li>
+          </ol>
+        </div>
+      </div>
+      <figure class="shot" style="margin-top:26px"><img src="assets/img/gouache/sheet.webp" alt="THE LAST KEEPER character sheet: the young woman in her yellow raincoat from the key art pose, the side and the back, each holding a brass storm lantern, and the lantern alone as a prop, on cream paper" loading="lazy" width="1500" height="844"><figcaption><span class="src l">THE LAST KEEPER</span>The same steps on gouache: her cut-out from the key art, side and back views from Make versions, the storm lantern from New layer in a tall marquee (<span class="go">New layer · 24 CU</span>). The boot her dog hid in the key art was repainted on the sheet with Inside selection on Ideogram 4.5 Precise Edit.</figcaption></figure>
+
+      <h3 id="prop">A prop inside a marquee</h3>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>Rectangular Marquee, 400 × 520</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>New layer, Remove background</span><span class="mdl">GPT Image 2.5 Flare, 851 Labs Background Remover</span></div>
+      <div class="pair" style="max-width:760px">
+        <figure class="tile"><img src="assets/img/rh/helmet-marquee.webp" alt="A rectangular marquee on the cream sheet beside the back view, above the label PROP: HELMET" loading="lazy" width="430" height="525"><span class="lab r">Rectangular Marquee</span></figure>
+        <div class="arrow" aria-hidden="true">→</div>
+        <figure class="tile"><img src="assets/img/rh/helmet-layer.webp" alt="Her white and burnt-orange expedition helmet with a gold visor inside the marquee, the cream paper around it, the label PROP: HELMET below" loading="lazy" width="430" height="525"><span class="lab r">New layer, cut out</span></figure>
+      </div>
+      <div class="row rev" style="margin-top:22px">
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/rh/pc-newlayer.webp" alt="The Lands menu, Cut out or Full frame, then Lands Cut out, No style, GPT Image 2.5 Flare, 2 takes, New layer · 27 CU" loading="lazy" width="610" height="470"><figcaption>Lands: Cut out, the default. <span class="go">New layer · 27 CU</span></figcaption></figure>
+        </div>
+        <div>
+          <p>Draw a marquee where the prop goes, choose <span class="pill">New layer</span> and describe it: "her round expedition helmet on its own…". The 400 × 520 marquee is about the size of her torso on the sheet. The take is sized to the selection and placed inside it, so the label and the paper stay visible around it <span class="v live">verified live</span>. Here the kept take still carried a background, cleared with Remove background on the take, 1 CU.</p>
+          <p><b>Lands: Cut out</b>, the default, asks the model for a transparent background. When the model still returns a full picture, Photoshop's own Remove Background cuts it at placement, as a layer mask you can paint. <b>Full frame</b> keeps the model's background inside the selection box. Without a selection, New layer makes a new image on a layer above the active one.</p>
+        </div>
+      </div>
+
+      <h3 id="new-angle">New angle</h3>
+      <p class="col">With a layer active, <b>More › Make variants › New angle</b> turns the subject to a preset angle with no prompt: <span class="pill">Turn left 45°</span> <span class="pill">Turn right 45°</span> <span class="pill">Side view</span> <span class="pill">Back view</span> or <span class="pill">From above</span>, on Qwen Edit Multiangle 2511. A kept take's <span class="pill">More</span> offers it too, on the take that is showing <span class="v live">verified live</span>. Neither film uses it: their side and back views come from Make versions, with a prompt per view.</p>
+    </section>
+
+    <!-- ================================================================ 04 LAYERS -->
+    <section id="layers" data-toc="04 Layers">
+      <div class="chap-head"><span class="chap-no">04</span><p class="eyebrow">Layers</p><h2>One flat picture, <span class="it">rebuilt as layers</span>.</h2></div>
+      <div class="band">
+        <div class="ps"><span class="k"><svg aria-hidden="true"><use href="#i-ps"></use></svg>Photoshop</span><b>Layer mask, Hue/Saturation</b><p>The cast shadows masked back in from the original; one adjustment layer on a selection, or clipped to a layer.</p></div>
+        <div class="op" aria-hidden="true">+</div>
+        <div class="sc"><span class="k"><svg viewBox="0 0 245 252" aria-hidden="true"><use href="#mark"></use></svg>Scenario</span><b>Split into layers, Select by description</b><p>Seedream 5.0 Flash Layerize: a clean background and one layer per element. SAM 3.1 Image: every orange stripe.</p></div>
+        <div class="op" aria-hidden="true">=</div>
+        <div class="rs"><span class="k"><svg aria-hidden="true"><use href="#i-rs"></use></svg>Result</span><b>Four layers, any livery</b><p>The explorer, the rover and the outpost move on their own; one slider recolours her suit and the rover together.</p></div>
+      </div>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>A flat picture</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Split into layers</span><span class="mdl">Seedream 5.0 Flash Layerize</span></div>
+      <div class="row">
+        <div>
+          <div class="q2">
+            <figure class="tile cell"><img src="assets/img/rh/el-plate.webp" alt="The clean background: the plain and the arches, with the explorer, the rover and the outpost taken out" loading="lazy" width="600" height="900"><span class="lab">Background</span></figure>
+            <figure class="tile checker cell"><img src="assets/img/rh/el-explorer.webp" alt="The explorer on her own layer" loading="lazy" width="210" height="600"><span class="lab">Explorer</span></figure>
+            <figure class="tile checker cell"><img src="assets/img/rh/el-rover.webp" alt="The rover on its own layer" loading="lazy" width="441" height="376"><span class="lab">Rover</span></figure>
+            <figure class="tile checker cell"><img src="assets/img/rh/el-outpost.webp" alt="The research outpost on its own layer" loading="lazy" width="305" height="153"><span class="lab">Research outpost</span></figure>
+          </div>
+          <p class="k-note">What came back: a clean background and three elements, shown here on a checkerboard; in Photoshop each sits where it was in the frame. The prompt listed "the explorer and her long shadow, the rover and its shadow, the research outpost". <span class="go">Split into layers · 28 CU</span>.</p>
+        </div>
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/rh/pc-split.webp" alt="Split into layers, placed: Seedream 5.0 Flash Layerize · 28 CU, a background and 3 elements; the layer is hidden below" loading="lazy" width="610" height="740"><figcaption>A background and three elements; the source layer is hidden below.</figcaption></figure>
+        </div>
+      </div>
+      <ul class="list col">
+        <li>On a flat image, <span class="pill">Split into layers</span> is the first chip; on a layer it is in More › Layers. Leave the prompt empty for the main elements, or list them.</li>
+        <li>The result is a group above the source: a clean background and one layer per element, named Element 1, 2 and on in the model's order, not the prompt's. The source layer is hidden below.</li>
+        <li>Each element now moves and scales on its own with <b>Edit › Free Transform</b>.</li>
+        <li>Check where each element landed. Of four runs on RED HORIZON the first was kept; the three others placed the explorer 80 to 105 px from where she stood.</li>
+      </ul>
+
+      <h3 id="shadows">The shadows brought back</h3>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>A copy of the original, Lasso, feathered layer mask</span></div>
+      <div class="row">
+        <div class="pair">
+          <figure class="tile"><img src="assets/img/rh/shadow-before.webp" alt="After the split: the explorer and the rover on the plain without their long cast shadows" loading="lazy" width="900" height="967"><span class="lab r">After the split</span></figure>
+          <div class="arrow" aria-hidden="true">→</div>
+          <figure class="tile"><img src="assets/img/rh/shadow-after.webp" alt="The long cast shadows back on the plain, through a feathered layer mask" loading="lazy" width="900" height="967"><span class="lab r">Shadows, masked</span></figure>
+        </div>
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/rh/layers-shadows.webp" alt="The Layers panel: the Red Horizon group with Element 3, 2 and 1, the Cast shadows layer with its mask, and the clean background" loading="lazy" width="480" height="840"><figcaption>Cast shadows, a layer of its own with a mask.</figcaption></figure>
+        </div>
+      </div>
+      <ul class="list col">
+        <li>The split leaves the long cast shadows behind: the elements come back without them, and the clean background has none. It did so on all four runs.</li>
+        <li>Photoshop brings them back: a Cast shadows layer from a copy of the original, the Lasso around each shadow, a feathered layer mask.</li>
+        <li>The shadows are a layer of their own: they stay where they are when an element moves.</li>
+      </ul>
+
+      <h3 id="recolour">Every orange stripe, one adjustment</h3>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>Hue/Saturation adjustment layer</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Select by description</span><span class="mdl">SAM 3.1 Image</span></div>
+      <div class="row">
+        <div>
+          <div class="q2">
+            <figure class="tile"><img src="assets/img/rh/liv-0.webp" alt="The burnt-orange stripes on her suit and on the rover, as made" loading="lazy" width="720" height="640"><span class="lab r">As made</span></figure>
+            <figure class="tile"><img src="assets/img/rh/liv-1.webp" alt="The same stripes in blue on the suit and the rover" loading="lazy" width="720" height="640"><span class="lab r">Hue −170</span></figure>
+            <figure class="tile"><img src="assets/img/rh/liv-2.webp" alt="The same stripes in teal" loading="lazy" width="720" height="640"><span class="lab r">Hue +150</span></figure>
+            <figure class="tile"><img src="assets/img/rh/liv-3.webp" alt="The same stripes in yellow" loading="lazy" width="720" height="640"><span class="lab r">Hue +25</span></figure>
+          </div>
+          <p class="k-note">The suit and the rover change together: one selection, one adjustment layer, one slider.</p>
+        </div>
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/rh/pc-stripe.webp" alt="Context card: Selection 590 × 519 on the canvas; Select by description, SAM 3.1 Image, selected 20 objects, orange stripe" loading="lazy" width="610" height="615"><figcaption>"orange stripe": 20 objects, one selection.</figcaption></figure>
+        </div>
+      </div>
+      <ol class="list col">
+        <li>Type "orange stripe" in the <span class="pill">Select…</span> field: SAM 3.1 Image finds 20 objects across her suit and the rover, and they become one Photoshop selection.</li>
+        <li>Photoshop: <b>Layer › New Adjustment Layer › Hue/Saturation</b>. The selection becomes the adjustment's mask.</li>
+        <li>Move Hue. The four liveries are the picture as made and that one layer at −170, +150 and +25.</li>
+      </ol>
+
+      <h3 id="clipped">One adjustment per layer</h3>
+      <div class="recipe"><span class="src l">THE LAST KEEPER</span><span class="r ps"><span class="k">Photoshop</span>Hue/Saturation, clipped</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Split into layers, Select by description</span><span class="mdl">Seedream 5.0 Flash Layerize, SAM 3.1 Image</span></div>
+      <div class="row">
+        <div class="wipe tall" style="--cut:50%">
+          <img src="assets/img/gouache/hue-before.webp" alt="THE LAST KEEPER after the split: a red and white lighthouse, a red rowing boat, the young woman in a yellow raincoat with her dog" loading="lazy" width="900" height="1350">
+          <img class="over" src="assets/img/gouache/hue-after.webp" alt="THE LAST KEEPER recoloured: the lighthouse blue and white, the rowing boat yellow, her raincoat red" loading="lazy" width="900" height="1350">
+          <span class="lab">Split layers</span><span class="lab r">Recoloured</span><span class="lab b">THE LAST KEEPER</span>
+          <span class="line"></span><span class="knob" aria-hidden="true">↔</span>
+          <input type="range" min="0" max="100" value="50" aria-label="Wipe between the split painting and the recoloured one">
+        </div>
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/gouache/layers-hue.webp" alt="THE LAST KEEPER, the Layers panel: Hue/Saturation layers clipped to the figure, the lighthouse and the rowing boat, above the cottage and the background" loading="lazy" width="480" height="940"><figcaption><span class="src l">THE LAST KEEPER</span>One Hue/Saturation layer clipped to each element; the raincoat's is also masked to a selection.</figcaption></figure>
+        </div>
+      </div>
+      <p class="col">On a split picture, Photoshop does the grade one layer at a time: <b>Layer › New Adjustment Layer › Hue/Saturation</b> with <b>Use Previous Layer to Create Clipping Mask</b>. On THE LAST KEEPER the lighthouse goes blue and the rowing boat yellow; her raincoat, found with Select by description, goes red. Each adjustment touches one element, so the rest of the painting stays as it was. Its split needed one fix by hand: the lighthouse came back 58 px from its place, and was moved back with Move and its edge tidied with a layer mask.</p>
+      <div class="note col"><p><b>Relight to scene</b> (More › Make variants) relights a cut-out or a split element to match what is under it, masked to its outline, with GPT Image 2.5 Sunburst. Neither film uses it. It can redraw details: name what must stay in the prompt and look at every take at 100%.</p></div>
+
+      <h3 id="split-text">Split text</h3>
+      <p class="col">For a title painted into the pixels, a flattened file or a client's JPEG: <b>More › Layers › Split text</b> returns the clean base and the text on its own layer above it, Ideogram V3 Layerize Text, no prompt. The base is ready for a new title set with the Type tool. <b>Remove text</b> (More › Finish) gives only the clean base. Neither film's poster needs it: their titles are live type from the start.</p>
+    </section>
+
+    <!-- ================================================================ 05 FORMATS -->
+    <section id="formats" data-toc="05 Formats">
+      <div class="chap-head"><span class="chap-no">05</span><p class="eyebrow">Formats</p><h2>Six lines of type, four formats, <span class="it">one document</span>.</h2></div>
+      <div class="band">
+        <div class="ps"><span class="k"><svg aria-hidden="true"><use href="#i-ps"></use></svg>Photoshop</span><b>The Type tool, Move</b><p>Six lines of live type over the art; then Move takes the billing clear of her boots.</p></div>
+        <div class="op" aria-hidden="true">+</div>
+        <div class="sc"><span class="k"><svg viewBox="0 0 245 252" aria-hidden="true"><use href="#mark"></use></svg>Scenario</span><b>Formats</b><p>Smart Reframe to 9:16, 4:5, 1:1 and 16:9, with a prompt for what must stay in frame.</p></div>
+        <div class="op" aria-hidden="true">=</div>
+        <div class="rs"><span class="k"><svg aria-hidden="true"><use href="#i-rs"></use></svg>Result</span><b>Four artboards, one document</b><p>Each with its six lines laid out again, still editable type.</p></div>
+      </div>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>Type tool, Move</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Formats</span><span class="mdl">Smart Reframe</span></div>
+      <div class="row">
+        <div>
+          <div class="q2">
+            <figure class="tile dark"><img src="assets/img/rh/fmt-916.webp" alt="9:16 artboard: the full poster with its six lines of type" loading="lazy" width="800" height="800"><span class="lab">9:16 · 1080 × 1920</span></figure>
+            <figure class="tile dark"><img src="assets/img/rh/fmt-45.webp" alt="4:5 artboard with its six lines of type" loading="lazy" width="800" height="800"><span class="lab">4:5 · 1080 × 1350</span></figure>
+            <figure class="tile dark"><img src="assets/img/rh/fmt-11.webp" alt="1:1 artboard with its six lines of type" loading="lazy" width="800" height="800"><span class="lab">1:1 · 1080 × 1080</span></figure>
+            <figure class="tile dark"><img src="assets/img/rh/fmt-169.webp" alt="16:9 artboard with its six lines of type" loading="lazy" width="800" height="800"><span class="lab">16:9 · 1920 × 1080</span></figure>
+          </div>
+          <p class="k-note">The four artboards of one document, each fitted to its cell. On every artboard the six lines are live type. On 9:16, the right edge of the frame cuts through the outpost.</p>
+        </div>
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/rh/layers-formats.webp" alt="The Layers panel of the formats document: the 16:9 artboard with its six type layers and the reframed picture, then the 1:1 artboard" loading="lazy" width="480" height="840"><figcaption>One artboard per format, each with its own type layers. One layer name is blurred.</figcaption></figure>
+        </div>
+      </div>
+      <div class="row rev">
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/rh/pc-formats.webp" alt="The composer: Keep the explorer, the rover and the research outpost whole in frame, at their size; 9:16 1080 × 1920; Formats · 45 CU" loading="lazy" width="610" height="340"><figcaption>What must stay in frame, then the format.</figcaption></figure>
+          <figure class="pc"><img src="assets/img/rh/layers-type.webp" alt="The Layers panel of the poster: six type layers above the art, the studio line, the release line, the billing lines, the tagline and the title RED HORIZON" loading="lazy" width="480" height="1090"><figcaption>The poster's six type layers.</figcaption></figure>
+        </div>
+        <div>
+          <ol class="list">
+            <li>Set the poster's type with the <b>Type tool</b>: a studio line, the title, a tagline, two billing lines and a release line, each its own type layer.</li>
+            <li>Select the art and choose <span class="pill">Formats</span>, a chip on a flat image, More › Finish on a layer. Pick the format in the <span class="pill">Format</span> chip.</li>
+            <li>Optional: say what must stay in frame, "Keep the explorer, the rover and the research outpost whole in frame, at their size". <span class="go">Formats · 45 CU</span> per format.</li>
+            <li>The picture is reframed without its type layers. Each line is laid out again on the artboard at its place in the frame, scaled with the picture, smaller only when it would not fit. Run the next format: it is added to the same document.</li>
+            <li>Then Photoshop: on the 1:1 and 16:9 artboards, the <b>Move</b> tool takes the billing lines clear of her boots.</li>
+          </ol>
+          <p class="small muted" style="margin-top:12px">Four artboards in one document, each title live inside its artboard <span class="v live">verified live</span> on 0.7.1. Text painted into the pixels is reframed with the picture and can still be cut: use Split text first.</p>
+        </div>
+      </div>
+
+      <h3 id="extend">Extend canvas</h3>
+      <p class="col">To grow the poster itself to a wider ratio, keeping its pixels and drawing only the new area, use <b>Extend canvas</b>: a chip on a layer, More › Finish on a flat image. Pick the target in <span class="pill">Extend to</span>. The default model, Reframe, redraws the frame around the original; for <span class="pill">+20% each side</span>, pick GPT Image 2.5 Flare. Neither film uses it: their wide versions come from Formats.</p>
+      <div class="note col"><p><b>Look at the old edges at 100%.</b> Runs in testing showed a step at the old edge or drew a figure twice; the checks flag a step or a repeated detail but do not remove it. Extend in smaller steps if you see one.</p></div>
+    </section>
+
+    <!-- ================================================================ 06 PRINT -->
+    <section id="print" data-toc="06 Print">
+      <div class="chap-head"><span class="chap-no">06</span><p class="eyebrow">Print</p><h2>Stamp it, double it, <span class="it">check at 100%</span>.</h2></div>
+      <div class="band">
+        <div class="ps"><span class="k"><svg aria-hidden="true"><use href="#i-ps"></use></svg>Photoshop</span><b>Stamp Visible, Image Size</b><p>Shift + Option + Command + E merges everything you see, the livery, the outpost and the type, onto a new layer.</p></div>
+        <div class="op" aria-hidden="true">+</div>
+        <div class="sc"><span class="k"><svg viewBox="0 0 245 252" aria-hidden="true"><use href="#mark"></use></svg>Scenario</span><b>Upscale this layer, ×2</b><p>Topaz Image Upscale reads the stamped layer only. No prompt.</p></div>
+        <div class="op" aria-hidden="true">=</div>
+        <div class="rs"><span class="k"><svg aria-hidden="true"><use href="#i-rs"></use></svg>Result</span><b>A 2048 × 3072 document</b><p>17.3 × 26 cm at 300 ppi, opened as a new document beside the poster.</p></div>
+      </div>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>Stamp Visible</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Upscale this layer ×2</span><span class="mdl">Topaz Image Upscale</span></div>
+      <div class="row">
+        <figure class="shot"><img src="assets/img/rh/stamp.webp" alt="The stamped Layer 1 at the top of the Layers panel above the working layers; the Scenario panel reads Layer 1, Layer 1024 × 1536, Opens as a new document 2048 × 3072, with Upscale this layer selected" loading="lazy" width="1122" height="560"><figcaption>The stamped layer on top, the working layers kept below it. The panel reads "Opens as a new document 2048 × 3072".</figcaption></figure>
+        <div class="stack pcs"><figure class="pc"><img src="assets/img/rh/pc-upscale.webp" alt="Reads this layer only, not the whole picture. No prompt needed. ×2 2048 × 3072, Topaz Image Upscale, Upscale ×2 · 10 CU" loading="lazy" width="610" height="280"><figcaption><span class="go">Upscale ×2 · 10 CU</span></figcaption></figure></div>
+      </div>
+      <div class="pair" style="max-width:760px;margin-top:8px">
+        <figure class="tile"><img src="assets/img/rh/up-before.webp" alt="Her face from the 1024 × 1536 poster, enlarged five times: soft and blocky" loading="lazy" width="600" height="600"><span class="lab r">Original at 500%</span></figure>
+        <div class="arrow" aria-hidden="true">→</div>
+        <figure class="tile"><img src="assets/img/rh/up-after.webp" alt="The same face from the 2048 × 3072 document at 250%: clean skin, hair and suit collar" loading="lazy" width="600" height="600"><span class="lab r">×2 at 250%</span></figure>
+      </div>
+      <p class="k-note col">Her face at the same size on screen: the 1024 × 1536 poster enlarged, and the 2048 × 3072 document Upscale opened.</p>
+      <ul class="list col">
+        <li><b>Upscale this layer</b> (More › Finish on a layer) reads the active layer only, which is why the stamp comes first. <span class="pill">Upscale</span> on a flat image reads all visible layers; <span class="pill">Upscale kept take</span> upscales the take you kept.</li>
+        <li>The result opens as a new document named after the source <span class="v live">verified live</span>. The source document and its layers are untouched.</li>
+        <li>Photoshop: <b>Image › Image Size</b>, Resample off, 300 ppi, reads the print size of the new document.</li>
+        <li>Every upload stays under 4,000,000 bytes. When a capture is over, the panel stops first and shows the new size and price; the next click runs at that size. Nothing is sent or spent before <span class="v live">verified live</span>.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================ 07 MOTION -->
+    <section id="motion" data-toc="07 Motion">
+      <div class="chap-head"><span class="chap-no">07</span><p class="eyebrow">Motion</p><h2>The poster, <span class="it">in motion</span>.</h2></div>
+      <div class="band">
+        <div class="ps"><span class="k"><svg aria-hidden="true"><use href="#i-ps"></use></svg>Photoshop</span><b>The Timeline</b><p>The clip opens as a video document: trim it, set a title over it, File › Export › Render Video.</p></div>
+        <div class="op" aria-hidden="true">+</div>
+        <div class="sc"><span class="k"><svg viewBox="0 0 245 252" aria-hidden="true"><use href="#mark"></use></svg>Scenario</span><b>Animate</b><p>A short clip from the picture and your prompt, 5 s. Minimax H3 Fast by default; this clip ran on Minimax H3.</p></div>
+        <div class="op" aria-hidden="true">=</div>
+        <div class="rs"><span class="k"><svg aria-hidden="true"><use href="#i-rs"></use></svg>Result</span><b>A five-second clip</b><p>She turns toward the rover and red dust drifts across the plain; the type stays out of the frames.</p></div>
+      </div>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r ps"><span class="k">Photoshop</span>The key art, type hidden</span><span class="op" aria-hidden="true">+</span><span class="r sc"><span class="k">Scenario</span>Animate, 5 s</span><span class="mdl">Minimax H3</span></div>
+      <div class="row">
+        <figure class="shot" style="max-width:440px">
+          <video src="assets/clip/red-horizon-animate-5s.mp4" poster="assets/img/rh/clip-poster.webp" width="768" height="1152" muted loop playsinline autoplay preload="metadata" aria-label="RED HORIZON animated: the explorer turns toward the rover while red dust drifts across the plain"></video>
+          <figcaption>The clip as it came back, 768 × 1152: she turns toward the rover while red dust drifts low across the plain.</figcaption>
+        </figure>
+        <div class="stack pcs"><figure class="pc"><img src="assets/img/rh/pc-animate.webp" alt="Context card: Key art, no type, Layer 1024 × 1536, opens the clip as a new document; the MP4 goes to the output folder; the Animate chip selected" loading="lazy" width="610" height="410"><figcaption>The clip opens as a new document; the MP4 goes to the output folder.</figcaption></figure></div>
+      </div>
+      <ul class="list col">
+        <li><b>More › Animate</b>: describe the motion; 5 s by default. On RED HORIZON: "Camera locked off, nothing changes size or position. Fine red dust drifts low across the…". The run cost 80 CU on Minimax H3.</li>
+        <li>Animate reads the picture without its type layers, so the motion never warps the lettering; the titles stay in the document <span class="v live">verified live</span>. Set the title again over the clip, or keep the clip clean for an editor.</li>
+        <li>The clip opens as a new document with a Video Group in the Timeline, and the MP4 is saved in the output folder. Jobs names these jobs "Video".</li>
+        <li><span class="pill">Frame to layer</span> brings the clip's last frame back as a layer, to animate again from it.</li>
+      </ul>
+    </section>
+
+    <!-- ================================================================ 08 AGENTS -->
+    <section id="agents" data-toc="08 Agents">
+      <div class="chap-head"><span class="chap-no">08</span><p class="eyebrow">Agents</p><h2>Let an agent work in Photoshop, <span class="it">through the Scenario MCP</span>.</h2></div>
+      <div class="band">
+        <div class="ps"><span class="k"><svg aria-hidden="true"><use href="#i-ps"></use></svg>Photoshop</span><b>History</b><p>Each change an agent lands is one named step, "Scenario agent: &lt;action&gt;", that you can undo.</p></div>
+        <div class="op" aria-hidden="true">+</div>
+        <div class="sc"><span class="k"><svg viewBox="0 0 245 252" aria-hidden="true"><use href="#mark"></use></svg>Scenario</span><b>The Scenario MCP, 29 tools</b><p>The local <code style="background:transparent;padding:0;color:inherit">scenario-photoshop</code> server for Claude Code, Codex, Cursor or Claude Desktop.</p></div>
+        <div class="op" aria-hidden="true">=</div>
+        <div class="rs"><span class="k"><svg aria-hidden="true"><use href="#i-rs"></use></svg>Result</span><b>An agent in your document</b><p>It reads, prices, runs and lands layers, with every spend approved in the panel.</p></div>
+      </div>
+      <p class="col">The helper runs on your computer only, talks to the panel over <code>localhost</code> and holds no Scenario key: generations run through the plugin with the account you signed in with. Every credit an agent spends goes through a card in the panel; with <b>Agents may modify the document</b> off, every result it wants to land waits on a proposal card.</p>
+      <div class="row rev">
+        <div class="stack pcs">
+          <figure class="pc"><img src="assets/img/settings-agents.webp" alt="Settings, Connect an AI agent: no agent connected, Copy pairing token, the agent switches" loading="lazy" width="565" height="1150"><figcaption>Settings › Connect an AI agent. Account row blurred.</figcaption></figure>
+          <figure class="pc"><img src="assets/img/connect-client.webp" alt="Connect a client: rows for Claude Code, Codex, Cursor and Claude Desktop with Copy command, Get the extension and Copy token" loading="lazy" width="565" height="1040"><figcaption>Connect a client: a row per client.</figcaption></figure>
+        </div>
+        <div>
+          <ol class="list">
+            <li>Open <b>Settings › Connect an AI agent › Connect a client</b>.</li>
+            <li><span class="pill">Copy command</span> for Claude Code, Codex and Cursor and run it in a terminal; <span class="pill">Get the extension</span> and <span class="pill">Copy token</span> for Claude Desktop. Buttons that hold the pairing token clear the clipboard after 60 seconds.</li>
+            <li>Restart the client so it starts the helper.</li>
+            <li>Ask "What document is open in Photoshop?". The row turns to <b>Connected</b>.</li>
+          </ol>
+          <p class="small">In this development build the helper is not on npm yet, so the copied <code>npx</code> commands work once it is published. From a checkout, after <span class="pill">Copy pairing token</span>:</p>
+          <pre><code>pbpaste | node helper/bin/scenario-photoshop.js setup claude-code --local --token-stdin</code></pre>
+          <div class="tbl"><table>
+            <thead><tr><th>Client</th><th>Checked</th></tr></thead>
+            <tbody>
+              <tr><td>Claude Code</td><td><span class="v live">verified live</span> sessions that read the document, priced, spent through the spend card and landed through the proposal card</td></tr>
+              <tr><td>Codex</td><td><span class="v auto">tested headless</span> the setup command; no session against Photoshop yet</td></tr>
+              <tr><td>Cursor</td><td><span class="v auto">tested automated</span> config writing; Cursor itself <span class="v none">not tested</span></td></tr>
+              <tr><td>Claude Desktop</td><td>the <code>.mcpb</code> extension ships with the first published release <span class="v none">not tested</span></td></tr>
+            </tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <h3 id="agent-switches">What agents may do</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Switch</th><th>Off (default)</th><th>On</th></tr></thead>
+        <tbody>
+          <tr><td>Agents may modify the document</td><td>Every result an agent wants to land shows a proposal card with Apply and Dismiss</td><td>Results land at once as one History step "Scenario agent: &lt;action&gt;", with an Undo banner</td></tr>
+          <tr><td>Agents may run Photoshop commands</td><td>Refused</td><td>batchPlay on the document in front, one History step per call. Saving, closing, exporting, printing, Actions, scripts, Adobe's generative features and settings are always refused. Needs the first switch; turns off when Photoshop quits</td></tr>
+          <tr><td>Agents read the active document only</td><td>Agents can read every open document</td><td>Only the document you are working on, and its jobs</td></tr>
+          <tr><td>No-spend mode</td><td colspan="2">Refuses every agent request that would spend credits, whatever the other switches say</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3 id="agent-approvals">A typical edit, and where you approve</h3>
+      <div class="cols2">
+        <ol class="flowv" aria-label="A typical agent edit">
+          <li><span><code>document_summary</code><span class="who">reads</span></span></li>
+          <li><span><code>set_selection</code><span class="who">first switch</span></span></li>
+          <li><span><code>capture_reference</code></span></li>
+          <li class="card-stop"><span><code>upload_reference</code><span class="stop"><b>Upload card</b>: before an agent first sends pixels from a document in a session <span class="v auto">tested automated</span></span></span></li>
+          <li><span><code>estimate_cost</code><span class="who">free</span></span></li>
+          <li class="card-stop"><span><code>generate</code><span class="stop"><b>Spend card</b>: the client, the model, the prompt, the price on Approve <span class="v live">verified live</span></span></span></li>
+          <li><span><code>wait_for_job</code></span></li>
+          <li><span><code>prepare_result_application</code></span></li>
+          <li class="card-stop"><span><code>apply_result_application</code><span class="stop"><b>Proposal card</b>: the target document and the History name; Apply lands it in one step <span class="v live">verified live</span></span></span></li>
+        </ol>
+        <div>
+          <ul class="list">
+            <li><b>Spend card.</b> Decline spends nothing. The agent must send back the exact price it was quoted; a changed price or an expired quote is refused before anything is spent. A card left unanswered expires after 10 minutes.</li>
+            <li><b>Proposal card.</b> Shows the client, the model, the target document and the History name; it shows no picture of the result in this build.</li>
+            <li><b>Agent spending.</b> <span class="pill">Ask each time</span>, the default, or <span class="pill">Allow</span> for one client session, with a limit per call and a total. <span class="pill">End</span> stops it at once. The Activity log lists every agent request.</li>
+            <li>Agents change only the document in front; the plugin never brings another document forward for them. Their jobs show in Jobs, marked with the client's name.</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3 id="tools-29">The 29 tools</h3>
+      <p class="small muted col">Each square is one tool of the local server. Hover or focus a square for its name. Amber squares need a switch.</p>
+      <div class="tools" id="tools"></div>
+      <p class="small col">Setup per client, the approvals and the tool reference: <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/docs/MCP.md">docs/MCP.md</a>. <span class="pill">Copy skills command</span> in Connect a client copies <code>npx skills add scenario-labs/skills</code> for the Scenario skills.</p>
+    </section>
+
+    <!-- ================================================================ THE LAST KEEPER -->
+    <section id="gouache" data-toc="The same steps on gouache">
+      <div class="col">
+        <p class="eyebrow">The second film</p>
+        <h2>The same steps on <span class="it">gouache key art</span>.</h2>
+        <p>THE LAST KEEPER runs the plugin on a painted picture for an animated feature: a young woman in a yellow raincoat with her shaggy dog and a brass storm lantern, a striped lighthouse on a headland, a rowing boat heading out to sea. Create image, Select, the character sheet, Split into layers, Formats, Upscale, Animate and an agent, on the same development build. The pictures labelled <span class="src l">THE LAST KEEPER</span> on this page come from its runs: <a href="#inside-selection">the rowing boat</a>, <a href="#turnaround">the character sheet and her lantern</a> and <a href="#clipped">the recolour</a>.</p>
+      </div>
+      <figure>
+        <div class="film" id="film-l" data-state="poster">
+          <video id="film-l-v" src="assets/film/film-gouache.mp4" poster="assets/film/film-gouache-poster.jpg" preload="none" playsinline width="1280" height="720" aria-label="Scenario for Photoshop, the second film, on THE LAST KEEPER"></video>
+          <span class="film-tag">Second film</span>
+          <button class="film-play" type="button" id="film-l-play"><span class="tri" aria-hidden="true"></span>Watch the film</button>
+          <span class="film-msg" role="status">The film is not on this page yet.</span>
+        </div>
+        <figcaption>THE LAST KEEPER, 4 min, narration in English: from four takes on an empty document to a five-second clip and an agent, then the web app, a workflow in the node editor and Scenario MCP.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ================================================================ THE GUIDE -->
+    <section id="guide" data-toc="The guide, both pictures">
+      <div class="col">
+        <p class="eyebrow">The guide</p>
+        <h2>Both pictures, <span class="it">step by step</span>.</h2>
+        <p>The guide follows RED HORIZON from an empty document to the poster, then its formats, print, motion and agents. THE LAST KEEPER comes in where it shows a step of its own, such as the rowing boat placed with Inside selection and the recolour that keeps every element on its layer. Read it here page by page, or open the PDF.</p>
+      </div>
+      <div class="kit kit-one">
+        <div class="kit-card kit-guide wide">
+          <button class="kit-media" type="button" id="kit-guide" aria-label="Read the guide"><img class="pg-l" src="assets/guide/pages/p09.webp" alt="" loading="lazy" width="909" height="1287"><img class="pg-r" src="assets/guide/pages/p16.webp" alt="" loading="lazy" width="909" height="1287"><img class="pg-c" src="assets/guide/pages/p01.webp" alt="The guide's cover page" loading="lazy" width="909" height="1287"></button>
+          <div class="kit-body">
+            <span class="kit-meta">Guide · PDF · 30 pages A4 · 9 MB</span>
+            <h3>Scenario for Photoshop, two posters from start to finish</h3>
+            <p>Seventeen chapters and an index. Eight follow the pictures, from Create to Agents; the others cover install, the panel, versions and takes, prices and jobs, the library, privacy, troubleshooting and known limits.</p>
+            <div class="kit-act"><button class="btn-go" type="button" id="kit-guide-go">Read the guide</button><a class="btn-pill" href="assets/guide/scenario-photoshop-plugin-guide.pdf" target="_blank" rel="noopener">Open the PDF</a></div>
+            <span class="kit-note">If the PDF does not open here, read it page by page with Read the guide.</span>
+          </div>
+        </div>
+      </div>
+      <div class="reader" id="reader" hidden role="dialog" aria-modal="true" aria-label="The guide, page by page">
+        <div class="reader-bar"><b>Scenario for Photoshop, the guide</b><span id="reader-n">1 / 30</span><button type="button" id="reader-x" aria-label="Close the guide">Close</button></div>
+        <div class="reader-stage"><button type="button" id="reader-prev" aria-label="Previous page">‹</button><img id="reader-img" src="" alt="" width="909" height="1287"><button type="button" id="reader-next" aria-label="Next page">›</button></div>
+      </div>
+    </section>
+
+    <!-- ================================================================ REFERENCE -->
+    <div class="part"><span>Reference</span><em>install, prices, jobs, privacy, limits</em></div>
+
+    <section id="install" data-toc="Install and sign in">
+      <div class="col">
+        <p class="eyebrow">Install</p>
+        <h2>Build it, install it, <span class="it">sign in</span>.</h2>
+        <div class="req"><span class="pill">Photoshop 2026 (27.x)</span><span class="pill">macOS tested, Windows not tested</span><span class="pill">Node.js 20 or later to build</span><span class="pill">Scenario plan with API access, Starter or above</span><span class="pill">Project key, Editor role</span></div>
+        <p>The plugin is not on the Adobe Marketplace yet. You build the <code>.ccx</code> package from the repository and install it with Creative Cloud's installer.</p>
+        <ol class="list">
+          <li><b>Build the package</b> from a checkout of <a href="https://github.com/scenario-labs/photoshop-plugin">scenario-labs/photoshop-plugin</a>:
+            <pre><code>npm ci
+npm run package   # writes build/scenario-photoshop-0.7.1.ccx</code></pre></li>
+          <li><b>Install it</b> with Creative Cloud's plugin installer, then restart Photoshop:
+            <pre><code>"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" \
+  --install "$PWD/build/scenario-photoshop-0.7.1.ccx"</code></pre></li>
+          <li><b>Open the panel</b> from <b>Plugins › Scenario</b>. Photoshop hides docked panels on its Home screen, so make or open a document first: File › New is enough.</li>
+        </ol>
+        <p class="small">The development package installs this way <span class="v live">verified live</span>. Installing the release package, by command or by double-click, and the time to a first image <span class="v none">not tested</span>.</p>
+      </div>
+      <h3 id="sign-in" class="col">Sign in</h3>
+      <div class="row rev">
+        <div class="stack pcs"><figure class="pc"><img src="assets/img/settings-account.webp" alt="Settings, Account: the signed-in project blurred, Add a key for another project, Test connection, Sign out" loading="lazy" width="565" height="550"><figcaption>Settings › Account. Project name and key blurred.</figcaption></figure></div>
+        <div>
+          <ol class="list">
+            <li>On <a href="https://app.scenario.com">app.scenario.com</a>, in the project you want to use, create a <b>Project key</b> with the <b>Editor</b> role. Copy the key and its secret. Only team admins and project owners can create keys: <span class="pill">Copy a request for your admin</span> prepares the message.</li>
+            <li>Paste both in the panel and click <span class="pill">Save and test</span>. Pasting <code>key:secret</code> fills both fields. Two free reads check the key.</li>
+          </ol>
+          <div class="tbl"><table><tbody>
+            <tr><td>Where the key is kept</td><td>Photoshop's secure storage for this plugin, one entry per project, under your operating system account. It goes only to Scenario's API over HTTPS, never to the helper or to agents.</td></tr>
+            <tr><td>Another project</td><td><span class="pill">Add a key for another project</span>, then click the project name in the panel header to switch.</td></tr>
+            <tr><td>A spending cap</td><td>A limit on the key, set on app.scenario.com, caps what the plugin and connected agents can spend.</td></tr>
+            <tr><td>Sign out</td><td>Removes the key from this computer only. Delete the key on app.scenario.com to revoke it.</td></tr>
+          </tbody></table></div>
+          <p class="small muted">Signing in <span class="v live">verified live</span> through the development build's key import. Typing or pasting into the fields, and the screens for a refused key or a plan without API access <span class="v none">not tested</span> live.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel" data-toc="The panel, top to bottom">
+      <div class="col">
+        <p class="eyebrow">The panel</p>
+        <h2>One panel beside your layers, <span class="it">top to bottom</span>.</h2>
+        <p>Scenario is a docked Photoshop panel. It resizes with its column and keeps one order: header, context card, action chips, Takes and Recent, and the composer pinned at the bottom. Here on RED HORIZON's first step, a blank canvas with the prompt typed; the empty middle of the panel is cut out.</p>
+      </div>
+      <div class="anno">
+        <div class="anno-pic">
+          <figure class="pc"><img src="assets/img/rh/panel-tour.webp" alt="The Scenario panel on a blank canvas: header, context card Blank canvas 1024 × 1536, Select field, the chips Create image and Place from Library, then the composer with Reference, the prompt, Suggest, the chips No style, GPT Image 2.5 Flare and 4 takes, and the Create image · 47 CU button" loading="lazy" width="632" height="968"></figure>
+          <span class="pin" style="top:8.8%">1</span><span class="pin" style="top:21%">2</span><span class="pin" style="top:29.9%">3</span><span class="pin" style="top:38.5%">4</span><span class="pin" style="top:56.8%">5</span><span class="pin" style="top:66.4%">6</span><span class="pin" style="top:73.3%">7</span><span class="pin" style="top:83.5%">8</span><span class="pin" style="top:94.7%">9</span>
+        </div>
+        <ol>
+          <li><div><b>Header.</b> The signed-in project (click to switch; blurred here), the agent icon with its status dot and the connected client, and <b>Jobs</b> with a count.</div></li>
+          <li><div><b>Context card.</b> What the panel works on and where the result lands. During a run it shows the progress.</div></li>
+          <li><div><b>Select…</b> Select by description.</div></li>
+          <li><div><b>Action chips.</b> At most six for this context, then <span class="pill">More</span> with the others in groups: Finish, Select and cut, Layers, Make variants, Animate. A pin in More adds an action to the chips.</div></li>
+          <li><div><b>+ Reference.</b> The selection's box, a layer, all visible, a file or a Library image.</div></li>
+          <li><div><b>Prompt.</b> An action that needs none says so.</div></li>
+          <li><div><b>Suggest.</b> Writes a prompt that fits the action and the size the result fills.</div></li>
+          <li><div><b>Chips.</b> Style, model and takes, each showing its value. The gear holds the quality level, Medium by default, and advanced options.</div></li>
+          <li><div><b>The action button</b> with its price, <span class="go">Create image · 47 CU</span> for four takes at quality High.</div></li>
+        </ol>
+      </div>
+      <h3 id="chips">Chips by context</h3>
+      <div class="tbl"><table>
+        <thead><tr><th>Context</th><th>Chips, in order</th></tr></thead>
+        <tbody>
+          <tr><td>Blank canvas</td><td>Create image, Place from Library</td></tr>
+          <tr><td>Flat image</td><td>Split into layers, Make versions, Upscale, Formats, More</td></tr>
+          <tr><td>Layer</td><td>Make versions, Extend canvas, Upscale, Remove background, New layer, More</td></tr>
+          <tr><td>Cut-out</td><td>Add background, Relight to scene, Make versions, Upscale, Extend canvas, More</td></tr>
+          <tr><td>Split element</td><td>Make versions, Relight to scene, New angle, Upscale, More</td></tr>
+          <tr><td>Selection</td><td>Replace inside, Remove, Make versions, Cut out subject, New layer</td></tr>
+          <tr><td>Takes</td><td>Compare takes, More like this, Refine, Upscale kept take, More</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small muted col">With no document open the panel offers Create image and Open from Library, but Photoshop hides docked panels on its Home screen.</p>
+    </section>
+
+    <section id="models" data-toc="Versions and models">
+      <div class="col">
+        <p class="eyebrow">Versions, takes, models</p>
+        <h2>Variations to compare, <span class="it">the catalog one click away</span>.</h2>
+      </div>
+      <div class="recipe"><span class="src">RED HORIZON</span><span class="r sc"><span class="k">Scenario</span>Make versions, two takes per view</span><span class="mdl">GPT Image 2.5 Flare</span></div>
+      <div class="row wide-side">
+        <div class="vers4">
+          <figure class="tile"><img src="assets/img/rh/vers-front-1.webp" alt="Front view, take 1: the explorer from the front on a white card, holding her helmet" loading="lazy" width="258" height="770"><span class="lab b">Front 1</span></figure>
+          <figure class="tile"><img src="assets/img/rh/vers-front-2.webp" alt="Front view, take 2: the same explorer from the front, a second way" loading="lazy" width="258" height="770"><span class="lab b">Front 2</span></figure>
+          <figure class="tile"><img src="assets/img/rh/vers-side-1.webp" alt="Side view, take 1: the explorer in profile on a white card" loading="lazy" width="258" height="770"><span class="lab b">Side 1</span></figure>
+          <figure class="tile"><img src="assets/img/rh/vers-side-2.webp" alt="Side view, take 2: the explorer in profile, a second way" loading="lazy" width="258" height="770"><span class="lab b">Side 2</span></figure>
+        </div>
+        <div>
+          <p><b>Make versions</b> on the character sheet: one run per view, two takes each, on GPT Image 2.5 Flare, <span class="go">Make versions · 23 CU</span>. The takes of one run land as a group; you compare them in the Takes card and keep one.</p>
+          <div class="tbl" style="margin-top:0"><table><tbody>
+            <tr><td>Make versions</td><td>Variations of the layer, or the change you describe. Empty prompt: a built-in one is sent. Also works on a selection.</td></tr>
+            <tr><td>Takes chip</td><td>How many takes one run makes; the price follows.</td></tr>
+            <tr><td>Keep take</td><td>Leaves the group named after its prompt <span class="v auto">tested automated</span>. A layer you added to the group, or a copy of a take, is never deleted by Keep.</td></tr>
+            <tr><td>Model chip</td><td>The action's recommended model, then catalog models that can do it, with their prices for this document, then <span class="pill">All models…</span>: search, the Image, Edit, Enhance and Trained tabs, favorites.</td></tr>
+            <tr><td>Style chip</td><td>No style, Match an image (<span class="v none">not tested</span> live) and the project's trained styles.</td></tr>
+            <tr><td>Trained models</td><td>Run on their base model with their trigger words before your prompt <span class="v live">verified live</span> with FLUX.1 Dev and FLUX.2 Dev models.</td></tr>
+            <tr><td>+ Reference</td><td>The selection's box, the active layer, all visible, a PNG or JPEG file, or a Library image. References upload at the click.</td></tr>
+          </tbody></table></div>
+        </div>
+      </div>
+      <div class="q2" style="max-width:640px;margin-top:20px">
+        <figure class="pc"><img src="assets/img/rh/pc-model-menu.webp" alt="Model menu on Replace inside: the recommended model first, then catalog models with their prices for this document, then All models" loading="lazy" width="610" height="750"><figcaption>Model, on Replace inside.</figcaption></figure>
+        <figure class="pc"><img src="assets/img/rh/pc-picker.webp" alt="All models picker with search and the Image, Edit, Enhance and Trained tabs" loading="lazy" width="610" height="1010"><figcaption>All models.</figcaption></figure>
+        <figure class="pc"><img src="assets/img/style-menu.webp" alt="Style menu: No style, Match an image" loading="lazy" width="565" height="600"><figcaption>Style.</figcaption></figure>
+        <figure class="pc"><img src="assets/img/rh/pc-edit-menu.webp" alt="Edit menu on Replace inside: Inside selection and Bolder" loading="lazy" width="610" height="560"><figcaption>Edit, on Replace inside.</figcaption></figure>
+      </div>
+      <h3 id="default-models">Default models in this build</h3>
+      <div class="cols2">
+        <div class="tbl"><table><tbody>
+          <tr><td>Create image, New layer, Make versions, Bolder</td><td>GPT Image 2.5 Flare</td></tr>
+          <tr><td>Replace inside, Inside selection</td><td>Ideogram 4.5 Precise Edit</td></tr>
+          <tr><td>Remove</td><td>Ideogram 4.5</td></tr>
+          <tr><td>Select by description</td><td>SAM 3.1 Image</td></tr>
+          <tr><td>Cut out subject, Remove background</td><td>851 Labs Background Remover</td></tr>
+          <tr><td>New angle</td><td>Qwen Edit Multiangle 2511</td></tr>
+          <tr><td>Split into layers</td><td>Seedream 5.0 Flash Layerize</td></tr>
+        </tbody></table></div>
+        <div class="tbl"><table><tbody>
+          <tr><td>Split text, Remove text</td><td>Ideogram V3 Layerize Text</td></tr>
+          <tr><td>Render sketch, Relight to scene</td><td>GPT Image 2.5 Sunburst</td></tr>
+          <tr><td>Formats</td><td>Smart Reframe</td></tr>
+          <tr><td>Extend canvas</td><td>Reframe, at 2K</td></tr>
+          <tr><td>Upscale</td><td>Topaz Image Upscale, ×2</td></tr>
+          <tr><td>Animate</td><td>Minimax H3 Fast</td></tr>
+        </tbody></table></div>
+      </div>
+    </section>
+
+    <section id="prices" data-toc="Prices">
+      <div class="col">
+        <p class="eyebrow">Prices</p>
+        <h2>The price is on the <span class="it">button</span>.</h2>
+        <p>Each change of prompt, model or setting is priced for free, a dry run that creates no job, about half a second later. The button shows it exact, as a range, or as "from" a price. Prices are in Scenario credits and vary by model, document and settings; the ones below are buttons from RED HORIZON's runs.</p>
+      </div>
+      <div class="anat">
+        <div><span class="pbtn">Create image · 47 CU</span><small>4 takes, quality High</small></div>
+        <div><span class="pbtn">Replace inside · 23 CU</span><small>Bolder, 2 takes</small></div>
+        <div><span class="pbtn">Upscale ×2 · 10 CU</span><small>no prompt</small></div>
+        <div><span class="pbtn wait">Fill in the prompt to see the price</span><small>needs a prompt</small></div>
+      </div>
+      <ul class="list col">
+        <li><b>A click on a priced button is the approval.</b> Above 100 CU, for the top of a range and for any "from" price, a card asks first.</li>
+        <li>The request is built again at the click. If the document, the selection or a setting changed since the price check, nothing is sent.</li>
+        <li>If the price changes once references or captures are uploaded, the panel stops and asks again. Nothing was spent <span class="v live">verified live</span>.</li>
+        <li>A failed job shows "Refunded by Scenario"; a model without refunds says so before you click. The plugin shows no balance or plan: check those on app.scenario.com.</li>
+      </ul>
+    </section>
+
+    <section id="jobs" data-toc="Jobs">
+      <div class="col">
+        <p class="eyebrow">Jobs</p>
+        <h2>Every run is a job, <span class="it">kept on disk</span>.</h2>
+        <p>Every run, yours or an agent's, is a job on this computer. Each job keeps what was asked, the price quoted and the price charged, and where its result went. Jobs is also where a result that did not land is placed by hand.</p>
+      </div>
+      <div class="tbl col"><table><tbody>
+          <tr><td>Where</td><td><b>Jobs</b> in the panel header opens the newest jobs, each with its time and price, then <span class="pill">All jobs</span>: each job with its picture, status, the price quoted and the price charged.</td></tr>
+          <tr><td>Written first</td><td>Each job is written to disk before anything is sent, so Jobs survives a restart <span class="v live">verified live</span> on 0.5.0.</td></tr>
+          <tr><td>After a restart</td><td>Uploading or waiting jobs become not sent, nothing charged; generating jobs resume; finished ones download again; nothing lands by itself.</td></tr>
+          <tr><td>Unknown</td><td>A request that may or may not have reached Scenario. The plugin looks it up: <span class="pill">Link</span> continues a match; <span class="pill">Mark not sent</span> appears only when a full look-up found none. Nothing is paid twice <span class="v auto">tested automated</span>.</td></tr>
+          <tr><td>Place</td><td><span class="pill">Place</span>, <span class="pill">Place in current document</span> and <span class="pill">Open as document</span> land a finished result where you choose.</td></tr>
+        </tbody></table></div>
+    </section>
+
+    <section id="library" data-toc="Library">
+      <div class="col">
+        <p class="eyebrow">Library</p>
+        <h2>Your project's images, <span class="it">one click away</span>.</h2>
+        <ul class="list">
+          <li><b>Place from Library</b>, in More › Layers or on a blank canvas: a grid of the project's images with search and the filters All, Generated, Edited, Uploaded, then <span class="pill">Show more</span>.</li>
+          <li>Click an image to place it as a new layer at its own size, never enlarged, centered, in one History state <span class="v live">verified live</span>. <span class="pill">+ Reference › Library</span> uses the same grid.</li>
+          <li>Everything the panel makes is also in your Scenario project, so the takes you did not keep are here too.</li>
+          <li>Search matches asset names, which are often not the words of the prompt. Dragging from the grid is not in this build.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="privacy" data-toc="Privacy and files">
+      <div class="col">
+        <p class="eyebrow">Privacy</p>
+        <h2>What leaves your computer, <span class="it">and when</span>.</h2>
+      </div>
+      <div class="cards3">
+        <div class="card"><b>To Scenario's API</b><p>Your key and secret with every request, over HTTPS. Prompt, model and settings for price checks and runs. Pixels only at your click: the selection's box plus a margin, a layer or the document, the mask and your references, each upload under 4,000,000 bytes.</p></div>
+        <div class="card"><b>Downloaded</b><p>Results from Scenario's CDN, the only download host this build accepts, through signed links kept in memory, without your key.</p></div>
+        <div class="card"><b>To an agent</b><p>What a connected agent reads, including previews of your documents, goes to that agent's model provider, under your agreement with that provider. The helper never receives your key.</p></div>
+      </div>
+      <div class="tbl"><table><tbody>
+        <tr><td>Results</td><td>Saved before they are placed, kept or not, in the plugin's output folder, and in your Scenario project.<pre><code>~/Library/Application Support/Adobe/UXP/PluginsStorage/PHSP/27/External/
+  com.scenario.photoshop/PluginData/Scenario/&lt;kind&gt;/&lt;date&gt;/</code></pre></td></tr>
+        <tr><td>Layer metadata</td><td>Each placed layer carries model, prompt, settings, job and prices in its XMP, which survives saving the PSD. Never your key, secret, token, team or project ids, or file paths.</td></tr>
+        <tr><td>Key and token</td><td>Photoshop's secure storage. The helper's token file is readable by your account only.</td></tr>
+        <tr><td>Diagnostics</td><td>Versions, switch states, job counts and recent error types, with no prompts, names, ids, paths, keys or tokens. <span class="pill">Copy diagnostics</span> shows the text before copying it.</td></tr>
+        <tr><td>Local link</td><td>Port 9890 of the loopback interface only, which other computers cannot reach. Web pages are refused. The plugin and each helper prove they hold the pairing token without sending it.</td></tr>
+        <tr><td>Deleting</td><td>On this computer: sign out, reset the pairing token, delete the plugin data folder. On Scenario: delete uploads and results in the web app, or write to support@scenario.com. Signing out does not revoke a key: delete it on app.scenario.com.</td></tr>
+      </tbody></table></div>
+      <p class="small col">The plugin sends nothing else: no update check, no analytics. Details: <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/PRIVACY.md">PRIVACY.md</a>. Security reports: privately to support@scenario.com with "security" in the subject.</p>
+    </section>
+
+    <section id="troubleshooting" data-toc="Troubleshooting">
+      <div class="col">
+        <p class="eyebrow">Troubleshooting</p>
+        <h2>When something does not <span class="it">land</span>.</h2>
+      </div>
+      <div class="tbl"><table>
+        <thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+        <tbody>
+          <tr><td>The panel is empty on Photoshop's Home screen</td><td>Make or open a document. Photoshop hides docked panels on Home.</td></tr>
+          <tr><td>"Scenario did not accept this key and secret."</td><td>Copy both again, from a Project key. <span class="pill">Enter key again</span> or <span class="pill">Create an API key</span>.</td></tr>
+          <tr><td>"API keys need a Starter plan or above."</td><td>Use a team on a plan with API access, or <span class="pill">Open plans</span>.</td></tr>
+          <tr><td>A Team (Organization) key or a Reader key</td><td>Use a Project key with the Editor role.</td></tr>
+          <tr><td>A card says the price changed</td><td>Nothing was spent. <span class="pill">Approve</span> at the new price or <span class="pill">Cancel</span>.</td></tr>
+          <tr><td>A job is Unknown</td><td>Open Jobs and let it look the job up, then <span class="pill">Link</span> or <span class="pill">Mark not sent</span>.</td></tr>
+          <tr><td>A result did not land</td><td>Bring the document it started from to the front, then <span class="pill">Place</span> in Jobs, or <span class="pill">Open as document</span>.</td></tr>
+          <tr><td>"No connection to Scenario."</td><td>Check the network, then <span class="pill">Retry</span>.</td></tr>
+          <tr><td>"Photoshop is busy. Try again in a moment."</td><td>Photoshop was placing or reading; the panel tried three times. Click again.</td></tr>
+          <tr><td>A Request For Permission card from Photoshop</td><td>The first link the panel opens to a new site asks Photoshop's permission; answer it.</td></tr>
+          <tr><td>A subject cut at the edge of a format</td><td>Name it in the Formats prompt and run that format again.</td></tr>
+        </tbody>
+      </table></div>
+      <h3 id="troubleshooting-agents">Agents</h3>
+      <div class="tbl"><table><tbody>
+        <tr><td><code>NotConnected</code></td><td>Open the Scenario panel; the helper reaches it only while it is open.</td></tr>
+        <tr><td><code>PairingFailed</code></td><td>The token changed. Run the setup command again from Connect a client.</td></tr>
+        <tr><td><code>VersionMismatch</code></td><td>The plugin and helper versions differ. Connect a client shows the command for the new version.</td></tr>
+        <tr><td><code>DocumentNotActive</code></td><td>Bring the document forward, then ask the agent to retry.</td></tr>
+        <tr><td><code>NoSpend</code></td><td>Turn off No-spend mode in Settings.</td></tr>
+        <tr><td><code>QuoteExpired</code>, <code>CostMismatch</code></td><td>Nothing was spent. The agent prices the run again.</td></tr>
+        <tr><td><code>SpendDeclined</code>, <code>UploadDeclined</code></td><td>You declined the card. Nothing was spent or sent.</td></tr>
+      </tbody></table></div>
+      <p class="small col">Still stuck: <span class="addr">support@scenario.com</span>, with the text from <span class="pill">Copy diagnostics</span>.</p>
+    </section>
+
+    <section id="limits" data-toc="Known limits">
+      <div class="col">
+        <p class="eyebrow">Known limits</p>
+        <h2>What this build does not do yet, <span class="it">and what was not tested</span>.</h2>
+      </div>
+      <div class="cols2">
+        <div>
+          <h4>Not in this build</h4>
+          <ul class="list small">
+            <li>Start a set, Same action on each, and Run a workflow.</li>
+            <li>Drag and drop onto the panel or from the Library grid.</li>
+            <li>The update check and an Output Folder setting.</li>
+            <li>The Adobe Marketplace listing and the helper on npm.</li>
+            <li>A picture of the result on the agent's proposal card.</li>
+          </ul>
+          <h4>Look closely at</h4>
+          <ul class="list small">
+            <li>Extend canvas: a step or a repeated detail at the old edge.</li>
+            <li>Inside selection: a lighter or darker patch at the selection edge. Edges ok is a hint.</li>
+            <li>Split into layers: a small element can land in the wrong place without a note.</li>
+            <li>Split into layers: cast shadows can stay behind. Bring them back from the original with a layer mask.</li>
+            <li>New layer cut out: with several elements, Photoshop's Remove Background can keep the wrong one.</li>
+            <li>Relight to scene can redraw details: name what must stay.</li>
+            <li>Formats: text painted into the pixels is reframed with the picture and can be cut.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Not tested</h4>
+          <ul class="list small">
+            <li>Windows, and Photoshop versions other than 27.11.</li>
+            <li>Installing the release <code>.ccx</code>, and the time from install to a first image.</li>
+            <li>Typing into the sign-in fields; the refused-key and no-API-access screens live.</li>
+            <li>Color-managed documents other than sRGB, 16-bit, CMYK, Lab, documents over about 8000 px, Undo and Redo of a landed result.</li>
+            <li>Match an image live; the trained Z-Image route and a stacked style.</li>
+            <li>Cursor and Claude Desktop sessions; a Codex session against Photoshop; two agent clients at once.</li>
+            <li>Panel widths other than 320 px on 0.7.x.</li>
+            <li>The panel following a Free Transform or a Move before New angle (tested automated only).</li>
+          </ul>
+        </div>
+      </div>
+      <p class="small col">Every limit, with how it was checked: <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/docs/KNOWN_LIMITATIONS.md">docs/KNOWN_LIMITATIONS.md</a>.</p>
+    </section>
+
+    <section id="licence" data-toc="Licence">
+      <div class="col">
+        <p class="eyebrow">Licence</p>
+        <p>Scenario for Photoshop is open source under the MIT licence. Third-party code is listed in <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>. The Scenario logo is a trademark of Scenario, not covered by the licence.</p>
+        <p class="small muted">Adobe and Photoshop are trademarks of Adobe. This project is not affiliated with or endorsed by Adobe.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="site-footer">
+  <div class="bar">
+    <svg class="wordmark" viewBox="0 0 1024 252" role="img" aria-label="Scenario"><use href="#logo"></use></svg>
+    <a href="https://github.com/scenario-labs/photoshop-plugin">Source on GitHub</a>
+    <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/CHANGELOG.md">Changelog</a>
+    <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/PRIVACY.md">Privacy</a>
+    <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/SECURITY.md">Security</a>
+    <a href="https://docs.scenario.com">Scenario docs</a>
+    <a href="https://www.scenario.com">scenario.com</a>
+    <span class="addr legal">support@scenario.com</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  // Contents rail: open beside the page on wide screens, a closed card on narrow ones;
+  // the section in view, and its sub-section, are marked.
+  var toc = document.getElementById("toc"), det = toc.querySelector("details");
+  var mq = window.matchMedia("(max-width: 960px)");
+  function fit() { det.open = !mq.matches; }
+  fit();
+  if (mq.addEventListener) mq.addEventListener("change", fit); else if (mq.addListener) mq.addListener(fit);
+  det.querySelector("summary").addEventListener("click", function (e) { if (!mq.matches) e.preventDefault(); });
+  toc.addEventListener("click", function (e) { if (mq.matches && e.target.closest("a")) det.open = false; });
+  var marks = [].slice.call(toc.querySelectorAll("a[href^='#']")).map(function (a) {
+    var up = a.parentNode.parentNode.closest("li");
+    return { a: a, el: document.getElementById(a.getAttribute("href").slice(1)), up: up ? up.firstElementChild : null };
+  }).filter(function (m) { return m.el; });
+  var ticking = false;
+  function spy() {
+    ticking = false;
+    var cur = marks[0];
+    marks.forEach(function (m) { if (m.el.getBoundingClientRect().top <= 140) cur = m; });
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) cur = marks[marks.length - 1];
+    marks.forEach(function (m) { m.a.removeAttribute("aria-current"); m.a.classList.remove("in"); });
+    cur.a.setAttribute("aria-current", "location");
+    if (cur.up) cur.up.classList.add("in");
+    if (!mq.matches) {
+      var t = cur.a.offsetTop, h = toc.clientHeight;
+      if (t < toc.scrollTop + 40 || t > toc.scrollTop + h - 60) toc.scrollTop = t - h / 3;
+    }
+  }
+  window.addEventListener("scroll", function () { if (!ticking) { ticking = true; requestAnimationFrame(spy); } }, { passive: true });
+  spy();
+
+  // Search: sections and sub-sections of this page, "/" to focus.
+  var q = document.getElementById("q"), box = document.getElementById("search"), panel = document.getElementById("q-panel");
+  var list = document.getElementById("q-results"), status = document.getElementById("q-status");
+  var idx = [], INLINE = /^(A|B|STRONG|EM|I|CODE|KBD|MARK|SMALL|SPAN|BR)$/;
+  function words(n) {
+    if (n.nodeType === 3) return n.nodeValue;
+    if (n.nodeType !== 1 || n.hidden || n.tagName === "SCRIPT" || n.tagName === "svg") return " ";
+    var t = "";
+    for (var c = n.firstChild; c; c = c.nextSibling) t += words(c);
+    return INLINE.test(n.tagName) && !/\b(k|lab)\b/.test(n.className) ? t : " " + t + " ";
+  }
+  [].forEach.call(document.querySelectorAll("[data-toc]"), function (s) {
+    var top = s.getAttribute("data-toc"), cur = { id: s.id, title: top, trail: "", text: "" };
+    idx.push(cur);
+    [].forEach.call(s.children, function (ch) {
+      if (ch.tagName === "H3" && ch.id) { cur = { id: ch.id, title: ch.textContent, trail: top, text: "" }; idx.push(cur); }
+      else cur.text += words(ch);
+    });
+  });
+  idx.forEach(function (e) { e.title = e.title.replace(/\s+/g, " ").trim(); e.text = e.text.replace(/\s+/g, " ").trim(); e.lt = e.title.toLowerCase(); e.lx = e.text.toLowerCase(); });
+  function esc(t) { return t.replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function hl(t, w) {
+    var lt = t.toLowerCase(), out = "", i = 0, j;
+    if (!w) return esc(t);
+    while ((j = lt.indexOf(w, i)) >= 0) { out += esc(t.slice(i, j)) + "<mark>" + esc(t.slice(j, j + w.length)) + "</mark>"; i = j + w.length; }
+    return out + esc(t.slice(i));
+  }
+  function snip(e, w) {
+    var j = e.lx.indexOf(w);
+    if (j < 0) return esc(e.text.slice(0, 120)) + (e.text.length > 120 ? "…" : "");
+    var a = Math.max(0, j - 50), b = Math.min(e.text.length, j + w.length + 80);
+    if (a > 0) { var s1 = e.text.indexOf(" ", a); if (s1 > -1 && s1 < j) a = s1 + 1; }
+    if (b < e.text.length) { var s2 = e.text.lastIndexOf(" ", b); if (s2 > j + w.length) b = s2; }
+    return (a > 0 ? "…" : "") + hl(e.text.slice(a, b), w) + (b < e.text.length ? "…" : "");
+  }
+  var hits = [], sel = -1;
+  function close() { panel.hidden = true; q.setAttribute("aria-expanded", "false"); q.removeAttribute("aria-activedescendant"); }
+  function pick(n) {
+    sel = n;
+    [].forEach.call(list.children, function (li, i) { li.setAttribute("aria-selected", i === n ? "true" : "false"); });
+    if (n >= 0 && list.children[n]) { q.setAttribute("aria-activedescendant", list.children[n].id); list.children[n].scrollIntoView({ block: "nearest" }); }
+  }
+  function run() {
+    var v = q.value.trim().toLowerCase().replace(/\s+/g, " ");
+    if (!v) { list.innerHTML = ""; status.textContent = ""; close(); return; }
+    var words = v.split(" ");
+    hits = [];
+    idx.forEach(function (e, i) {
+      var sc = 0;
+      if (e.lt.indexOf(v) >= 0) sc = 3;
+      else if (e.lx.indexOf(v) >= 0) sc = 2;
+      else if (words.every(function (w) { return e.lt.indexOf(w) >= 0 || e.lx.indexOf(w) >= 0; })) sc = 1;
+      if (sc) hits.push({ e: e, sc: sc, i: i });
+    });
+    hits.sort(function (x, y) { return y.sc - x.sc || x.i - y.i; });
+    var n = hits.length; hits = hits.slice(0, 8);
+    var key = hits.length && hits[0].sc === 1 ? words[0] : v;
+    list.innerHTML = hits.map(function (h, i) {
+      return '<li role="option" id="q-o' + i + '" aria-selected="false"><a href="#' + h.e.id + '">' +
+        (h.e.trail ? '<span class="s-trail">' + esc(h.e.trail) + "</span>" : "") +
+        '<span class="s-title">' + hl(h.e.title, key) + '</span><span class="s-snip">' + snip(h.e, key) + "</span></a></li>";
+    }).join("");
+    status.textContent = n ? (n > 8 ? "8 of " + n + " matching sections" : n === 1 ? "1 matching section" : n + " matching sections") : "No section matches.";
+    panel.hidden = false; q.setAttribute("aria-expanded", "true");
+    pick(hits.length ? 0 : -1);
+  }
+  function go(n) {
+    var h = hits[n]; if (!h) return;
+    close(); q.blur();
+    if (location.hash === "#" + h.e.id) document.getElementById(h.e.id).scrollIntoView(); else location.hash = h.e.id;
+  }
+  q.addEventListener("input", run);
+  q.addEventListener("focus", function () { if (q.value.trim()) run(); });
+  q.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowDown") { e.preventDefault(); if (hits.length) pick((sel + 1) % hits.length); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); if (hits.length) pick((sel - 1 + hits.length) % hits.length); }
+    else if (e.key === "Enter") { e.preventDefault(); go(sel < 0 ? 0 : sel); }
+    else if (e.key === "Escape") { if (q.value) { q.value = ""; run(); } else { q.blur(); } }
+  });
+  list.addEventListener("click", function (e) { if (e.target.closest("a")) { close(); q.blur(); } });
+  document.addEventListener("click", function (e) { if (!box.contains(e.target)) close(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = document.activeElement;
+    if (t && (/^(input|textarea|select)$/i.test(t.tagName) || t.isContentEditable)) return;
+    if (!document.getElementById("reader").hidden) return;
+    e.preventDefault(); q.focus();
+  });
+
+  // Wipes.
+  [].forEach.call(document.querySelectorAll(".wipe"), function (w) {
+    var r = w.querySelector("input");
+    r.addEventListener("input", function () { w.style.setProperty("--cut", r.value + "%"); });
+  });
+
+  // The launch film: a poster until the file is there; no broken player.
+  var film = document.getElementById("film"), fv = document.getElementById("film-v"), fp = document.getElementById("film-play");
+  fv.addEventListener("error", function () { film.setAttribute("data-state", "missing"); fv.controls = false; });
+  fp.addEventListener("click", function () {
+    if (film.getAttribute("data-state") === "missing") return;
+    fv.controls = true;
+    var p = fv.play();
+    film.setAttribute("data-state", "playing");
+    if (p && p.catch) p.catch(function (err) {
+      if (err && err.name === "NotAllowedError") return; // the browser wants its own play button: keep the controls
+      film.setAttribute("data-state", "missing"); fv.controls = false;
+    });
+  });
+
+  // Contexts, from the panel's CONTEXTS lists in this build (actions.js); card texts, prompts and prices from the RED HORIZON takes.
+  var IMG = { flat: "assets/img/rh/doc-flat.webp", layer: "assets/img/rh/keyart.webp", cutout: "assets/img/rh/doc-cutout.webp" };
+  var TAKES = ["take1", "take2", "take3", "take4"], SHOWN = 2;
+  var C = {
+    blank: { doc: null, thumb: null, card: ["Blank canvas 1024 × 1536", "Lands above Background at canvas size"], chips: ["Create image", "Place from Library"], more: false,
+      prompt: "Vertical cinematic key art for a science-fiction feature film, a wide view. A vast rust-red…", opts: ["No style", "GPT Image 2.5 Flare", "4 takes"], btn: "Create image · 47 CU",
+      note: "<b>A blank canvas</b>, as File › New makes it: one Background of a single color. Create image fills it at the canvas's shape; Place from Library brings in an image from your Scenario project." },
+    flat: { doc: "flat", thumb: "flat", card: ["Background · Layer 1024 × 1536", "Lands as a group above Background: a background and one layer per element"], chips: ["Split into layers", "Make versions", "Upscale", "Formats"], more: true,
+      prompt: "the explorer and her long shadow, the rover and its shadow, the research outpost", opts: ["Seedream 5.0 Flash Layerize"], btn: "Split into layers · 28 CU",
+      note: "<b>A flat image</b>: a document of one layer, a delivered JPEG or PNG. Split into layers comes first. More holds Extend canvas, Remove text, Remove background, Split text, Place from Library, Render sketch, New angle, Relight to scene and Animate." },
+    layer: { doc: "layer", thumb: "layer", box: true, card: ["Take 3 of Vertical cinematic key…", "Lands above Take 3 as a group"], chips: ["Make versions", "Extend canvas", "Upscale", "Remove background", "New layer"], more: true,
+      prompt: "", placeholder: "Describe the change, or leave empty for variations", opts: ["No style", "GPT Image 2.5 Flare", "2 takes"], btn: "Make versions · 24 CU",
+      note: "<b>A layer</b> in a layered document, with no selection. The panel reads the active layer and leaves it untouched: results land above it." },
+    selection: { doc: "layer", thumb: "layer", ants: true, card: ["Selection 434 × 376 on the canvas", "Lands inside the selection, masked"], chips: ["Replace inside", "Remove", "Make versions", "Cut out subject", "New layer"], more: false,
+      prompt: "The same six-wheeled expedition rover, the same shape, size, wheels, dish antenna and…", opts: ["Edit Bolder", "GPT Image 2.5 Flare", "2 takes"], btn: "Replace inside · 23 CU",
+      note: "<b>A selection</b> from any Photoshop tool: the Lasso, a marquee, Select by description, Select › Modify. Replace inside with Inside selection or Bolder, Remove, Make versions of the area, Cut out subject, or New layer inside it." },
+    cutout: { doc: "cutout", thumb: "cutout", checker: true, card: ["Cut out", "Lands below the cut-out at canvas size"], chips: ["Add background", "Relight to scene", "Make versions", "Upscale", "Extend canvas"], more: true,
+      prompt: "", placeholder: "Describe the background", opts: ["No style", "GPT Image 2.5 Flare", "2 takes"], btn: "Fill in the prompt to see the price", wait: true,
+      note: "<b>A cut-out</b>: a layer with transparency or a mask, such as the explorer after Cut out subject. Add background paints a scene behind her; Relight to scene matches her light to what is under her." },
+    takes: { doc: "layer", thumb: "layer", takes: true, card: ["4 takes · Vertical cinematic key a…", "Showing take 3 · click a take to compare"], chips: ["Compare takes", "More like this", "Refine", "Upscale kept take"], more: true,
+      note: "<b>A set of takes</b>: the group a run landed, selected in the Layers panel. Compare them in the document, keep one, refine it with a selection edit, or run more like it." }
+  };
+  var doc = document.getElementById("ctx-doc"), im = document.getElementById("ctx-img");
+  function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  function show(k) {
+    var c = C[k];
+    [].forEach.call(document.querySelectorAll(".ctx-tabs button"), function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-k") === k ? "true" : "false"); });
+    doc.className = "ps-doc" + (c.checker ? " checker" : "");
+    if (c.doc) { im.hidden = false; im.src = IMG[c.doc]; } else { im.hidden = true; }
+    doc.querySelector(".lbox").style.display = c.box || c.takes ? "block" : "none";
+    doc.querySelector(".ants").style.display = c.ants ? "block" : "none";
+    var th = document.getElementById("ctx-th");
+    th.style.backgroundImage = c.thumb ? "url(" + IMG[c.thumb] + ")" : "none";
+    th.style.backgroundColor = c.checker ? "#9a9a9a" : "#fff";
+    document.getElementById("ctx-card-t").textContent = c.card[0];
+    document.getElementById("ctx-card-l").textContent = c.card[1];
+    var chips = document.getElementById("ctx-chips"); chips.innerHTML = "";
+    c.chips.forEach(function (t, i) { chips.appendChild(el("span", "pchip" + (i === 0 ? " on" : ""), t)); });
+    if (c.more) chips.appendChild(el("span", "pchip", "More ⌄"));
+    var tk = document.getElementById("ctx-takes"); tk.innerHTML = "";
+    var comp = document.getElementById("ctx-comp");
+    if (c.takes) {
+      var row = el("div", "takes-row");
+      TAKES.forEach(function (t, i) { var s = el("span", i === SHOWN ? "on" : ""); s.style.backgroundImage = "url(assets/img/rh/" + t + ".webp)"; s.appendChild(el("b", "", String(i + 1))); row.appendChild(s); });
+      tk.appendChild(row);
+      var acts = el("div", "pchips"); acts.style.marginTop = "8px";
+      acts.appendChild(el("span", "pchip on", "Keep take " + (SHOWN + 1))); acts.appendChild(el("span", "pchip", "Refine")); acts.appendChild(el("span", "pchip", "More like this"));
+      tk.appendChild(acts);
+      comp.hidden = true;
+    } else {
+      comp.hidden = false;
+      var p = document.getElementById("ctx-prompt");
+      p.textContent = c.prompt || c.placeholder || "";
+      p.className = "prompt" + (c.prompt ? "" : " empty");
+      var o = document.getElementById("ctx-opts"); o.innerHTML = "";
+      c.opts.forEach(function (t) { o.appendChild(el("span", "pchip", t)); });
+      var b = document.getElementById("ctx-btn"); b.textContent = c.btn; b.className = "pbtn" + (c.wait ? " wait" : "");
+    }
+    document.getElementById("ctx-note").innerHTML = c.note;
+  }
+  [].forEach.call(document.querySelectorAll(".ctx-tabs button"), function (b) { b.addEventListener("click", function () { show(b.getAttribute("data-k")); }); });
+  show("blank");
+
+  // The 29 tools of the local Scenario MCP server (docs/MCP.md).
+  var T = [
+    ["Document", "Read the open documents.", ["scenario_status", "document_summary", "layer_detail", "preview_document"]],
+    ["Scenario", "Models, prices, jobs and assets. Free.", ["list_models", "model_schema", "recommend_models", "estimate_cost", "job_status", "wait_for_job", "list_local_jobs", "list_generations", "list_assets", "search_assets", "list_collections", "inspect_result_previews"]],
+    ["Inputs", "Captures and reference uploads.", ["capture_reference", "upload_reference", "reference_upload_status"]],
+    ["Spending", "Through the spend card.", ["generate"]],
+    ["Recovery", "Jobs after a crash or restart.", ["recover_local_job", "recover_cloud_job", "cancel_prepared_job"]],
+    ["Document changes", "First switch, or a proposal card.", ["prepare_result_application", "apply_result_application", "select_layers", "set_selection", "remove_scenario_layers"], true],
+    ["Photoshop commands", "Second switch only.", ["execute_batchplay"], true]
+  ];
+  var tg = document.getElementById("tools");
+  T.forEach(function (g) {
+    var d = el("div", "tool-family" + (g[3] ? " sw" : "") + (g[2].length > 8 ? " wide" : ""));
+    d.innerHTML = '<div class="tf-head"><b>' + g[2].length + "</b><span>" + g[0] + '</span></div><div class="sq' + (g[3] ? " sw" : "") + '">' +
+      g[2].map(function (t) { return '<i tabindex="0" title="' + t + '" aria-label="' + t + '"></i>'; }).join("") +
+      "</div><p>" + g[1] + '</p><div class="tool-names">' + g[2].join("\u00a0· ") + "</div>";
+    tg.appendChild(d);
+  });
+})();
+</script>
+
+<script>
+(function () {
+  // THE LAST KEEPER, lower on the page: the same player as the hero's. One film plays at a time.
+  var box = document.getElementById("film-l"), v = document.getElementById("film-l-v"), btn = document.getElementById("film-l-play"), hv = document.getElementById("film-v");
+  v.addEventListener("error", function () { box.setAttribute("data-state", "missing"); v.controls = false; });
+  btn.addEventListener("click", function () {
+    if (box.getAttribute("data-state") === "missing") return;
+    v.controls = true;
+    var p = v.play();
+    box.setAttribute("data-state", "playing");
+    if (p && p.catch) p.catch(function (err) {
+      if (err && err.name === "NotAllowedError") return;
+      box.setAttribute("data-state", "missing"); v.controls = false;
+    });
+  });
+  hv.addEventListener("play", function () { if (!v.paused) v.pause(); });
+  v.addEventListener("play", function () { if (!hv.paused) hv.pause(); });
+
+  // The guide, page by page, for viewers whose browser does not open the PDF.
+  var N = 30, page = 1, rd = document.getElementById("reader"), img = document.getElementById("reader-img"), num = document.getElementById("reader-n"), back = null;
+  function src(n) { return "assets/guide/pages/p" + (n < 10 ? "0" : "") + n + ".webp"; }
+  function show(n) {
+    page = Math.max(1, Math.min(N, n));
+    img.src = src(page); img.alt = "Guide page " + page + " of " + N; num.textContent = page + " / " + N;
+    if (page < N) { var pre = new Image(); pre.src = src(page + 1); }
+  }
+  function open() { back = document.activeElement; rd.hidden = false; document.body.style.overflow = "hidden"; show(page); document.getElementById("reader-next").focus(); }
+  function close() { rd.hidden = true; document.body.style.overflow = ""; if (back && back.focus) back.focus(); }
+  document.getElementById("kit-guide").addEventListener("click", open);
+  document.getElementById("kit-guide-go").addEventListener("click", open);
+  document.getElementById("reader-x").addEventListener("click", close);
+  document.getElementById("reader-prev").addEventListener("click", function () { show(page - 1); });
+  document.getElementById("reader-next").addEventListener("click", function () { show(page + 1); });
+  img.addEventListener("click", function (e) { var r = img.getBoundingClientRect(); show(page + (e.clientX - r.left < r.width / 2 ? -1 : 1)); });
+  document.addEventListener("keydown", function (e) {
+    if (rd.hidden) return;
+    if (e.key === "Escape") close(); else if (e.key === "ArrowRight" || e.key === "PageDown") show(page + 1); else if (e.key === "ArrowLeft" || e.key === "PageUp") show(page - 1);
+  });
+})();
+</script>
+</body>
+</html>

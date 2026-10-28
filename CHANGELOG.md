@@ -102,6 +102,7 @@ A verification pass on 2026-10-22 pressed the panel's controls with real macOS m
 - `docs/MCP.md`: real screenshots and a recording of an agent run, how each client was checked, and the from-checkout setup command while the helper is not on npm.
 - New `docs/KNOWN_LIMITATIONS.md` and `SECURITY.md`; `PRIVACY.md` brought current for 0.7.1.
 - The handbook: `npm run handbook` builds the docs into one web page with contents, search, light and dark themes and pictures that enlarge, a single HTML file with the pictures embedded (its fonts load from Google Fonts) and an A4 PDF with a cover and page numbers (`build/handbook/`). Made for photoshop.scenario.com; not published yet.
+- The photoshop.scenario.com page in `site/`: the RED HORIZON launch film, the eight steps on two examples (RED HORIZON and THE LAST KEEPER), the gouache film, the PDF guide with a page-by-page reader, then install, prices, jobs, privacy and known limits. `.github/workflows/pages.yml` publishes it by hand from main once Pages and the DNS record are set (steps at the top of the file); `test/unit/site-page.test.js` checks that every file it links to is in `site/`.
 - Panel screenshots under `docs/media/screens/`, captured in Photoshop 27.11. The before and after pictures and the recordings the guides link to follow in a later pass.
 
 ## 0.7.1 - 2026-10-20
