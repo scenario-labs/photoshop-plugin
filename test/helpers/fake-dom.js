@@ -126,7 +126,7 @@ function createFakeDocument({ html = fs.readFileSync(INDEX, "utf8"), macPassword
   // button is down (ui/create-view.js, press hold).
   const docHandlers = {};
   doc.addEventListener = (type, fn) => (docHandlers[type] = docHandlers[type] || []).push(fn);
-  doc.fire = (type) => (docHandlers[type] || []).forEach((fn) => fn({ type }));
+  doc.fire = (type, extra = {}) => (docHandlers[type] || []).forEach((fn) => fn({ type, ...extra }));
   doc.byId = (id) => {
     const el = els.get(id);
     if (!el) throw new Error(`no element #${id} in index.html`);
