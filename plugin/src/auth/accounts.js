@@ -9,16 +9,33 @@
 //   project name is written in clear either.
 // - Only the current project's pair is kept in memory. Nothing here is
 //   written to plugin data files, logs or the helper link.
+// - A browser sign-in (oauth.js) is one secureStorage entry per signed-in
+//   person, named by a hash of the issuer and the subject, holding the
+//   refresh token; each project chosen with it is a row of the list (kind
+//   "browser") with no key. Its key_hash is a hash of the issuer, the subject
+//   and the project id, so quotes and jobs stay apart per project as they do
+//   per key. The access token never reaches this module.
 
 var sha = require("../util/sha256.js");
 var utf8 = require("../util/utf8.js");
 
 var INDEX_ENTRY = "scenario.accounts";
 var KEY_ENTRY_PREFIX = "scenario.key.";
+var SESSION_ENTRY_PREFIX = "scenario.session.";
 var NAME_MAX = 100;
 
 function keyHash(key) {
   return sha.toHex(sha.sha256(utf8.encode(key)));
+}
+
+// A browser sign-in's identity: who signed in, at which issuer. Not a secret.
+function sessionId(issuer, subject) {
+  return keyHash("session\n" + issuer + "\n" + subject).slice(0, 32);
+}
+
+// What stands for the key of a project chosen with a browser sign-in.
+function browserHash(issuer, subject, projectId) {
+  return keyHash("browser\n" + issuer + "\n" + subject + "\n" + projectId);
 }
 
 function cleanName(name) {
@@ -38,13 +55,24 @@ function parseJson(text) {
 }
 
 function validAccount(a) {
-  return a && typeof a.id === "string" && /^[0-9a-f]{32}$/.test(a.id) && typeof a.key_hash === "string" && typeof a.key_last4 === "string";
+  if (!a || typeof a.id !== "string" || !/^[0-9a-f]{32}$/.test(a.id) || typeof a.key_hash !== "string" || typeof a.key_last4 !== "string") return false;
+  if (a.kind === "browser") return typeof a.session === "string" && /^[0-9a-f]{32}$/.test(a.session) && typeof a.project_id === "string" && !!a.project_id;
+  return a.kind === undefined;
+}
+
+function validSession(s) {
+  return s && typeof s.issuer === "string" && typeof s.client_id === "string" && typeof s.subject === "string" && typeof s.refresh_token === "string" && !!s.refresh_token;
 }
 
 // host: { secureGet, secureSet, secureRemove }. redactor: util/redact.js.
-function createAccounts(host, redactor) {
+// opts.openSession(stored, save(refreshToken), onEnd()) -> a session of
+// oauth.js for a stored browser sign-in; without it, browser rows are kept
+// but cannot send requests.
+function createAccounts(host, redactor, opts) {
+  opts = opts || {};
   var index = { v: 1, current: null, accounts: [] };
-  var pair = null; // { key, secret } of the current project
+  var pair = null; // { key, secret } of the current project, or { session, project_id }
+  var sessions = {}; // session id -> { stored, live } for the sessions in the list
   var listeners = [];
 
   function find(id) {
@@ -57,7 +85,7 @@ function createAccounts(host, redactor) {
   }
 
   function remember(p) {
-    if (!redactor || !p) return;
+    if (!redactor || !p || !p.key) return;
     redactor.add(p.key);
     redactor.add(p.secret);
   }
@@ -81,7 +109,55 @@ function createAccounts(host, redactor) {
     return { v: 1, current: index.current, accounts: index.accounts.map(function (a) { return Object.assign({}, a); }) };
   }
 
+  async function readSession(sid) {
+    var stored = null;
+    try {
+      stored = parseJson(await host.secureGet(SESSION_ENTRY_PREFIX + sid));
+    } catch (e) {
+      stored = null;
+    }
+    if (!validSession(stored) || sessionId(stored.issuer, stored.subject) !== sid) return null;
+    return stored;
+  }
+
+  // The live session of a stored sign-in, made once per Photoshop start.
+  function liveSession(sid, stored) {
+    var known = sessions[sid];
+    if (known && known.live) return known.live;
+    if (redactor) redactor.add(stored.refresh_token);
+    var live = opts.openSession
+      ? opts.openSession(
+          stored,
+          function (refreshToken) {
+            return saveRefreshToken(sid, refreshToken);
+          },
+          function () {
+            return removeSession(sid);
+          },
+          known ? known.initial : null
+        )
+      : null;
+    sessions[sid] = { stored: stored, live: live };
+    return live;
+  }
+
+  async function saveRefreshToken(sid, refreshToken) {
+    var known = sessions[sid];
+    if (!known) return;
+    var next = Object.assign({}, known.stored, { refresh_token: refreshToken });
+    if (redactor) redactor.add(refreshToken);
+    await host.secureSet(SESSION_ENTRY_PREFIX + sid, JSON.stringify(next));
+    known.stored = next;
+  }
+
   async function readPair(id) {
+    var acc0 = find(id);
+    if (acc0 && acc0.kind === "browser") {
+      var stored0 = await readSession(acc0.session);
+      if (!stored0) return null;
+      if (browserHash(stored0.issuer, stored0.subject, acc0.project_id) !== acc0.key_hash) return null;
+      return { session: liveSession(acc0.session, stored0), session_id: acc0.session, project_id: acc0.project_id };
+    }
     var stored = null;
     try {
       stored = parseJson(await host.secureGet(entryName(id)));
@@ -95,10 +171,21 @@ function createAccounts(host, redactor) {
   }
 
   async function removeEntry(id) {
+    var a = find(id);
+    if (a && a.kind === "browser") return; // the session entry goes with the last of its rows
     try {
       await host.secureRemove(entryName(id));
     } catch (e) {
       // removal is best effort; the index no longer points at it
+    }
+  }
+
+  async function removeSessionEntry(sid) {
+    delete sessions[sid];
+    try {
+      await host.secureRemove(SESSION_ENTRY_PREFIX + sid);
+    } catch (e) {
+      // removal is best effort; no row points at it any more
     }
   }
 
@@ -141,13 +228,28 @@ function createAccounts(host, redactor) {
   }
 
   function view(a) {
-    return { id: a.id, project_name: a.project_name || null, key_last4: a.key_last4, current: a.id === index.current };
+    var out = { id: a.id, project_name: a.project_name || null, key_last4: a.key_last4, current: a.id === index.current };
+    if (a.kind === "browser") {
+      out.kind = "browser";
+      out.team_name = a.team_name || null;
+      out.email = sessions[a.session] && sessions[a.session].stored ? sessions[a.session].stored.email || null : null;
+    }
+    return out;
   }
 
   function current() {
     var a = index.current ? find(index.current) : null;
     if (!a || !pair) return null;
-    return { id: a.id, key_hash: a.key_hash, project_name: a.project_name || null, project_id: a.project_id || null, key_last4: a.key_last4 };
+    var out = { id: a.id, key_hash: a.key_hash, project_name: a.project_name || null, project_id: a.project_id || null, key_last4: a.key_last4 };
+    if (a.kind === "browser") {
+      out.kind = "browser";
+      out.session = a.session;
+      out.team_id = a.team_id || null;
+      out.team_name = a.team_name || null;
+      var known = sessions[a.session];
+      out.email = known && known.stored ? known.stored.email || null : null;
+    }
+    return out;
   }
 
   function summary() {
@@ -233,10 +335,127 @@ function createAccounts(host, redactor) {
     return current();
   }
 
+  function cleanEmail(v) {
+    return typeof v === "string" && v.length <= 254 && /^[^\s@]+@[^\s@]+$/.test(v) ? v : null;
+  }
+
+  // Makes a project of a browser sign-in the current project: a row of the
+  // list, added once per project.
+  async function addBrowserRow(sid, stored, choice) {
+    var hash = browserHash(stored.issuer, stored.subject, choice.project_id);
+    var id = hash.slice(0, 32);
+    var next = copyIndex();
+    next.accounts = next.accounts.filter(function (a) {
+      return a.id !== id;
+    });
+    next.accounts.push({
+      id: id,
+      kind: "browser",
+      session: sid,
+      key_hash: hash,
+      key_last4: "",
+      project_id: choice.project_id,
+      project_name: cleanName(choice.project_name),
+      team_id: typeof choice.team_id === "string" && choice.team_id ? choice.team_id : null,
+      team_name: cleanName(choice.team_name),
+      saved_at: new Date().toISOString()
+    });
+    next.current = id;
+    await writeIndex(next);
+    pair = { session: liveSession(sid, stored), session_id: sid, project_id: choice.project_id };
+    notify();
+    return current();
+  }
+
+  // After a browser sign-in: saves who signed in and the refresh token, then
+  // the chosen project. tokens (optional): the sign-in's own access token, so
+  // the first request needs no refresh.
+  // signIn: { issuer, client_id, subject, email, refresh_token }
+  // choice: { team_id, team_name, project_id, project_name }
+  async function saveBrowser(signIn, choice, tokens) {
+    if (!choice || typeof choice.project_id !== "string" || !choice.project_id) throw new Error("Choose a project first.");
+    var sid = sessionId(signIn.issuer, signIn.subject);
+    var stored = { v: 1, issuer: signIn.issuer, client_id: signIn.client_id, subject: signIn.subject, email: cleanEmail(signIn.email), refresh_token: signIn.refresh_token };
+    if (!validSession(stored)) throw new Error("The sign-in gave no refresh token.");
+    if (redactor) redactor.add(stored.refresh_token);
+    await host.secureSet(SESSION_ENTRY_PREFIX + sid, JSON.stringify(stored));
+    // A new sign-in of the same person replaces the session made with the old refresh token.
+    sessions[sid] = { stored: stored, live: null, initial: tokens || null };
+    try {
+      return await addBrowserRow(sid, stored, choice);
+    } catch (e) {
+      var used = index.accounts.some(function (a) {
+        return a.session === sid;
+      });
+      if (!used) await removeSessionEntry(sid);
+      throw e;
+    }
+  }
+
+  // Another project of a saved browser sign-in (the project chooser).
+  async function chooseProject(sid, choice) {
+    if (!choice || typeof choice.project_id !== "string" || !choice.project_id) throw new Error("Choose a project first.");
+    var known = sessions[sid];
+    var stored = known && known.stored ? known.stored : await readSession(sid);
+    if (!stored) throw new Error("The Scenario sign-in is no longer saved on this computer. Sign in again.");
+    return addBrowserRow(sid, stored, choice);
+  }
+
+  // The live session of a browser sign-in, for its team and project reads.
+  async function session(sid) {
+    var known = sessions[sid];
+    var stored = known && known.stored ? known.stored : await readSession(sid);
+    return stored ? liveSession(sid, stored) : null;
+  }
+
+  // Forgets a browser sign-in: its refresh token and every project chosen
+  // with it. Sign out calls it after revoking the token; a refresh the
+  // identity provider refuses calls it too. The next saved project, if any,
+  // becomes current.
+  async function removeSession(sid) {
+    var next = copyIndex();
+    var wasCurrent = false;
+    next.accounts = next.accounts.filter(function (a) {
+      var gone = a.kind === "browser" && a.session === sid;
+      if (gone && a.id === next.current) wasCurrent = true;
+      return !gone;
+    });
+    if (wasCurrent) next.current = null;
+    await removeSessionEntry(sid);
+    await writeIndex(next);
+    if (wasCurrent) await pickNext();
+    notify();
+    return summary();
+  }
+
+  // The refresh token of a saved browser sign-in, for revocation at sign out.
+  function refreshTokenOf(sid) {
+    var known = sessions[sid];
+    if (known && known.live && typeof known.live.refreshToken === "function") return known.live.refreshToken();
+    return known && known.stored ? known.stored.refresh_token : null;
+  }
+
+  async function pickNext() {
+    pair = null;
+    var candidates = index.accounts.map(function (a) {
+      return a.id;
+    });
+    for (var i = 0; i < candidates.length && !pair; i++) {
+      try {
+        await switchTo(candidates[i]);
+      } catch (e) {
+        // an unreadable entry is dropped by switchTo; try the next one
+      }
+    }
+  }
+
   // Sign out: removes the key and secret of one project from this computer.
   // When it was the current project, the next saved project becomes current.
+  // A project of a browser sign-in signs out of that sign-in.
   async function remove(id) {
-    if (!find(id)) return summary();
+    var target = find(id);
+    if (!target) return summary();
+    if (target.kind === "browser") return removeSession(target.session);
     await removeEntry(id);
     var next = copyIndex();
     next.accounts = next.accounts.filter(function (a) {
@@ -245,19 +464,7 @@ function createAccounts(host, redactor) {
     var wasCurrent = next.current === id;
     if (wasCurrent) next.current = null;
     await writeIndex(next);
-    if (wasCurrent) {
-      pair = null;
-      var candidates = index.accounts.map(function (a) {
-        return a.id;
-      });
-      for (var i = 0; i < candidates.length && !pair; i++) {
-        try {
-          await switchTo(candidates[i]);
-        } catch (e) {
-          // an unreadable entry is dropped by switchTo; try the next one
-        }
-      }
-    }
+    if (wasCurrent) await pickNext();
     notify();
     return summary();
   }
@@ -265,6 +472,11 @@ function createAccounts(host, redactor) {
   return {
     load: load,
     save: save,
+    saveBrowser: saveBrowser,
+    chooseProject: chooseProject,
+    session: session,
+    removeSession: removeSession,
+    refreshTokenOf: refreshTokenOf,
     update: update,
     switchTo: switchTo,
     remove: remove,
@@ -273,9 +485,12 @@ function createAccounts(host, redactor) {
     list: function () {
       return index.accounts.map(view);
     },
-    // The pair for Scenario requests. Only the scenario client calls this.
+    // What signs Scenario requests: the key pair, or the browser session and
+    // the chosen project. Only the scenario client calls this.
     credentials: function () {
-      return pair ? { key: pair.key, secret: pair.secret } : null;
+      if (!pair) return null;
+      if (pair.session_id) return { session: pair.session, project_id: pair.project_id };
+      return { key: pair.key, secret: pair.secret };
     },
     onChange: function (fn) {
       listeners.push(fn);
@@ -283,4 +498,4 @@ function createAccounts(host, redactor) {
   };
 }
 
-module.exports = { createAccounts: createAccounts, keyHash: keyHash, cleanName: cleanName, INDEX_ENTRY: INDEX_ENTRY, KEY_ENTRY_PREFIX: KEY_ENTRY_PREFIX };
+module.exports = { createAccounts: createAccounts, keyHash: keyHash, cleanName: cleanName, sessionId: sessionId, browserHash: browserHash, INDEX_ENTRY: INDEX_ENTRY, KEY_ENTRY_PREFIX: KEY_ENTRY_PREFIX, SESSION_ENTRY_PREFIX: SESSION_ENTRY_PREFIX };

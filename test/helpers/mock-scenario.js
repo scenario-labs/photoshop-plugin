@@ -8,6 +8,11 @@
 // {"message": "Unauthorized"}, an unknown key 403 {"reason": "Given APIKey
 // does not exists"}. A test can take over any answer with handle(). No real
 // key is ever used.
+//
+// With `oauth` ({ subjectOf(token), teams }), a Bearer token of the mock
+// identity provider (mock-oauth.js) is accepted too: GET /v1/teams lists the
+// teams, and every other route needs a projectId of those teams, else 403
+// "Project ... not found" as the live API answers.
 
 const http = require("node:http");
 const crypto = require("node:crypto");
@@ -52,8 +57,20 @@ function projectRecord(key, opts = {}) {
   return rec;
 }
 
+// The teams of GET /v1/teams for the browser sign-in tests: two teams with
+// two projects each, and a team without a project (several teams and
+// projects at every level).
+function teamsFixture() {
+  return [
+    { id: "team_studio", name: "Studio", projects: [{ id: "project_film", name: "Film" }, { id: "project_poster", name: "Poster" }] },
+    { id: "team_personal", name: "Personal", projects: [{ id: "project_sketches", name: "Sketches" }, { id: "project_tests", name: "Tests" }] },
+    { id: "team_empty", name: "Empty team", projects: [] }
+  ];
+}
+
 // accounts: [{ key, secret, projects: [project records] }]
-async function startMockScenario({ accounts = [], handle = null } = {}) {
+// oauth: { subjectOf(token) -> subject | null, teams: [team records] }
+async function startMockScenario({ accounts = [], handle = null, oauth = null } = {}) {
   const requests = [];
   let handler = handle;
   const sockets = new Set();
@@ -88,9 +105,21 @@ async function startMockScenario({ accounts = [], handle = null } = {}) {
       res.writeHead(status, { "content-type": "application/json", ...headers });
       res.end(Buffer.isBuffer(body) || typeof body === "string" ? body : JSON.stringify(body));
     };
-    const custom = handler ? handler({ ...record, account }) : undefined;
+    const bearer = auth && auth.startsWith("Bearer ") ? auth.slice(7) : null;
+    const subject = bearer && oauth ? oauth.subjectOf(bearer) : null;
+    const custom = handler ? handler({ ...record, account, subject }) : undefined;
     if (custom && custom.destroy) return req.socket.destroy(); // the connection drops: offline
     if (custom) return send(custom.status, custom.body === undefined ? {} : custom.body, custom.headers);
+    if (bearer) {
+      if (!subject) return send(401, { message: "Unauthorized" });
+      const teams = typeof oauth.teams === "function" ? oauth.teams() : oauth.teams;
+      if (req.method === "GET" && url.pathname === "/v1/teams") return send(200, { teams });
+      const projectId = record.query.projectId;
+      const known = teams.some((t) => t.projects.some((p) => p.id === projectId));
+      if (!known) return send(403, { reason: `Project ${projectId} not found` });
+      if (req.method === "GET" && url.pathname === "/v1/models") return send(200, { models: [], nextPaginationToken: null });
+      return send(404, { reason: `Route ${url.pathname} not found` });
+    }
     if (!auth) return send(401, { message: "Unauthorized" });
     if (!account) return send(403, { reason: "Given APIKey does not exists" });
     if (req.method === "GET" && url.pathname === "/v1/models") return send(200, { models: [], nextPaginationToken: null });
@@ -118,4 +147,4 @@ async function startMockScenario({ accounts = [], handle = null } = {}) {
   };
 }
 
-module.exports = { startMockScenario, newKeyPair, projectRecord, basic, MEMBER_EMAIL, OTHER_KEY_ID };
+module.exports = { startMockScenario, newKeyPair, projectRecord, teamsFixture, basic, MEMBER_EMAIL, OTHER_KEY_ID };

@@ -18,10 +18,19 @@
 // "Connected" without claiming it can run models.
 //
 // Outcomes carry a state for the panel, never the key or the secret.
+//
+// Sign in with Scenario (SPEC 4.6) runs the device sign-in of oauth.js:
+// the panel shows the code while the browser page is open, then the
+// account's teams and projects are read (GET /v1/teams, no project). One
+// usable project is chosen at once; with several, the panel asks, and
+// nothing is saved until a project is chosen. Test connection reads the
+// models of the chosen project and the list again, so a project that is
+// gone (deleted, or the role removed) says so instead of failing each call.
 
 var API = require("../../../shared/scenario-api.json");
 var split = require("./split.js");
 var clientMod = require("../scenario/client.js");
+var oauthMod = require("./oauth.js");
 
 var STEPS = 2;
 // Error types that end a check at once, with the state the panel shows.
@@ -47,8 +56,16 @@ var STATE_TYPES = {
   failed: "Internal",
   storage_failed: "Internal",
   missing: "InvalidParameter",
-  not_signed_in: "NotSignedIn"
+  not_signed_in: "NotSignedIn",
+  browser_denied: "Unauthorized",
+  browser_expired: "NotSignedIn",
+  browser_failed: "Internal",
+  session_ended: "NotSignedIn",
+  no_project: "Forbidden",
+  project_gone: "Forbidden"
 };
+// What an OAuthError's state reads as.
+var OAUTH_STATES = { denied: "browser_denied", expired: "browser_expired", cancelled: "cancelled", offline: "offline", ended: "session_ended", failed: "browser_failed" };
 
 function readString(v) {
   return typeof v === "string" && v ? v : null;
@@ -95,19 +112,68 @@ function identify(projects, key) {
   return { scope: null, role: null, project: null };
 }
 
+// The teams of GET /v1/teams and the projects the account may use in each,
+// in the server's order. Records without an id are skipped; a name falls back
+// to the id. Pure, for the tests.
+function teamsFrom(body) {
+  var out = [];
+  var list = body && Array.isArray(body.teams) ? body.teams : [];
+  function name(r) {
+    return typeof r.name === "string" && r.name.trim() ? r.name.trim() : r.id;
+  }
+  for (var i = 0; i < list.length; i++) {
+    var t = list[i];
+    if (!t || typeof t.id !== "string" || !t.id) continue;
+    var projects = [];
+    var ps = Array.isArray(t.projects) ? t.projects : [];
+    for (var j = 0; j < ps.length; j++) {
+      if (ps[j] && typeof ps[j].id === "string" && ps[j].id) projects.push({ id: ps[j].id, name: name(ps[j]) });
+    }
+    out.push({ id: t.id, name: name(t), projects: projects });
+  }
+  return out;
+}
+
+// Every (team, project) pair, as the chooser lists them.
+function choicesOf(teams) {
+  var out = [];
+  for (var i = 0; i < teams.length; i++) {
+    for (var j = 0; j < teams[i].projects.length; j++) {
+      out.push({ team_id: teams[i].id, team_name: teams[i].name, project_id: teams[i].projects[j].id, project_name: teams[i].projects[j].name });
+    }
+  }
+  return out;
+}
+
+function findChoice(teams, projectId) {
+  var all = choicesOf(teams);
+  for (var i = 0; i < all.length; i++) if (all[i].project_id === projectId) return all[i];
+  return null;
+}
+
 function cannotGenerate(role) {
   if (!role) return false;
   return API.roles_that_cannot_generate.roles.indexOf(String(role).toLowerCase()) >= 0;
 }
 
-// o: { client, accounts, redactor, log(text), recordError(type) }
+// o: { client, accounts, redactor, log(text), recordError(type),
+//      oauth (oauth.js client), openPage(url) -> Promise (the browser),
+//      now() }
 function createAuth(o) {
   var client = o.client;
   var accounts = o.accounts;
   var redactor = o.redactor;
   var log = o.log || function () {};
   var recordError = o.recordError || function () {};
+  var oauth = o.oauth || null;
+  var now =
+    o.now ||
+    function () {
+      return Date.now();
+    };
   var busy = false;
+  var attempt = null; // the browser sign-in in progress: { cancelled }
+  var pending = null; // a sign-in waiting for its project: { signIn, tokens, session, teams }
 
   function fail(state, err, extra) {
     var out = { ok: false, state: state, type: STATE_TYPES[state] || (err && err.type) || "Internal", scenario_message: (err && err.scenarioMessage) || null, role: null };
@@ -211,6 +277,11 @@ function createAuth(o) {
     var pair = accounts.credentials();
     var c = accounts.current();
     if (!pair || !c) return fail("not_signed_in", null);
+    if (c.kind === "browser") {
+      var b = await checkBrowser(c, hooks);
+      log("test connection: " + (b.ok ? "ok" : b.type));
+      return b.ok ? { ok: true, account: accounts.current() } : b;
+    }
     if (redactor) redactor.add(clientMod.basicToken(pair));
     var out = await check(pair, hooks);
     if (!out.ok) {
@@ -226,6 +297,205 @@ function createAuth(o) {
     return { ok: true, account: accounts.current() };
   });
 
+  // ---- Sign in with Scenario ----
+
+  async function readTeams(creds, hooks) {
+    var res = await client.request("GET", API.sign_in.teams.path, { credentials: creds, unscoped: true, onWait: hooks && hooks.onWait });
+    return teamsFrom(res.body);
+  }
+
+  function oauthFail(e) {
+    var state = (e && OAUTH_STATES[e.state]) || (e && e.type && STOP[e.type]) || "failed";
+    if (state === "cancelled") return { ok: false, state: "cancelled", type: null, scenario_message: null };
+    return fail(state, null, { scenario_message: e && e.message && state === "browser_failed" ? e.message : null });
+  }
+
+  // The device sign-in (SPEC 4.6). hooks: { onCode({user_code, page,
+  // verification_uri, expires_at}), onStep(step, total), onWait(seconds) }.
+  // Resolves { ok, account } when one project was used, { ok, choose, teams }
+  // when the panel must ask, or a failure; never rejects.
+  var signInWithBrowser = guard(async function (hooks) {
+    hooks = hooks || {};
+    if (!oauth) return fail("browser_failed", null);
+    var me = { cancelled: false };
+    attempt = me;
+    pending = null;
+    try {
+      log("browser sign-in: started");
+      var device;
+      try {
+        device = await oauth.startDevice();
+      } catch (e) {
+        log("browser sign-in: did not start (" + ((e && e.state) || "failed") + ")");
+        return oauthFail(e);
+      }
+      if (hooks.onCode) hooks.onCode({ user_code: device.user_code, page: device.page, verification_uri: device.verification_uri, expires_at: device.expires_at });
+      openPage(device.page);
+      var tokens;
+      try {
+        tokens = await oauth.waitForApproval(device, {
+          cancelled: function () {
+            return me.cancelled;
+          },
+          onWait: hooks.onWait
+        });
+      } catch (e) {
+        log("browser sign-in: " + ((e && e.state) || "failed"));
+        return oauthFail(e);
+      }
+      if (me.cancelled) {
+        await oauth.revoke(tokens.refresh_token);
+        return { ok: false, state: "cancelled", type: null, scenario_message: null };
+      }
+      log("browser sign-in: approved, reading teams");
+      if (hooks.onStep) hooks.onStep(1, 1);
+      var latest = tokens.refresh_token;
+      var session = oauthMod.createSession({
+        oauth: oauth,
+        refresh_token: tokens.refresh_token,
+        access_token: tokens.access_token,
+        expires_at: tokens.expires_at,
+        now: now,
+        save: async function (rt) {
+          latest = rt;
+        }
+      });
+      var teams;
+      try {
+        teams = await readTeams({ session: session, project_id: null }, hooks);
+      } catch (e) {
+        await oauth.revoke(latest);
+        log("browser sign-in: teams unavailable (" + ((e && e.type) || "Internal") + ")");
+        if (e && STOP[e.type]) return fail(STOP[e.type], e);
+        return fail("failed", e);
+      }
+      var signIn = { issuer: oauth.issuer, client_id: oauth.target.client_id, subject: tokens.subject, email: tokens.email || null, refresh_token: latest };
+      var choices = choicesOf(teams);
+      if (!choices.length) {
+        await oauth.revoke(latest);
+        log("browser sign-in: no usable project");
+        return fail("no_project", null);
+      }
+      if (choices.length === 1) return await useChoice(signIn, choices[0], session, tokens);
+      pending = { signIn: signIn, tokens: tokens, session: session, teams: teams, latest: function () { return latest; } };
+      log("browser sign-in: " + choices.length + " projects to choose from");
+      return { ok: true, choose: true, teams: teams };
+    } finally {
+      if (attempt === me) attempt = null;
+    }
+  });
+
+  function openPage(url) {
+    if (!o.openPage) return;
+    Promise.resolve()
+      .then(function () {
+        return o.openPage(url);
+      })
+      .catch(function () {
+        // Photoshop asked and the person said no: the code stays on screen
+      });
+  }
+
+  async function useChoice(signIn, choice, session, tokens) {
+    var account;
+    try {
+      if (session) signIn.refresh_token = session.refreshToken();
+      // The sign-in's access token is still valid: the first request needs no refresh.
+      account = await accounts.saveBrowser(signIn, choice, tokens ? { access_token: tokens.access_token, expires_at: tokens.expires_at } : null);
+    } catch (e) {
+      log("browser sign-in: secure storage refused the sign-in");
+      return fail("storage_failed", null);
+    }
+    pending = null;
+    log("browser sign-in: saved (" + accounts.list().length + " project(s) saved)");
+    return { ok: true, account: account };
+  }
+
+  // The project chosen in the panel, for the sign-in that waits for one or
+  // for the current browser sign-in (Choose another project).
+  var chooseProject = guard(async function (projectId) {
+    if (pending) {
+      var choice = findChoice(pending.teams, projectId);
+      if (!choice) return fail("project_gone", null);
+      pending.signIn.refresh_token = pending.latest();
+      return await useChoice(pending.signIn, choice, pending.session, pending.tokens);
+    }
+    var c = accounts.current();
+    if (!c || c.kind !== "browser") return fail("not_signed_in", null);
+    var teams;
+    try {
+      teams = await readTeams({ session: await accounts.session(c.session), project_id: null });
+    } catch (e) {
+      if (e && STOP[e.type]) return fail(STOP[e.type], e);
+      return fail("failed", e);
+    }
+    var picked = findChoice(teams, projectId);
+    if (!picked) return fail("project_gone", null);
+    try {
+      var account = await accounts.chooseProject(c.session, picked);
+      log("project chosen (" + accounts.list().length + " project(s) saved)");
+      return { ok: true, account: account };
+    } catch (e) {
+      return fail("storage_failed", null);
+    }
+  });
+
+  // The teams and projects of the current browser sign-in, for the chooser.
+  async function listChoices() {
+    if (pending) return { ok: true, teams: pending.teams };
+    var c = accounts.current();
+    if (!c || c.kind !== "browser") return fail("not_signed_in", null);
+    try {
+      return { ok: true, teams: await readTeams({ session: await accounts.session(c.session), project_id: null }) };
+    } catch (e) {
+      if (e && STOP[e.type]) return fail(STOP[e.type], e);
+      return fail("failed", e);
+    }
+  }
+
+  // Cancels the sign-in in progress, or forgets one waiting for its project
+  // (its refresh token is revoked).
+  function cancelBrowser() {
+    if (attempt) attempt.cancelled = true;
+    if (pending) {
+      if (oauth) oauth.revoke(pending.latest());
+      pending = null;
+      log("browser sign-in: cancelled before choosing a project");
+    }
+  }
+
+  // Test connection for a browser sign-in: the chosen project's models, then
+  // the list, which also refreshes the team and project names.
+  async function checkBrowser(c, hooks) {
+    hooks = hooks || {};
+    var creds = accounts.credentials();
+    if (hooks.onStep) hooks.onStep(1, STEPS);
+    try {
+      await client.request("GET", API.sign_in.auth_check.path, { query: API.sign_in.auth_check.query, onWait: hooks.onWait });
+    } catch (e) {
+      if (e && e.type === "NotSignedIn") return fail("session_ended", e);
+      if (e && e.type === "Unauthorized") return fail("session_ended", e);
+      if (e && STOP[e.type]) return fail(STOP[e.type], e);
+      if (e && e.type !== "Forbidden") return fail("failed", e);
+    }
+    if (hooks.onStep) hooks.onStep(2, STEPS);
+    var teams;
+    try {
+      teams = await readTeams({ session: creds.session, project_id: null }, hooks);
+    } catch (e) {
+      if (e && STOP[e.type]) return fail(STOP[e.type], e);
+      return fail("failed", e);
+    }
+    var choice = findChoice(teams, c.project_id);
+    if (!choice) return fail("project_gone", null);
+    try {
+      await accounts.update(c.id, { project_name: choice.project_name, project_id: choice.project_id });
+    } catch (e) {
+      // the name is display only
+    }
+    return { ok: true };
+  }
+
   async function switchTo(id) {
     var c = await accounts.switchTo(id);
     log("project switched (" + accounts.list().length + " project(s) saved)");
@@ -235,6 +505,14 @@ function createAuth(o) {
   async function signOut(id) {
     var target = id || (accounts.current() && accounts.current().id);
     if (!target) return accounts.summary();
+    var row = null;
+    var list = accounts.list();
+    for (var i = 0; i < list.length; i++) if (list[i].id === target) row = list[i];
+    var c = accounts.current();
+    if (row && row.kind === "browser" && oauth && c && c.id === target) {
+      var rt = accounts.refreshTokenOf(c.session);
+      if (rt) await oauth.revoke(rt);
+    }
     var s = await accounts.remove(target);
     log("signed out of one project (" + accounts.list().length + " still saved)");
     return s;
@@ -242,6 +520,13 @@ function createAuth(o) {
 
   return {
     saveAndTest: saveAndTest,
+    signInWithBrowser: signInWithBrowser,
+    chooseProject: chooseProject,
+    listChoices: listChoices,
+    cancelBrowser: cancelBrowser,
+    waiting: function () {
+      return !!pending;
+    },
     testConnection: testConnection,
     switchTo: switchTo,
     signOut: signOut,
@@ -255,4 +540,4 @@ function createAuth(o) {
   };
 }
 
-module.exports = { createAuth: createAuth, identify: identify, cannotGenerate: cannotGenerate, STATE_TYPES: STATE_TYPES };
+module.exports = { createAuth: createAuth, identify: identify, cannotGenerate: cannotGenerate, teamsFrom: teamsFrom, choicesOf: choicesOf, STATE_TYPES: STATE_TYPES };

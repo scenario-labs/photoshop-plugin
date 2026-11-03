@@ -25,6 +25,7 @@
       "domains": [
         "https://api.cloud.scenario.com",
         "https://cdn.cloud.scenario.com",
+        "https://clerk.scenario.com",
         "ws://localhost:9890",
         "ws://127.0.0.1:9890"
       ]

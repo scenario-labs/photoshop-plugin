@@ -2,9 +2,15 @@
 // REST client for Scenario's API (SPEC 2.3, module `scenario`).
 //
 // - Every URL is the API base plus a relative path, so the Authorization
-//   header (HTTP Basic, key and secret) can only go to api.cloud.scenario.com.
+//   header (HTTP Basic with a key and secret, or Bearer with a browser
+//   sign-in's access token) can only go to api.cloud.scenario.com.
 //   Downloads and uploads to other hosts will use their own code, never this
 //   client.
+// - A browser sign-in's requests carry the chosen project as the projectId
+//   query parameter (the account itself has no project), except reads that
+//   ask for none (`unscoped`, the team and project listing). The token comes
+//   from the session at each request, refreshed when it is about to expire;
+//   a read answered 401 gets one new token and one more try.
 // - Redirects are refused (`redirect: "error"`): no redirected request carries
 //   the key. Photoshop 26.9 and later also drop the header on a cross-origin
 //   redirect (SPEC 2.10).
@@ -19,7 +25,9 @@
 //   so the paid URL never carries the price-check flag.
 // - Paid requests (`paid` set) are never retried and time out after 60 s
 //   (SPEC 6.1 item 8). Errors raised before anything is sent carry
-//   `beforeSend: true`, so a caller never reads them as a lost answer.
+//   `beforeSend: true`, so a caller never reads them as a lost answer. The
+//   rule that the paid request carries no query applies to what the caller
+//   passes; a browser sign-in's projectId is the only parameter added.
 //
 // The catalog, model schemas, price checks, asset uploads and the paid
 // request are built on request() in their own modules.
@@ -64,8 +72,9 @@ function parseJson(text) {
 }
 
 // opts: { fetch, AbortController, timers: {setTimeout, clearTimeout},
-//         credentials() -> {key, secret} | null, redactor,
-//         baseUrl and sleep(ms) (tests only) }
+//         credentials() -> {key, secret} | {session, project_id} | null,
+//         redactor, baseUrl (a development target, and the tests' mock),
+//         sleep(ms) (tests only) }
 function createClient(opts) {
   var baseUrl = String(opts.baseUrl || API.base_url).replace(/\/+$/, "");
   var apiOrigin = originOf(baseUrl);
@@ -83,10 +92,11 @@ function createClient(opts) {
       });
     };
 
-  function cleaner(pair) {
+  function cleaner(pair, bearer) {
     return function (text) {
       var out = String(text);
-      if (pair) {
+      if (bearer && bearer.length >= 4) out = out.split(bearer).join("[redacted]");
+      if (pair && pair.key) {
         var values = [pair.key, pair.secret, basicToken(pair)];
         for (var i = 0; i < values.length; i++) if (values[i] && values[i].length >= 4) out = out.split(values[i]).join("[redacted]");
       }
@@ -162,15 +172,33 @@ function createClient(opts) {
     throw refuse("Internal", "Refused before sending: a request to /generate must be a price check or the paid request, and the paid request carries no query.");
   }
 
+  // The access token of a browser sign-in, before anything is sent.
+  async function bearerOf(sessionCreds, force) {
+    if (!sessionCreds.session || typeof sessionCreds.session.token !== "function") throw refuse("NotSignedIn", "The Scenario sign-in is not available. Sign in again in the panel.");
+    try {
+      return await sessionCreds.session.token(force);
+    } catch (e) {
+      if (e && e.type) {
+        e.beforeSend = true;
+        throw e;
+      }
+      throw refuse("Internal", "The Scenario sign-in could not give a token.");
+    }
+  }
+
   // o: { query, body, credentials (overrides the saved pair, for Save and
-  //      test), retries, timeoutMs, paid, priceCheck, onWait(seconds, error) }
+  //      test and a sign-in's first reads), unscoped (a browser sign-in's
+  //      read that names no project), retries, timeoutMs, paid, priceCheck,
+  //      onWait(seconds, error) }
   // Resolves { status, body }; rejects with a ScenarioError.
   async function request(method, path, o) {
     o = o || {};
     guardGenerate(method, String(path), o);
     if (typeof fetchFn !== "function") throw refuse("Internal", "This Photoshop offers no fetch.");
     var pair = o.credentials || (opts.credentials ? opts.credentials() : null);
-    if (!pair || !pair.key || !pair.secret) throw refuse("NotSignedIn", "No Scenario key is saved in the plugin.");
+    var browser = pair && pair.session ? pair : null;
+    if (!browser && (!pair || !pair.key || !pair.secret)) throw refuse("NotSignedIn", "No Scenario key or sign-in is saved in the plugin.");
+    if (browser && !o.unscoped && !browser.project_id) throw refuse("NotSignedIn", "Choose a Scenario project first.");
     var url;
     try {
       url = buildUrl(path, o.query);
@@ -179,9 +207,11 @@ function createClient(opts) {
       throw e;
     }
     if (o.paid === paidMod.PAID_REQUEST && url.indexOf("?") >= 0) throw refuse("Internal", "Refused before sending: the paid request carries no query string.");
+    if (browser && !o.unscoped) url += (url.indexOf("?") >= 0 ? "&" : "?") + encodeURIComponent(API.sign_in.project_query) + "=" + encodeURIComponent(browser.project_id);
+    var bearer = browser ? await bearerOf(browser, false) : null;
     var headers = { Accept: "application/json" };
     // Always true for a URL built above; kept as the one place the header is set.
-    if (originOf(url) === apiOrigin) headers.Authorization = "Basic " + basicToken(pair);
+    if (originOf(url) === apiOrigin) headers.Authorization = browser ? "Bearer " + bearer : "Basic " + basicToken(pair);
     var init = { method: method, headers: headers, redirect: "error" };
     if (o.body !== undefined) {
       headers["Content-Type"] = "application/json";
@@ -190,11 +220,22 @@ function createClient(opts) {
     var isRead = method === "GET" && !o.paid;
     var retries = isRead ? (o.retries === undefined ? API.reads.retries : o.retries) : 0;
     var timeoutMs = o.timeoutMs || (o.paid ? PAID_TIMEOUT_MS : API.reads.timeout_ms);
-    var clean = cleaner(pair);
+    var clean = cleaner(browser ? null : pair, bearer);
+    var renewed = false;
     for (var attempt = 0; ; attempt++) {
-      var res = await once(url, Object.assign({}, init), timeoutMs);
+      var res = await once(url, Object.assign({}, init, { headers: Object.assign({}, headers) }), timeoutMs);
       var body = parseJson(res.text);
       if (res.status >= 200 && res.status < 300) return { status: res.status, body: body };
+      // A browser sign-in's token can be revoked or rotated elsewhere: a read
+      // answered 401 asks for a new token once and tries again.
+      if (browser && isRead && res.status === 401 && !renewed) {
+        renewed = true;
+        bearer = await bearerOf(browser, true);
+        headers.Authorization = "Bearer " + bearer;
+        clean = cleaner(null, bearer);
+        attempt--;
+        continue;
+      }
       var err = errorsMod.fromResponse(res.status, body !== null ? body : res.text, res.headers, clean);
       if (attempt < retries && API.reads.retry_statuses.indexOf(res.status) >= 0) {
         var wait = res.status === 429 ? err.retryAfterS || API.reads.rate_limit_default_wait_s : API.reads.server_error_wait_s;
@@ -207,7 +248,17 @@ function createClient(opts) {
     }
   }
 
-  return { request: request, baseUrl: baseUrl };
+  return {
+    request: request,
+    get baseUrl() {
+      return baseUrl;
+    },
+    // A development build pointed at a development target, before any request.
+    setBaseUrl: function (url) {
+      baseUrl = String(url).replace(/\/+$/, "");
+      apiOrigin = originOf(baseUrl);
+    }
+  };
 }
 
 module.exports = { createClient: createClient, basicToken: basicToken, originOf: originOf, PAID_TIMEOUT_MS: PAID_TIMEOUT_MS };
