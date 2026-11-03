@@ -286,6 +286,26 @@ body {
   align-items: flex-start;
 }
 
+/* Sign in with Scenario: the code the browser page shows too. */
+.code {
+  margin: 4px 0;
+  font-family: Menlo, Consolas, monospace;
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+#signin-key-title {
+  margin-top: 16px;
+}
+
+/* The project chooser: a team's name above its projects. */
+.list-team {
+  margin: 8px 0 2px 4px;
+  font-size: 11px;
+  color: var(--uxp-host-text-color-secondary);
+}
+
 .close {
   flex: 0 0 auto;
 }

@@ -109,7 +109,7 @@ test("composer pinned: one flex column; the context card on top, the middle part
   for (const id of ["account-banner", "mid-card", "recent", "mid-empty"]) assert.ok(at(id) > at("mid") && at(id) < at("composer"), `#${id} scrolls`);
   for (const id of ["agent-card", "refs", "prompt", "cchips", "confirm-card", "go", "go-label", "go-cu", "gear", "go-reason", "c-message"]) assert.ok(at(id) > at("composer") && at(id) < at("view-picker"), `#${id} is in the pinned composer`);
   // Every other view: its header row, then one part that scrolls.
-  for (const v of ["view-signin", "view-jobs", "view-projects", "view-settings"]) {
+  for (const v of ["view-signin", "view-jobs", "view-projects", "view-choose", "view-settings"]) {
     const body = section(v);
     assert.ok(/<div class="subhead">/.test(body), `${v} has a header row`);
     assert.equal((body.match(/class="scroll"/g) || []).length, 1, `${v} scrolls once`);
@@ -226,10 +226,10 @@ test("header: the project label shrinks on one line and ends with an ellipsis; t
   assert.equal(R[".project-label"]["text-overflow"], "ellipsis");
   const src = fs.readFileSync(path.join(PLUGIN, "src", "ui", "account-panel.js"), "utf8");
   assert.ok(/setText\("project-label", label\)/.test(src), "the label is written to the span, which keeps the button's markup");
-  assert.ok(/"Project: " \+ label/.test(src), "the full name is in the tooltip");
+  assert.ok(/"Project: " \+ full/.test(src) && /view\.teamProject\(auth\.current\(\)\) : label/.test(src), "the full name is in the tooltip, with the team for a browser sign-in");
 });
 
-test("Not signed in screen: the key fields and Save and test come before the help on getting a key", () => {
+test("Not signed in screen: Sign in with Scenario first, then the key fields and Save and test, then the help on getting a key", () => {
   const v = section("view-signin");
   const at = (id) => {
     const i = v.indexOf(`id="${id}"`);
@@ -237,7 +237,24 @@ test("Not signed in screen: the key fields and Save and test come before the hel
     return i;
   };
   const before = v.slice(0, at("signin-key")).match(/\bid="[^"]+"/g);
-  assert.deepEqual(before, ['id="signin-back"', 'id="signin-title"', 'id="signin-scroll"', 'id="signin-disclosure"', 'id="signin-step2"']);
+  assert.deepEqual(before, [
+    'id="signin-back"',
+    'id="signin-title"',
+    'id="signin-scroll"',
+    'id="signin-disclosure"',
+    'id="signin-browser-text"',
+    'id="signin-browser"',
+    'id="signin-browser-progress"',
+    'id="signin-code-box"',
+    'id="signin-code-label"',
+    'id="signin-code"',
+    'id="signin-code-wait"',
+    'id="signin-code-open"',
+    'id="signin-code-copy"',
+    'id="signin-code-cancel"',
+    'id="signin-key-title"',
+    'id="signin-step2"'
+  ]);
   assert.ok(at("signin-key") < at("signin-secret") && at("signin-secret") < at("signin-save"));
   for (const id of ["signin-help-title", "signin-step1", "signin-create-key", "signin-admins", "signin-copy-request", "signin-no-account", "signin-plan", "signin-see-plans", "signin-create-account"]) {
     assert.ok(at(id) > at("signin-save"), `#${id} follows Save and test`);
