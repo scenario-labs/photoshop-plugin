@@ -36,7 +36,7 @@ async function bootPanel(t, { oauth: oauthOpts = {}, teams = teamsFixture(), sle
 }
 
 function chooserRows(doc) {
-  return doc.byId("choose-list").children.map((n) => (n.className === "list-team" ? `# ${n.textContent}` : n.className === "note" ? `  (${n.textContent})` : `  ${n.children[1].textContent}${n.getAttribute("selected") === "" ? " *" : ""}`));
+  return doc.byId("choose-list").children.map((n) => (n.className === "list-team" ? `# ${n.textContent}` : n.className === "note list-none" ? `  (${n.textContent})` : `  ${n.children[1].textContent}${n.getAttribute("selected") === "" ? " *" : ""}`));
 }
 
 function rowOf(doc, projectId) {
@@ -64,7 +64,7 @@ test("Sign in with Scenario: the code while the page is open, then the chooser b
   await waitFor(() => doc.shown("view-choose"), { label: "chooser shown" });
   assert.ok(!doc.shown("signin-code-box"));
   assert.equal(doc.text("choose-note"), view.TEXT.choose_note);
-  assert.deepEqual(chooserRows(doc), ["# Studio", "  Film", "  Poster", "# Personal", "  Sketches", "  Tests", "# Empty team", `  (${view.TEXT.choose_none})`]);
+  assert.deepEqual(chooserRows(doc), ["# Personal", "  Sketches", "  Tests", "# Studio", "  Film", "  Poster", "# Empty team", `  (${view.TEXT.choose_none})`]);
   assert.equal(app.auth.status().signed_in, false, "nothing saved before a project is chosen");
 
   rowOf(doc, "project_poster").click();
@@ -90,7 +90,7 @@ test("Projects: Choose another project lists the teams with the current one chec
   assert.ok(doc.shown("view-projects"));
   assert.ok(doc.shown("projects-choose"), "Choose another project for a browser sign-in");
   const rows = doc.byId("projects-list").children;
-  assert.deepEqual(rows.map((r) => [r.children[1].textContent, r.children[2].textContent]), [["Studio / Film", idp.state.email]]);
+  assert.deepEqual(rows.map((r) => [r.children[1].textContent, r.children[2].textContent]), [["Film", "Studio"]], "the project, then its team");
   doc.byId("projects-choose").click();
   await waitFor(() => chooserRows(doc).length > 0, { label: "chooser listed" });
   assert.ok(chooserRows(doc).includes("  Film *"), "the current project is checked");
@@ -98,7 +98,7 @@ test("Projects: Choose another project lists the teams with the current one chec
   await waitFor(() => doc.text("project-label") === "Tests", { label: "switched" });
   assert.equal(idp.state.requests.filter((r) => r.path === "/oauth/device_authorization").length, 1, "the same sign-in");
   doc.byId("project").click();
-  assert.deepEqual(doc.byId("projects-list").children.map((r) => r.children[1].textContent), ["Studio / Film", "Personal / Tests"]);
+  assert.deepEqual(doc.byId("projects-list").children.map((r) => [r.children[1].textContent, r.children[2].textContent]), [["Film", "Studio"], ["Tests", "Personal"]]);
 
   assert.equal(app.menu.invoke("settings"), true);
   assert.equal(doc.text("settings-signout-note"), view.TEXT.sign_out_browser_note);

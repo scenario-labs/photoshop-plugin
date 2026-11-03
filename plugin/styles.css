@@ -306,6 +306,11 @@ body {
   color: var(--uxp-host-text-color-secondary);
 }
 
+/* Under a team without a project, aligned with the project names. */
+.list-none {
+  padding: 4px 0 4px 26px;
+}
+
 .close {
   flex: 0 0 auto;
 }
@@ -413,7 +418,12 @@ body {
 }
 
 .list-row .key {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   margin-left: 8px;
   font-size: 11px;
   color: var(--uxp-host-text-color-secondary);

@@ -131,7 +131,8 @@ function createAccountPanel(doc, actions) {
     for (var i = 0; i < list.length; i++) {
       (function (a) {
         // A row like Photoshop's lists: a check on the current project, the
-        // name (cut with an ellipsis) and the key's last characters.
+        // name (cut with an ellipsis) and the key's last characters or the
+        // team.
         var row = doc.createElement("div");
         row.className = a.current ? "list-row current" : "list-row";
         row.setAttribute("data-account", a.id);
@@ -140,7 +141,7 @@ function createAccountPanel(doc, actions) {
         row.appendChild(icons.icon(doc, a.current ? "check" : "blank"));
         var name = doc.createElement("span");
         name.className = "name";
-        name.textContent = view.teamProject(a);
+        name.textContent = view.projectLabel(a);
         row.appendChild(name);
         var key = doc.createElement("span");
         key.className = "key";
@@ -368,7 +369,7 @@ function createAccountPanel(doc, actions) {
       box.appendChild(head);
       if (!teams[i].projects.length) {
         var none = doc.createElement("div");
-        none.className = "note";
+        none.className = "note list-none";
         none.textContent = view.TEXT.choose_none;
         box.appendChild(none);
       }

@@ -60,11 +60,12 @@ function projectRecord(key, opts = {}) {
 // The teams of GET /v1/teams for the browser sign-in tests: two teams with
 // two projects each, and a team without a project (several teams and
 // projects at every level).
+// Out of order on purpose, as Scenario sends them: the plugin sorts by name.
 function teamsFixture() {
   return [
-    { id: "team_studio", name: "Studio", projects: [{ id: "project_film", name: "Film" }, { id: "project_poster", name: "Poster" }] },
-    { id: "team_personal", name: "Personal", projects: [{ id: "project_sketches", name: "Sketches" }, { id: "project_tests", name: "Tests" }] },
-    { id: "team_empty", name: "Empty team", projects: [] }
+    { id: "team_empty", name: "Empty team", projects: [] },
+    { id: "team_studio", name: "Studio", projects: [{ id: "project_poster", name: "Poster" }, { id: "project_film", name: "Film" }] },
+    { id: "team_personal", name: "Personal", projects: [{ id: "project_tests", name: "Tests" }, { id: "project_sketches", name: "Sketches" }] }
   ];
 }
 

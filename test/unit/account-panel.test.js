@@ -56,7 +56,7 @@ test("first run: the sign-in view with the spec's texts; header 'Not signed in'"
   assert.equal(doc.text("signin-step1"), "Create a Project key with the Editor role in the project you want to use. A CU limit on the key caps what this plugin and connected agents can spend.");
   assert.equal(doc.text("signin-admins"), "Only team admins and project owners can create keys.");
   assert.equal(doc.text("signin-storage"), "Keys and your sign-in stay in Photoshop's secure storage on this computer.");
-  assert.equal(doc.text("signin-browser-text"), "Sign in with your Scenario account in the browser. Photoshop asks before it opens the page.");
+  assert.equal(doc.text("signin-browser-text"), "Sign in with your Scenario account in the browser. Photoshop may ask before it opens the page.");
   assert.equal(doc.text("signin-key-title"), "Or use an API key");
   assert.ok(doc.shown("signin-browser") && !doc.shown("signin-code-box"), "Sign in with Scenario shows; the code only while it waits");
   assert.equal(doc.byId("signin-secret").getAttribute("type"), "password");

@@ -20,9 +20,9 @@ var TEXT = {
   no_key_title: "No key yet?",
   storage_note: "Keys and your sign-in stay in Photoshop's secure storage on this computer.",
   // SPEC 4.6: Sign in with Scenario.
-  browser_text: "Sign in with your Scenario account in the browser. Photoshop asks before it opens the page.",
+  browser_text: "Sign in with your Scenario account in the browser. Photoshop may ask before it opens the page.",
   key_title: "Or use an API key",
-  code_label: "The page shows this code. Check that they match:",
+  code_label: "If the page asks for a code, enter this one:",
   code_wait: "Waiting for you to approve in the browser.",
   code_copied: "Code copied.",
   reading_teams: "Reading your teams and projects.",
@@ -104,9 +104,10 @@ function teamProject(account) {
   return account && account.kind === "browser" && account.team_name ? account.team_name + " / " + project : project;
 }
 
-// What a list row says after the name: the key's ending, or who signed in.
+// What a list row says after the project's name: the key's ending, or the
+// team of a browser sign-in (its projects share one email).
 function rowDetail(account) {
-  if (account.kind === "browser") return account.email || "Signed in";
+  if (account.kind === "browser") return account.team_name || account.email || "Signed in";
   return keyEnding(account.key_last4);
 }
 

@@ -60,15 +60,15 @@ function codes() {
   return { seen, hooks: { onCode: (c) => seen.push(c) } };
 }
 
-test("teams: two teams with their projects and a team without one, in the server's order; records without an id are skipped", () => {
+test("teams: teams and their projects by name whatever the server's order, a team without a project last; records without an id are skipped", () => {
   const teams = teamsFrom({ teams: [...teamsFixture(), { name: "no id" }, { id: "team_x", projects: [{ name: "no id" }, { id: "project_y" }] }] });
   assert.deepEqual(
     teams.map((t) => [t.id, t.name, t.projects.map((p) => `${p.id}:${p.name}`)]),
     [
-      ["team_studio", "Studio", ["project_film:Film", "project_poster:Poster"]],
       ["team_personal", "Personal", ["project_sketches:Sketches", "project_tests:Tests"]],
-      ["team_empty", "Empty team", []],
-      ["team_x", "team_x", ["project_y:project_y"]]
+      ["team_studio", "Studio", ["project_film:Film", "project_poster:Poster"]],
+      ["team_x", "team_x", ["project_y:project_y"]],
+      ["team_empty", "Empty team", []]
     ]
   );
   assert.deepEqual(teamsFrom(null), []);
@@ -293,7 +293,7 @@ test("another project of the same sign-in, Test connection, a project that is go
   // Choose another project: the same session, another row; the key stays.
   const listed = await s.auth.listChoices();
   assert.equal(listed.ok, true);
-  assert.deepEqual(listed.teams.map((x) => x.id), ["team_studio", "team_personal", "team_empty"]);
+  assert.deepEqual(listed.teams.map((x) => x.id), ["team_personal", "team_studio", "team_empty"]);
   const other = await s.auth.chooseProject("project_tests");
   assert.equal(other.ok, true);
   assert.deepEqual(s.auth.list().map((a) => `${a.kind || "key"}:${a.project_name}:${a.current}`), ["key:Key project:false", "browser:Film:false", "browser:Tests:true"]);
@@ -330,6 +330,23 @@ test("another project of the same sign-in, Test connection, a project that is go
   const last = s.api.requests.at(-1);
   assert.match(last.authorization, /^Basic /);
   assert.equal(last.query.projectId, undefined);
+});
+
+test("signing out of a browser project that is not the current one still ends its sign-in at Scenario", async (t) => {
+  const pair = newKeyPair();
+  const s = await setup(t, { keyAccounts: [{ ...pair, projects: [projectRecord(pair.key, { id: "project_key", name: "Key project" })] }] });
+  await s.accounts.load();
+  await s.auth.signInWithBrowser({});
+  await s.auth.chooseProject("project_film");
+  const film = s.auth.current();
+  const rt = JSON.parse(s.host.secure.get(SESSION_ENTRY_PREFIX + film.session)).refresh_token;
+  await s.auth.saveAndTest(pair.key, pair.secret);
+  assert.equal(s.auth.current().project_name, "Key project");
+  await s.auth.signOut(film.id);
+  assert.deepEqual(s.idp.state.revoked, [rt]);
+  assert.deepEqual(s.auth.list().map((a) => a.project_name), ["Key project"]);
+  assert.equal(s.auth.current().project_name, "Key project", "the current key stays");
+  assert.ok(![...s.host.secure.keys()].some((k) => k.startsWith(SESSION_ENTRY_PREFIX)));
 });
 
 test("a stored sign-in damaged or for another person is dropped at load", async (t) => {

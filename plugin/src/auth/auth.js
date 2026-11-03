@@ -114,13 +114,20 @@ function identify(projects, key) {
 }
 
 // The teams of GET /v1/teams and the projects the account may use in each,
-// in the server's order. Records without an id are skipped; a name falls back
-// to the id. Pure, for the tests.
+// by name, teams without a project last: Scenario lists them in no stable
+// order (live 2026-11-03, two reads minutes apart). Records without an id
+// are skipped; a name falls back to the id. Pure, for the tests.
 function teamsFrom(body) {
   var out = [];
   var list = body && Array.isArray(body.teams) ? body.teams : [];
   function name(r) {
     return typeof r.name === "string" && r.name.trim() ? r.name.trim() : r.id;
+  }
+  function byName(a, b) {
+    var x = a.name.toLowerCase();
+    var y = b.name.toLowerCase();
+    if (x !== y) return x < y ? -1 : 1;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   }
   for (var i = 0; i < list.length; i++) {
     var t = list[i];
@@ -130,9 +137,12 @@ function teamsFrom(body) {
     for (var j = 0; j < ps.length; j++) {
       if (ps[j] && typeof ps[j].id === "string" && ps[j].id) projects.push({ id: ps[j].id, name: name(ps[j]) });
     }
-    out.push({ id: t.id, name: name(t), projects: projects });
+    out.push({ id: t.id, name: name(t), projects: projects.sort(byName) });
   }
-  return out;
+  return out.sort(function (a, b) {
+    if (!a.projects.length !== !b.projects.length) return a.projects.length ? -1 : 1;
+    return byName(a, b);
+  });
 }
 
 // Every (team, project) pair, as the chooser lists them.
@@ -512,16 +522,15 @@ function createAuth(o) {
   async function signOut(id) {
     var target = id || (accounts.current() && accounts.current().id);
     if (!target) return accounts.summary();
-    var row = null;
-    var list = accounts.list();
-    for (var i = 0; i < list.length; i++) if (list[i].id === target) row = list[i];
-    var c = accounts.current();
-    if (row && row.kind === "browser" && oauth && c && c.id === target) {
-      var rt = accounts.refreshTokenOf(c.session);
+    // A browser row ends its whole sign-in, at Scenario and here, with every
+    // project it saved.
+    var sid = accounts.sessionOf(target);
+    if (sid && oauth) {
+      var rt = accounts.refreshTokenOf(sid);
       if (rt) await oauth.revoke(rt);
     }
     var s = await accounts.remove(target);
-    log("signed out of one project (" + accounts.list().length + " still saved)");
+    log((sid ? "signed out of a browser sign-in" : "signed out of one project") + " (" + accounts.list().length + " still saved)");
     return s;
   }
 

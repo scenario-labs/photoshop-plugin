@@ -432,6 +432,12 @@ function createAccounts(host, redactor, opts) {
     return summary();
   }
 
+  // The browser sign-in a saved project belongs to, or null for a key.
+  function sessionOf(id) {
+    var a = find(id);
+    return a && a.kind === "browser" ? a.session : null;
+  }
+
   // The refresh token of a saved browser sign-in, for revocation at sign out.
   function refreshTokenOf(sid) {
     var known = sessions[sid];
@@ -481,6 +487,7 @@ function createAccounts(host, redactor, opts) {
     session: session,
     removeSession: removeSession,
     refreshTokenOf: refreshTokenOf,
+    sessionOf: sessionOf,
     update: update,
     switchTo: switchTo,
     remove: remove,

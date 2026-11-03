@@ -96,11 +96,16 @@ async function run(what, args, ctx) {
     }
     case "code": {
       // Sign in with Scenario waiting in the browser, with a sample code.
+      // The two buttons stay off as in a real wait; a reload turns them on.
       var a1 = need("account");
       a1.showView("signin");
       var code = ctx.doc ? ctx.doc.getElementById("signin-code") : null;
       a1.showCode(true);
       if (code) code.textContent = String(args.code || "ABCD-EFGH");
+      ["signin-browser", "signin-save"].forEach(function (id) {
+        var b = ctx.doc ? ctx.doc.getElementById(id) : null;
+        if (b) b.setAttribute("disabled", "");
+      });
       return { code: !!code };
     }
     case "choose": {
