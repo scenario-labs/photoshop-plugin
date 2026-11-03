@@ -300,12 +300,16 @@ function createAccounts(host, redactor, opts) {
     if (!a) return;
     var name = cleanName(info.project_name);
     var projectId = typeof info.project_id === "string" && info.project_id ? info.project_id : a.project_id || null;
-    if (name === (a.project_name || null) && projectId === (a.project_id || null)) return;
+    // A browser sign-in's project keeps its id; its team can be renamed.
+    if (a.kind === "browser") projectId = a.project_id;
+    var team = a.kind === "browser" ? cleanName(info.team_name) : null;
+    if (name === (a.project_name || null) && projectId === (a.project_id || null) && (!team || team === (a.team_name || null))) return;
     var next = copyIndex();
     for (var i = 0; i < next.accounts.length; i++) {
       if (next.accounts[i].id === id) {
         if (name) next.accounts[i].project_name = name;
         next.accounts[i].project_id = projectId;
+        if (team) next.accounts[i].team_name = team;
       }
     }
     await writeIndex(next);

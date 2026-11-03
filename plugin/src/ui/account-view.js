@@ -68,6 +68,7 @@ var STATES = {
   browser_denied: { text: "The sign-in was declined in the browser.", actions: ["sign_in_again"] },
   browser_expired: { text: "The code expired before the sign-in finished.", actions: ["sign_in_again"] },
   browser_failed: { text: "Scenario's sign-in did not answer as expected.", actions: ["sign_in_again", "copy_error"], scenario: true },
+  browser_check_failed: { text: "Scenario could not check your sign-in.", actions: ["retry", "copy_error"], scenario: true },
   session_ended: { text: "Your Scenario sign-in ended. Sign in again.", actions: ["sign_in_again"] },
   no_project: { text: "This account has no project it can use. Create one on Scenario, or ask a team admin for a role in one.", actions: ["sign_in_again"] },
   project_gone: { text: "The chosen project is no longer available. Choose another one.", actions: ["choose_project"] }

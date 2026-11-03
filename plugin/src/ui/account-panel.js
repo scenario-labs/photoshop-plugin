@@ -43,7 +43,8 @@ function createAccountPanel(doc, actions) {
     signOutArmed: false,
     signOutTimer: null,
     code: null, // the browser sign-in's code while it waits
-    choosing: false
+    choosing: false,
+    lastTry: "key" // what Retry on the sign-in view repeats: "key" or "browser"
   };
 
   function byId(id) {
@@ -260,6 +261,7 @@ function createAccountPanel(doc, actions) {
   async function save() {
     if (st.running) return;
     st.running = true;
+    st.lastTry = "key";
     enable("signin-save", false);
     renderFailure("signin", null);
     setText("signin-note", "");
@@ -314,6 +316,7 @@ function createAccountPanel(doc, actions) {
   async function browserSignIn() {
     if (st.running) return;
     st.running = true;
+    st.lastTry = "browser";
     enable("signin-browser", false);
     enable("signin-save", false);
     renderFailure("signin", null);
@@ -543,6 +546,7 @@ function createAccountPanel(doc, actions) {
     else if (name === "copy_error") copy(st.failure[prefix] ? st.failure[prefix].copy : "", noteId, view.TEXT.copied);
     else if (name === "retry") {
       if (prefix === "settings") testConnection();
+      else if (st.lastTry === "browser") browserSignIn();
       else save();
     } else if (name === "sign_in_again") browserSignIn();
     else if (name === "choose_project") loadChooser();
@@ -731,7 +735,7 @@ function createAccountPanel(doc, actions) {
 
   return {
     // Development builds only (a stub in release): sample states.
-    dev: uiDemo.hook("account", { renderFailure: renderFailure, renderConnected: renderConnected, showBanner: showBanner, startAdding: startAdding, renderChooser: renderChooser, showCode: showCode }),
+    dev: uiDemo.hook("account", { renderFailure: renderFailure, renderConnected: renderConnected, showBanner: showBanner, startAdding: startAdding, renderChooser: renderChooser, showCode: showCode, showView: showView }),
     refresh: refresh,
     showView: showView,
     showSection: showSection,

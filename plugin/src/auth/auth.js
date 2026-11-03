@@ -60,6 +60,7 @@ var STATE_TYPES = {
   browser_denied: "Unauthorized",
   browser_expired: "NotSignedIn",
   browser_failed: "Internal",
+  browser_check_failed: "Internal",
   session_ended: "NotSignedIn",
   no_project: "Forbidden",
   project_gone: "Forbidden"
@@ -304,6 +305,13 @@ function createAuth(o) {
     return teamsFrom(res.body);
   }
 
+  // A browser sign-in's read that failed, in words for a sign-in, never a key.
+  function browserFail(e, state) {
+    if (e && (e.type === "NotSignedIn" || e.type === "Unauthorized")) return fail("session_ended", e);
+    if (e && e.type !== "Forbidden" && STOP[e.type]) return fail(STOP[e.type], e);
+    return fail(state, e, { scenario_message: (e && (e.scenarioMessage || e.message)) || null });
+  }
+
   function oauthFail(e) {
     var state = (e && OAUTH_STATES[e.state]) || (e && e.type && STOP[e.type]) || "failed";
     if (state === "cancelled") return { ok: false, state: "cancelled", type: null, scenario_message: null };
@@ -319,7 +327,11 @@ function createAuth(o) {
     if (!oauth) return fail("browser_failed", null);
     var me = { cancelled: false };
     attempt = me;
-    pending = null;
+    // A sign-in still waiting for its project is replaced: its token goes.
+    if (pending) {
+      await oauth.revoke(pending.latest());
+      pending = null;
+    }
     try {
       log("browser sign-in: started");
       var device;
@@ -366,8 +378,8 @@ function createAuth(o) {
       } catch (e) {
         await oauth.revoke(latest);
         log("browser sign-in: teams unavailable (" + ((e && e.type) || "Internal") + ")");
-        if (e && STOP[e.type]) return fail(STOP[e.type], e);
-        return fail("failed", e);
+        var f = browserFail(e, "browser_failed");
+        return f.state === "session_ended" ? fail("browser_failed", e, { scenario_message: (e && e.message) || null }) : f;
       }
       var signIn = { issuer: oauth.issuer, client_id: oauth.target.client_id, subject: tokens.subject, email: tokens.email || null, refresh_token: latest };
       var choices = choicesOf(teams);
@@ -426,8 +438,7 @@ function createAuth(o) {
     try {
       teams = await readTeams({ session: await accounts.session(c.session), project_id: null });
     } catch (e) {
-      if (e && STOP[e.type]) return fail(STOP[e.type], e);
-      return fail("failed", e);
+      return browserFail(e, "browser_check_failed");
     }
     var picked = findChoice(teams, projectId);
     if (!picked) return fail("project_gone", null);
@@ -448,8 +459,7 @@ function createAuth(o) {
     try {
       return { ok: true, teams: await readTeams({ session: await accounts.session(c.session), project_id: null }) };
     } catch (e) {
-      if (e && STOP[e.type]) return fail(STOP[e.type], e);
-      return fail("failed", e);
+      return browserFail(e, "browser_check_failed");
     }
   }
 
@@ -473,23 +483,20 @@ function createAuth(o) {
     try {
       await client.request("GET", API.sign_in.auth_check.path, { query: API.sign_in.auth_check.query, onWait: hooks.onWait });
     } catch (e) {
-      if (e && e.type === "NotSignedIn") return fail("session_ended", e);
-      if (e && e.type === "Unauthorized") return fail("session_ended", e);
-      if (e && STOP[e.type]) return fail(STOP[e.type], e);
-      if (e && e.type !== "Forbidden") return fail("failed", e);
+      // A 403 here can be a project that is gone: the list below tells.
+      if (!e || e.type !== "Forbidden") return browserFail(e, "browser_check_failed");
     }
     if (hooks.onStep) hooks.onStep(2, STEPS);
     var teams;
     try {
       teams = await readTeams({ session: creds.session, project_id: null }, hooks);
     } catch (e) {
-      if (e && STOP[e.type]) return fail(STOP[e.type], e);
-      return fail("failed", e);
+      return browserFail(e, "browser_check_failed");
     }
     var choice = findChoice(teams, c.project_id);
     if (!choice) return fail("project_gone", null);
     try {
-      await accounts.update(c.id, { project_name: choice.project_name, project_id: choice.project_id });
+      await accounts.update(c.id, { project_name: choice.project_name, project_id: choice.project_id, team_name: choice.team_name });
     } catch (e) {
       // the name is display only
     }

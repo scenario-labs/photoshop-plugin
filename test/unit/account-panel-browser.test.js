@@ -156,3 +156,15 @@ test("a chosen project that is gone: Test connection says so and Choose a projec
   rowOf(doc, "project_film").click();
   await waitFor(() => doc.text("project-label") === "Film", { label: "chosen" });
 });
+
+test("Retry on the sign-in view repeats the browser sign-in after it failed offline", async (t) => {
+  let offline = true;
+  const { doc, idp } = await bootPanel(t, { oauth: { handle: (r) => (offline && r.path === "/oauth/device_authorization" ? { destroy: true } : undefined) } });
+  doc.byId("signin-browser").click();
+  await waitFor(() => doc.shown("signin-status"), { label: "failure" });
+  assert.equal(doc.text("signin-status-text"), "No connection to Scenario. Check your network.");
+  offline = false;
+  doc.byId("signin-act-retry").click();
+  await waitFor(() => doc.shown("view-choose"), { label: "retried as a browser sign-in" });
+  assert.equal(idp.state.requests.filter((r) => r.path === "/oauth/device_authorization").length, 2);
+});

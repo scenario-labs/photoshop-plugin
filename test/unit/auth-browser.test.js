@@ -342,3 +342,37 @@ test("a stored sign-in damaged or for another person is dropped at load", async 
   const sum = await again.load();
   assert.deepEqual(sum, { signed_in: false, project_name: null, count: 0 });
 });
+
+test("a browser sign-in's failures are worded for a sign-in, never a key; a team renamed on Scenario shows its new name", async (t) => {
+  const s = await setup(t);
+  // The team list refused at sign-in (the application not allowed on the API, say).
+  s.api.setHandler((r) => (r.path === "/v1/teams" ? { status: 403, body: { reason: "OAuth client not allowed" } } : undefined));
+  const refused = await s.auth.signInWithBrowser({});
+  assert.equal(refused.state, "browser_failed");
+  assert.equal(refused.scenario_message, "OAuth client not allowed");
+  assert.equal(s.idp.state.revoked.length, 1, "the unused sign-in is revoked");
+  s.api.setHandler(null);
+
+  await s.auth.signInWithBrowser({});
+  await s.auth.chooseProject("project_film");
+  s.api.setHandler((r) => (r.path === "/v1/models" ? { status: 500, body: { message: "boom" } } : undefined));
+  const broken = await s.auth.testConnection({});
+  assert.equal(broken.state, "browser_check_failed");
+  s.api.setHandler((r) => (r.path === "/v1/models" ? { destroy: true } : undefined));
+  assert.equal((await s.auth.testConnection({})).state, "offline");
+  s.api.setHandler(null);
+  s.box.teams = teamsFixture().map((team) => (team.id === "team_studio" ? { ...team, name: "Studio 2" } : team));
+  assert.equal((await s.auth.testConnection({})).ok, true);
+  assert.equal(s.auth.current().team_name, "Studio 2");
+  assert.equal(s.auth.current().project_id, "project_film", "the project id never changes");
+});
+
+test("a new sign-in while one waits for its project revokes the waiting one's token", async (t) => {
+  const s = await setup(t);
+  assert.equal((await s.auth.signInWithBrowser({})).choose, true);
+  const waitingToken = [...s.idp.state.refresh.keys()][0];
+  assert.equal((await s.auth.signInWithBrowser({})).choose, true);
+  assert.ok(s.idp.state.revoked.includes(waitingToken));
+  assert.equal((await s.auth.chooseProject("project_poster")).ok, true);
+  assert.equal(s.auth.list().length, 1);
+});
