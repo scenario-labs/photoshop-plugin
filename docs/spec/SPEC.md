@@ -690,7 +690,7 @@ The plugin classifies Scenario errors by HTTP status and the body's text: REST e
 | Rate limited (429) on a paid call | "Not sent: Scenario asked to wait N s." Paid requests pause for N s, or 60 s when Scenario gives no time | the button, enabled after the wait |
 | A price check that created a job | "A price check created a job on Scenario. Price checks are stopped until Photoshop restarts." | none |
 | Catalog failed | "Models could not load." | **Retry** |
-| Model no longer available | "This model is no longer available to this key." | the Model chip |
+| Model no longer available | "This model is no longer available in this project." | the Model chip |
 | No document open | The context card reads "No document open"; Create image is the action | none |
 | Hidden source layer | "Layer "x" is hidden. Show it to use it as the source." | none |
 | 32-bit document | "32-bit documents are not supported yet. Convert a copy to 16-bit." | none |
@@ -811,17 +811,17 @@ Nearest design for automation: sign in once per machine and user in the panel; t
 A Project key belongs to one project. The plugin keeps one key per project, one `secureStorage` entry each, named by a hash of the key id, never by the project name, because entry names are stored unencrypted (documented). The project name in the header opens the Projects view (a full panel view, like the model picker): the projects with a saved key, then **Add a key for another project**. Switching changes the trained models, the Library, the On Scenario tab, and where uploads and results go. Running jobs keep their own project. Quotes and jobs bind a hash of the key id, so a switch invalidates open quotes.
 
 
-A browser sign-in (section 4.6) has no key: the account chooses a project, and each project it chooses is a row of the same list. Its quotes and jobs bind a hash of the identity provider, the signed-in subject and the project id instead of a key hash.
+A browser sign-in (section 4.6) has no key: the account chooses a project, and each project it chooses is a row of the same list, with its team where a key row shows the key's ending. Its quotes and jobs bind a hash of the identity provider, the signed-in subject and the project id instead of a key hash.
 
 ### 4.6 Sign in with Scenario
 
 1. **Sign in with Scenario** sits above the key fields. It runs the OAuth 2.0 device authorization grant (RFC 8628) against Scenario's identity provider as the Photoshop plugin's registered public application: no secret, scope `openid email profile offline_access`.
-2. The panel shows the user code and opens the verification page with the code in it (Photoshop asks first). **Open the page again**, **Copy code** and **Cancel** stay under the code. The panel polls the token endpoint at the interval the identity provider gives, slower after `slow_down`, until the person approves, declines (`access_denied`), the code expires (`expired_token`) or Cancel.
-3. With the tokens, `GET /v1/teams` lists the account's teams and the projects it may use in each. One usable project is chosen at once; several open **Choose a project**, grouped by team. Nothing is saved before a project is chosen; Back from the chooser revokes the new refresh token. An account with no usable project is told so.
+2. The panel shows the user code and opens the verification page with the code in it. Photoshop may ask first: on 27.11 it asked the first time, then opened the page without asking, also after a restart (live 2026-11-03). That page goes straight to Approve and Deny for the signed-in browser and does not show the code; the panel's code is for a page that asks for it (**Copy code**). **Open the page again**, **Copy code** and **Cancel** stay under the code. The panel polls the token endpoint at the interval the identity provider gives, slower after `slow_down`, until the person approves, declines (`access_denied`), the code expires (`expired_token`) or Cancel.
+3. With the tokens, `GET /v1/teams` lists the account's teams and the projects it may use in each. One usable project is chosen at once; several open **Choose a project**, grouped by team, teams and projects by name (Scenario's order changes from one read to the next), teams without a project last. Nothing is saved before a project is chosen; Back from the chooser revokes the new refresh token. An account with no usable project is told so.
 4. Requests carry `Authorization: Bearer` and the chosen project as `projectId`, except the team listing. The paid request's no-query rule (section 6.1) applies to what the caller passes; `projectId` is the only parameter added.
 5. The refresh token goes to `secureStorage`, one entry per signed-in person named by a hash of the issuer and subject; the access token stays in memory, so each Photoshop start refreshes once. A token with less than 60 s left is refreshed before the request, one refresh at a time, and the rotated refresh token is saved. A read answered 401 gets one new token and one more try; a paid request is never retried. A refresh the identity provider refuses (`invalid_grant`) signs that person out: their projects leave the list and the panel asks to sign in again.
 6. **Choose another project** in Projects reads the list again with the same sign-in. Test connection reads the chosen project's models and the list; a project that is gone (deleted, or the role removed) reads "The chosen project is no longer available" with **Choose a project**.
-7. **Sign out** revokes the refresh token at the identity provider and removes the sign-in and its projects from this computer.
+7. **Sign out** on any of its projects revokes the refresh token at the identity provider and removes the sign-in and all its projects from this computer.
 
 Development builds can point Sign in with Scenario at a development identity provider and API: a `dev-oauth-target.json` file in the plugin's data folder names the issuer, client id and API base, and `DEV_OAUTH_TARGET=<file> npm run package:dev` allows those hosts in the development package's manifest. Release builds remove that code.
 ---
