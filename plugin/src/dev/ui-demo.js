@@ -3,7 +3,7 @@
 // whose hook() returns null (plugin/scripts/build.js), and a test checks it.
 //
 // Sample states for pictures of the panel made for the docs, never left on
-// the live panel: Jobs rows, a sign-in error, a project name. Each one is drawn by the panel's own render code,
+// the live panel: Jobs rows, a sign-in error, a project name, the sign-in code, the project chooser. Each one is drawn by the panel's own render code,
 // which hands its render functions to hook() when it is built. Sample
 // pictures arrive as base64 in the command (test/live/ui-dev.js) and are
 // written under "dev-demo/" in the plugin's data folder; nothing is added to
@@ -93,6 +93,27 @@ async function run(what, args, ctx) {
     case "adding": {
       need("account").startAdding();
       return { adding: true };
+    }
+    case "code": {
+      // Sign in with Scenario waiting in the browser, with a sample code.
+      var a1 = need("account");
+      a1.showView("signin");
+      var code = ctx.doc ? ctx.doc.getElementById("signin-code") : null;
+      a1.showCode(true);
+      if (code) code.textContent = String(args.code || "ABCD-EFGH");
+      return { code: !!code };
+    }
+    case "choose": {
+      // The project chooser with sample teams: [{ name, projects: [{ id, name }] }].
+      var a2 = need("account");
+      a2.renderChooser(args.teams || []);
+      a2.showView("choose");
+      return { teams: (args.teams || []).length };
+    }
+    case "connected": {
+      // The Connected banner of a browser sign-in, with sample names.
+      need("account").showBanner({ kind: "browser", team_name: args.team || "Studio", project_name: args.project || "Film", email: args.email || null, key_last4: "" });
+      return { banner: true };
     }
     default:
       throw new Error("unknown demo: " + what);
