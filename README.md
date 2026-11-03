@@ -50,8 +50,8 @@ You need Photoshop 2026 (27.x; tested on 27.11 on macOS) and a Scenario account 
 
 ## First generation
 
-1. On [app.scenario.com](https://app.scenario.com), open your project's API keys and create a **Project key** with the **Editor** role. Copy the key and its secret.
-2. In the panel, paste them (pasting `key:secret` fills both fields) and click **Save and test**.
+1. In the panel, click **Sign in with Scenario**. Photoshop asks before it opens Scenario's sign-in page in your browser; check that the page shows the panel's code and approve. If your account can use several projects, choose one.
+2. Or use an API key: on [app.scenario.com](https://app.scenario.com), open your project's API keys and create a **Project key** with the **Editor** role, then paste the key and its secret in the panel (pasting `key:secret` fills both fields) and click **Save and test**.
 3. Open or create a document. On a blank canvas the panel offers **Create image**, and on an image or a layer **New layer**. Type what you want and click the blue button. It shows the price, for example `Create image · 13 CU` for four takes.
 
 The full walkthrough, with every action, is in the [User Guide](docs/USER_GUIDE.md#quick-start).

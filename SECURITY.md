@@ -33,7 +33,7 @@ Vulnerabilities in the Scenario platform itself (app.scenario.com, the public AP
 
 These are the limits of what the plugin can protect, written out so a report can say which one failed:
 
-- **Your key** stays in Photoshop's secure storage for this plugin and goes only to `https://api.cloud.scenario.com` over HTTPS. The helper and agents never receive it. *Tested automated*.
+- **Your key** stays in Photoshop's secure storage for this plugin and goes only to `https://api.cloud.scenario.com` over HTTPS. A browser sign-in's refresh token stays in the same storage and goes only to Scenario's identity provider; its access token stays in memory and goes only to the API. The helper and agents never receive any of them. *Tested automated*.
 - **The local link** listens on the loopback interface only (port 9890). The plugin and each helper prove they hold the pairing token without sending it, and every message carries a code only token holders can produce. Messages are authenticated, not encrypted. *Tested automated*; pairing *verified live*.
 - **Programs running under your own account** can read the token file and client configs. Agent clients that run commands on your computer (Claude Code, Codex, Cursor) run under your account. The switches and cards govern what agents do through the helper; they cannot stop a program that already runs as you. A CU limit on your API key, set on app.scenario.com, caps spending either way.
 - **Spending** needs the exact quoted price: a changed price or an expired quote is refused before anything is sent, and a price that changes after an upload asks again. *Tested automated*; *verified live* in the panel and through an agent.

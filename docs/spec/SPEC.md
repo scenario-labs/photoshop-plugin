@@ -352,6 +352,7 @@ Other UXP differences the build must respect:
       "domains": [
         "https://api.cloud.scenario.com",
         "https://cdn.cloud.scenario.com",
+        "https://clerk.scenario.com",
         "https://<upload-storage-host>",
         "https://api.github.com",
         "ws://localhost:9890",
@@ -367,11 +368,11 @@ Other UXP differences the build must respect:
 
 - **Downloads and thumbnails.** Over REST every file kind (results, originals, video, model, asset and collection thumbnails) came from `cdn.cloud.scenario.com` (measured live 2026-10-19), so no wildcard is declared. A fresh `/assets-transform/` link can answer 302 to the same host and path; downloads follow one same-host redirect. Model, asset and collection thumbnails are remote images, which UXP also limits to declared hosts (documented). M2.0 item 7 reads every such host and fixes this list; requests go only to hosts in it. A host that varies by subdomain is declared as `https://*.<domain>` (only top-level wildcards are documented as refused, and Adobe's own examples use the subdomain form, such as `https://*.adobe.io`: documented in examples, checked in M2.0). Where no pattern fits, those files are not fetched: the tray and Library show "Stored on a host this plugin can't reach" with **Open on Scenario**, and thumbnails show a placeholder. The manifest never declares `"all"`.
 - **Uploads.** `<upload-storage-host>` is the host of the signed part URLs that `POST /v1/uploads` returns (the docs' example is an Amazon S3 host; documented). It was the same Amazon S3 Transfer Acceleration host on every upload (measured live 2026-10-19), but its name comes from Scenario's infrastructure and may change. The manifest declares it, and PRIVACY.md names it, only after Scenario confirms it as a stable public host (checked before release, M8). Until then the fallback of section 5.5 applies: every upload goes through `POST /v1/assets` under 4,000,000 bytes.
-- **Credentials.** `Authorization` goes to `api.cloud.scenario.com` only, never to download or upload links. From 26.9 on, Photoshop drops it if a request is redirected to another origin (documented); a mock-server test asserts that no redirected request carries it. No API call answered with a redirect in M2.0.
+- **Credentials.** `Authorization` goes to `api.cloud.scenario.com` only, never to download or upload links. `clerk.scenario.com` is Scenario's identity provider: Sign in with Scenario (section 4.6) posts its device code, refresh and revocation requests there, with the plugin's public client id and no `Authorization` header. From 26.9 on, Photoshop drops it if a request is redirected to another origin (documented); a mock-server test asserts that no redirected request carries it. No API call answered with a redirect in M2.0.
 - `api.github.com` serves the update check (section 10.6), which a setting turns off.
 - `launchProcess`: `https` opens pages the person asks for (the Claude Desktop extension's release page, section 7.4); no other scheme, since Cursor takes the setup command. No file extensions: the plugin opens no local files in other apps. `clipboard`: manifest v5 documents `read` and `readAndWrite` only; the copy buttons write, and the 60 s clear of section 4.3 reads the clipboard only to check that it still holds the token.
 - Not requested: `fullAccess`, `allowCodeGenerationFromStrings`, `webview`, `ipc`. Basis for the permission model: documented (manifest v5).
-- Dev builds add a mock API host for tests. Release builds are checked in CI for the exact list above.
+- Dev builds add a mock API host for tests, and a development sign-in target's hosts when one is packaged (section 4.6). Release builds are checked in CI for the exact list above.
 
 ### 2.11 Repository layout
 
@@ -753,7 +754,7 @@ Loading: text next to every progress bar ("Uploading", "Queued on Scenario", "Ge
 | Option | Steps for the person | Works today | Fits UXP | Verdict |
 |---|---|---|---|---|
 | API key + secret | Create a key on app.scenario.com, paste two values | Yes: the REST API takes Basic auth with key and secret (documented; measured live 2026-10-19). Needs a plan with API access and an admin or project owner to create the key (documented) | Yes | v1 |
-| Device code | Click, see a code, approve in the browser; the panel polls | No: a dynamically registered client loses the device grant (measured with curl against Scenario's OAuth endpoints, 2026-10-19); needs a first-party client | Yes: polling needs no redirect | v1.1, once Scenario provides the client |
+| Device code | Click, see a code, approve in the browser; the panel polls | Yes since 2026-11: Scenario registered a first-party Photoshop application with the device grant on its identity provider, and the REST API accepts its access tokens with a `projectId` (measured on the development instance and staging, 2026-11-03) | Yes: polling needs no redirect | Sign in with Scenario, section 4.6 |
 | Authorization code + PKCE with a paste-code page | Click, sign in, copy a code, paste it | not tested | Yes | v1.1 candidate |
 | Loopback redirect | Click, sign in | n/a | No: UXP cannot listen | Not possible |
 
@@ -782,6 +783,8 @@ The plugin asks for a Project key with the Editor role in the project the person
 | Secret | Stored in | Never in |
 |---|---|---|
 | API keys and secrets | `secureStorage`, per plugin (documented); persists across Photoshop restarts (verified live (27.11)) | Documents, XMP, the ledger, logs, diagnostics, the helper, requests to any host other than `api.cloud.scenario.com` |
+| Sign in with Scenario: refresh token | `secureStorage`, one entry per signed-in person (section 4.6) | Documents, XMP, the ledger, logs, diagnostics, the helper, requests to any host other than the identity provider |
+| Sign in with Scenario: access token | Memory only | Everything above, and requests to any host other than `api.cloud.scenario.com` |
 | Pairing token | `secureStorage`; the helper's user-only token file; the settings of clients that hold it themselves (Claude Desktop, Cursor, a manual entry) | Documents, logs, the socket (only proofs travel), command lines |
 | Signed download and upload links | Memory only; re-requested from the asset or upload record when needed | The ledger, logs, XMP |
 
@@ -807,6 +810,20 @@ Nearest design for automation: sign in once per machine and user in the panel; t
 
 A Project key belongs to one project. The plugin keeps one key per project, one `secureStorage` entry each, named by a hash of the key id, never by the project name, because entry names are stored unencrypted (documented). The project name in the header opens the Projects view (a full panel view, like the model picker): the projects with a saved key, then **Add a key for another project**. Switching changes the trained models, the Library, the On Scenario tab, and where uploads and results go. Running jobs keep their own project. Quotes and jobs bind a hash of the key id, so a switch invalidates open quotes.
 
+
+A browser sign-in (section 4.6) has no key: the account chooses a project, and each project it chooses is a row of the same list. Its quotes and jobs bind a hash of the identity provider, the signed-in subject and the project id instead of a key hash.
+
+### 4.6 Sign in with Scenario
+
+1. **Sign in with Scenario** sits above the key fields. It runs the OAuth 2.0 device authorization grant (RFC 8628) against Scenario's identity provider as the Photoshop plugin's registered public application: no secret, scope `openid email profile offline_access`.
+2. The panel shows the user code and opens the verification page with the code in it (Photoshop asks first). **Open the page again**, **Copy code** and **Cancel** stay under the code. The panel polls the token endpoint at the interval the identity provider gives, slower after `slow_down`, until the person approves, declines (`access_denied`), the code expires (`expired_token`) or Cancel.
+3. With the tokens, `GET /v1/teams` lists the account's teams and the projects it may use in each. One usable project is chosen at once; several open **Choose a project**, grouped by team. Nothing is saved before a project is chosen; Back from the chooser revokes the new refresh token. An account with no usable project is told so.
+4. Requests carry `Authorization: Bearer` and the chosen project as `projectId`, except the team listing. The paid request's no-query rule (section 6.1) applies to what the caller passes; `projectId` is the only parameter added.
+5. The refresh token goes to `secureStorage`, one entry per signed-in person named by a hash of the issuer and subject; the access token stays in memory, so each Photoshop start refreshes once. A token with less than 60 s left is refreshed before the request, one refresh at a time, and the rotated refresh token is saved. A read answered 401 gets one new token and one more try; a paid request is never retried. A refresh the identity provider refuses (`invalid_grant`) signs that person out: their projects leave the list and the panel asks to sign in again.
+6. **Choose another project** in Projects reads the list again with the same sign-in. Test connection reads the chosen project's models and the list; a project that is gone (deleted, or the role removed) reads "The chosen project is no longer available" with **Choose a project**.
+7. **Sign out** revokes the refresh token at the identity provider and removes the sign-in and its projects from this computer.
+
+Development builds can point Sign in with Scenario at a development identity provider and API: a `dev-oauth-target.json` file in the plugin's data folder names the issuer, client id and API base, and `DEV_OAUTH_TARGET=<file> npm run package:dev` allows those hosts in the development package's manifest. Release builds remove that code.
 ---
 
 ## 5. Capability matrix

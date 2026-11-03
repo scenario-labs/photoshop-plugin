@@ -7,6 +7,7 @@ All notable changes to this project are written here. The format follows [Keep a
 ### Added
 
 - The prompt box's height: drag the grip on the composer's top edge, as between two Photoshop panels, to make the prompt taller; double-click the grip to go back. The takes area above keeps at least 64 px, and the height is kept on this computer. *Tested automated*; the grip checked in place live on Photoshop 27.11, the drag not yet pressed live.
+- **Sign in with Scenario**: the panel signs in with your Scenario account in the browser (the OAuth device sign-in, no key to create), then lists your teams and projects to choose one. Requests carry the chosen project; Projects can choose another; Test connection says when the chosen project is gone; Sign out ends the sign-in at Scenario. The refresh token stays in Photoshop's secure storage. API keys keep working next to it. *Tested automated*.
 
 ### Fixed
 
