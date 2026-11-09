@@ -1,13 +1,29 @@
-# GitHub Pages publish for https://photoshop.scenario.com: the page in site/.
-# Runs by hand only, from main. Before the first run:
-#   1. Repository Settings > Pages: Source "GitHub Actions"; Custom domain
-#      photoshop.scenario.com; Enforce HTTPS once the certificate is issued.
-#   2. DNS for scenario.com: CNAME photoshop -> scenario-labs.github.io.
-#   3. Actions > Site > Run workflow (from main).
+# Publishes the page in site/ to GitHub Pages, as blender-plugin does: Pages has
+# build type "workflow" and no custom domain, so it serves
+# https://scenario-labs.github.io/photoshop-plugin/. https://photoshop.scenario.com
+# is a Vercel project in front of it, deployed from tools/site_proxy/ on main.
+# Runs on every push to main that changes the page, and by hand.
+# One-time setup:
+#   1. Repository Settings > Pages: Source "GitHub Actions", no custom domain.
+#   2. Vercel: a project from this repository with Root Directory tools/site_proxy,
+#      framework preset Other, no build or install command, production branch
+#      main, Ignored Build Step `git diff --quiet HEAD^ HEAD -- .`, and Web
+#      Analytics on. Add the domain photoshop.scenario.com to it.
+#   3. DNS for scenario.com (Route 53): CNAME photoshop -> the target Vercel
+#      shows for that domain.
+#   4. Run this workflow once, or push a change to site/.
+# tools/site_proxy/ holds only vercel.json: Vercel would serve any other file
+# there instead of forwarding its path.
 # The generated handbook keeps its own workflow in tools/handbook/pages.yml.
 name: Site
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "test/unit/site-page.test.js"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:

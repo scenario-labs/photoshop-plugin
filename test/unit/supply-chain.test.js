@@ -58,10 +58,17 @@ test("every GitHub workflow pins its actions by full commit and declares its per
       if (u.startsWith("./")) continue; // a local action is part of this repository
       assert.match(u, /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, `${f}: ${u} is pinned by full commit`);
     }
-    // Pages deploys need pages: write, only in the handbook workflow, which
-    // runs by hand only.
+    // Pages deploys need pages: write, only in the Pages workflows, which run
+    // by hand or on a push to main, never on a pull request.
     const pages = path.basename(f) === "pages.yml";
-    if (pages) assert.match(text, /^on:\s*\n\s+workflow_dispatch:\s*\n(?!\s+\w)/m, `${f} runs only by hand`);
+    if (pages) {
+      const on = text.match(/^on:\s*\n((?:[ \t]+.*\n)+)/m);
+      assert.ok(on, `${f} declares its triggers`);
+      const triggers = [...on[1].matchAll(/^ {2}([a-z_]+):/gm)].map((m) => m[1]);
+      assert.ok(triggers.length >= 1, `${f} has a trigger`);
+      for (const t of triggers) assert.ok(t === "workflow_dispatch" || t === "push", `${f}: ${t} is not expected`);
+      if (triggers.includes("push")) assert.match(on[1], /^ {4}branches: \[main\]$/m, `${f} runs on a push to main only`);
+    }
     for (const m of text.matchAll(/^\s+([a-z-]+):\s*write\s*$/gm)) {
       const allowed = ["id-token", "contents", "attestations", ...(pages ? ["pages"] : [])];
       assert.ok(allowed.includes(m[1]), `${f}: ${m[1]}: write is not expected`);
