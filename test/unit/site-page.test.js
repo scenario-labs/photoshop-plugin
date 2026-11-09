@@ -28,7 +28,8 @@ test("photoshop.scenario.com is the Vercel proxy in front of Pages, as for Blend
   // Pages has no custom domain: Vercel serves the domain, so site/ claims none.
   assert.ok(!fs.existsSync(path.join(SITE, "CNAME")), "no CNAME in site/");
   // Vercel would serve any other file in the proxy's directory instead of forwarding its path.
-  assert.deepEqual(fs.readdirSync(PROXY), ["vercel.json"]);
+  // .DS_Store is gitignored, so Finder's copy never reaches Vercel.
+  assert.deepEqual(fs.readdirSync(PROXY).filter((n) => n !== ".DS_Store"), ["vercel.json"]);
   const config = JSON.parse(fs.readFileSync(path.join(PROXY, "vercel.json"), "utf8"));
   assert.deepEqual(config.rewrites, [
     { source: "/handbook/page.js", destination: "https://photoshop.scenario.com/_vercel/insights/script.js" },

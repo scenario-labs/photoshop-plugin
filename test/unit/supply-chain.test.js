@@ -12,6 +12,56 @@ const ROOT = path.resolve(__dirname, "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const MIT_COMPATIBLE = new Set(["MIT", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "0BSD"]);
 
+// A workflow's triggers: the keys of its top-level `on:` block, at the block's
+// first indentation, past blank and comment lines, quoted or not; with the
+// block's text for checks on a trigger's settings. An inline `on:` value is
+// split as a list; a flow mapping (`on: {...}`) yields null, so it fails.
+function workflowTriggers(text) {
+  const lines = text.split("\n");
+  const at = lines.findIndex((l) => /^["']?on["']?\s*:/.test(l));
+  if (at < 0) return null;
+  const inline = lines[at].replace(/^["']?on["']?\s*:/, "").replace(/\s#.*$/, "").trim();
+  if (inline) {
+    if (inline.includes("{")) return null;
+    const names = inline.replace(/^\[|\]$/g, "").split(",").map((s) => s.trim().replace(/^["']|["']$/g, ""));
+    return { names: names.filter(Boolean), body: "" };
+  }
+  const body = [];
+  for (const l of lines.slice(at + 1)) {
+    if (/^\S/.test(l) && !/^#/.test(l)) break;
+    body.push(l);
+  }
+  const keyed = body.filter((l) => !/^\s*(#.*)?$/.test(l));
+  if (!keyed.length) return null;
+  const indent = Math.min(...keyed.map((l) => l.match(/^\s*/)[0].length));
+  const names = keyed
+    .filter((l) => l.match(/^\s*/)[0].length === indent)
+    .map((l) => (l.trim().match(/^["']?([^"':\s]+)["']?/) || [])[1]);
+  return { names, body: body.join("\n") };
+}
+
+// Pages deploys need pages: write, so a Pages workflow runs by hand or on a
+// push to main, never on a pull request.
+function pagesTriggersAllowed(text) {
+  const on = workflowTriggers(text);
+  if (!on || !on.names.length) return false;
+  if (!on.names.every((n) => n === "workflow_dispatch" || n === "push")) return false;
+  return !on.names.includes("push") || /^\s+branches:\s*\[main\]\s*$/m.test(on.body);
+}
+
+test("a Pages workflow trigger other than a hand run or a push to main is refused, however it is written", () => {
+  const ok = (on) => pagesTriggersAllowed(`name: Site\n\n${on}\npermissions:\n  contents: read\n`);
+  assert.ok(ok("on:\n  workflow_dispatch:\n"));
+  assert.ok(ok('on:\n  push:\n    branches: [main]\n    paths:\n      - "site/**"\n  workflow_dispatch:\n'));
+  assert.ok(!ok("on:\n  workflow_dispatch:\n\n  pull_request:\n"), "after a blank line");
+  assert.ok(!ok("on:\n  workflow_dispatch:\n# a comment\n  pull_request_target:\n"), "after a column-0 comment");
+  assert.ok(!ok('on:\n  workflow_dispatch:\n  "pull_request":\n'), "quoted");
+  assert.ok(!ok("on: [workflow_dispatch, pull_request]\n"), "inline list");
+  assert.ok(!ok("on: {workflow_dispatch: null, pull_request: null}\n"), "flow mapping");
+  assert.ok(!ok("on:\n  push:\n    branches: [feature]\n"), "a push to another branch");
+  assert.ok(!ok("on:\n  push:\n"), "a push to any branch");
+});
+
 test("the helper ships an npm-shrinkwrap.json that pins every package by integrity, in step with the workspace lock", () => {
   const pkg = JSON.parse(read("helper/package.json"));
   const shrink = JSON.parse(read("helper/npm-shrinkwrap.json"));
@@ -61,14 +111,7 @@ test("every GitHub workflow pins its actions by full commit and declares its per
     // Pages deploys need pages: write, only in the Pages workflows, which run
     // by hand or on a push to main, never on a pull request.
     const pages = path.basename(f) === "pages.yml";
-    if (pages) {
-      const on = text.match(/^on:\s*\n((?:[ \t]+.*\n)+)/m);
-      assert.ok(on, `${f} declares its triggers`);
-      const triggers = [...on[1].matchAll(/^ {2}([a-z_]+):/gm)].map((m) => m[1]);
-      assert.ok(triggers.length >= 1, `${f} has a trigger`);
-      for (const t of triggers) assert.ok(t === "workflow_dispatch" || t === "push", `${f}: ${t} is not expected`);
-      if (triggers.includes("push")) assert.match(on[1], /^ {4}branches: \[main\]$/m, `${f} runs on a push to main only`);
-    }
+    if (pages) assert.ok(pagesTriggersAllowed(text), `${f} runs by hand or on a push to main only`);
     for (const m of text.matchAll(/^\s+([a-z-]+):\s*write\s*$/gm)) {
       const allowed = ["id-token", "contents", "attestations", ...(pages ? ["pages"] : [])];
       assert.ok(allowed.includes(m[1]), `${f}: ${m[1]}: write is not expected`);
