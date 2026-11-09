@@ -258,10 +258,10 @@
         <div class="scroll" id="projects-scroll">
           <div class="list" id="projects-list"></div>
           <div class="actions">
-            <sp-action-button quiet size="s" id="projects-choose"><span class="ico" data-icon="chevron-right"></span><span>Choose another project</span></sp-action-button>
+            <sp-action-button quiet size="s" id="projects-choose"><span slot="icon" class="ico" data-icon="chevron-right"></span><span>Choose another project</span></sp-action-button>
           </div>
           <div class="actions">
-            <sp-action-button quiet size="s" id="projects-add"><span class="ico" data-icon="plus"></span><span>Add a key for another project</span></sp-action-button>
+            <sp-action-button quiet size="s" id="projects-add"><span slot="icon" class="ico" data-icon="plus"></span><span>Add a key for another project</span></sp-action-button>
           </div>
           <div class="note" id="projects-note"></div>
           <div class="note warn" id="projects-error"></div>
@@ -293,7 +293,7 @@
             <div class="list" id="settings-accounts"></div>
             <div class="note" id="settings-none"></div>
             <div class="actions">
-              <sp-action-button quiet size="s" id="settings-add"><span class="ico" data-icon="plus"></span><span>Add a key for another project</span></sp-action-button>
+              <sp-action-button quiet size="s" id="settings-add"><span slot="icon" class="ico" data-icon="plus"></span><span>Add a key for another project</span></sp-action-button>
             </div>
             <div class="actions">
               <sp-action-button size="s" id="settings-test">Test connection</sp-action-button>
@@ -338,7 +338,7 @@
             <!-- M6: Connect a client (ui/connect-client.js) and the agent switches, spending and activity log (ui/agents-settings.js). -->
             <div class="connect" id="connect-client"></div>
             <div class="agents-controls" id="agents-controls"></div>
-            <sp-action-button quiet size="s" class="disclosure" id="agents-details-toggle"><span class="ico" id="agents-details-icon" data-icon="chevron-right"></span><span>Details</span></sp-action-button>
+            <sp-action-button quiet size="s" class="disclosure" id="agents-details-toggle"><span slot="icon" class="ico" id="agents-details-icon" data-icon="chevron-right"></span><span>Details</span></sp-action-button>
             <div class="details" id="agents-details">
               <div class="note" id="link-detail"></div>
               <div class="note" id="agents-tech"></div>
