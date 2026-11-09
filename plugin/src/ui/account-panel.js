@@ -590,6 +590,8 @@ function createAccountPanel(doc, actions) {
     showView(homeView());
   });
   bind("signin-back", "click", function () {
+    // Leaving ends a browser sign-in in progress, as its Cancel does.
+    auth.cancelBrowser();
     st.adding = false;
     clearFields();
     renderFailure("signin", null);

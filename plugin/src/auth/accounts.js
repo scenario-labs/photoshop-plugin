@@ -459,10 +459,13 @@ function createAccounts(host, redactor, opts) {
   }
 
   // The refresh token of a saved browser sign-in, for revocation at sign out.
-  function refreshTokenOf(sid) {
+  // A sign-in not used since Photoshop started is read from its entry.
+  async function refreshTokenOf(sid) {
     var known = sessions[sid];
     if (known && known.live && typeof known.live.refreshToken === "function") return known.live.refreshToken();
-    return known && known.stored ? known.stored.refresh_token : null;
+    if (known && known.stored) return known.stored.refresh_token;
+    var stored = await readSession(sid);
+    return stored ? stored.refresh_token : null;
   }
 
   async function pickNext() {

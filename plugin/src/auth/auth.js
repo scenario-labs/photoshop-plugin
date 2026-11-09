@@ -274,7 +274,7 @@ function createAuth(o) {
     }
     // A key for the only project of a browser sign-in replaces that sign-in:
     // it ends at Scenario too, as Sign out ends it.
-    var ending = accounts.sessionsEndedBy(out.project_id).map(accounts.refreshTokenOf);
+    var ending = await Promise.all(accounts.sessionsEndedBy(out.project_id).map(accounts.refreshTokenOf));
     var account;
     try {
       account = await accounts.save(pair, { project_name: out.project_name, project_id: out.project_id });
@@ -531,7 +531,7 @@ function createAuth(o) {
     // project it saved.
     var sid = accounts.sessionOf(target);
     if (sid && oauth) {
-      var rt = accounts.refreshTokenOf(sid);
+      var rt = await accounts.refreshTokenOf(sid);
       if (rt) await oauth.revoke(rt);
     }
     var s = await accounts.remove(target);

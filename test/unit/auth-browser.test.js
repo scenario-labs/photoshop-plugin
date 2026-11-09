@@ -396,6 +396,29 @@ test("a write answered 401 is not sent again, and the next request already has a
   assert.equal(refreshes() - r0, 1);
 });
 
+test("after a restart, signing out of a browser project that is not current still revokes its token", async (t) => {
+  const pair = newKeyPair();
+  const s = await setup(t, { keyAccounts: [{ ...pair, projects: [projectRecord(pair.key, { id: "project_key", name: "Key project" })] }] });
+  await s.accounts.load();
+  await s.auth.signInWithBrowser({});
+  await s.auth.chooseProject("project_film");
+  const film = s.auth.current();
+  const rt = JSON.parse(s.host.secure.get(SESSION_ENTRY_PREFIX + film.session)).refresh_token;
+  await s.auth.saveAndTest(pair.key, pair.secret);
+  // A new Photoshop start on the same secure storage: the key project is
+  // current, so the browser sign-in is never opened.
+  const accounts = createAccounts(s.host, s.redactor, {
+    openSession: (stored, save, onEnd) => createSession({ oauth: s.oauth, refresh_token: stored.refresh_token, access_token: null, expires_at: 0, now: s.host.timers.now, save, onEnd })
+  });
+  await accounts.load();
+  const client = createClient({ fetch: globalThis.fetch, AbortController: globalThis.AbortController, timers: s.host.timers, credentials: accounts.credentials, redactor: s.redactor, baseUrl: s.api.url, sleep: async () => {} });
+  const auth = createAuth({ client, accounts, redactor: s.redactor, log: () => {}, recordError: () => {}, oauth: s.oauth, openPage: async () => {}, now: s.host.timers.now });
+  assert.equal(auth.current().project_name, "Key project");
+  await auth.signOut(film.id);
+  assert.deepEqual(s.idp.state.revoked, [rt]);
+  assert.ok(![...s.host.secure.keys()].some((k) => k.startsWith(SESSION_ENTRY_PREFIX)));
+});
+
 test("a stored sign-in damaged or for another person is dropped at load", async (t) => {
   const s = await setup(t, { teams: [{ id: "team_solo", name: "Solo", projects: [{ id: "project_only", name: "Only" }] }] });
   await s.auth.signInWithBrowser({});

@@ -138,6 +138,30 @@ test("a declined sign-in says so with Sign in again; Cancel stops waiting; Back 
   assert.equal(back.app.auth.status().signed_in, false);
 });
 
+test("Back from Add project's sign-in view stops a browser sign-in in progress", async (t) => {
+  const { doc, idp } = await bootPanel(t, { sleep: () => new Promise((r) => setTimeout(r, 10)) });
+  doc.byId("signin-browser").click();
+  await waitFor(() => doc.shown("view-choose"), { label: "chooser" });
+  rowOf(doc, "project_film").click();
+  await waitFor(() => doc.shown("view-main"), { label: "signed in" });
+
+  idp.state.approveAfter = Infinity; // the second sign-in waits in the browser
+  doc.byId("project").click();
+  doc.byId("projects-add").click();
+  assert.ok(doc.shown("signin-back"));
+  doc.byId("signin-browser").click();
+  await waitFor(() => doc.shown("signin-code-box"), { label: "code shown" });
+  doc.byId("signin-back").click();
+  assert.ok(doc.shown("view-main"));
+
+  idp.state.approveAfter = 0; // approved in the browser after leaving
+  const polls = idp.state.polls;
+  await new Promise((r) => setTimeout(r, 150));
+  assert.ok(idp.state.polls - polls <= 1, "no more polling once left");
+  assert.ok(!doc.shown("view-choose"));
+  assert.equal(doc.text("project-label"), "Film");
+});
+
 test("a chosen project that is gone: Test connection says so and Choose a project opens the chooser", async (t) => {
   const { doc, app, box } = await bootPanel(t);
   doc.byId("signin-browser").click();
