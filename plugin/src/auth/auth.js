@@ -272,6 +272,9 @@ function createAuth(o) {
       log("sign-in: not saved (" + out.type + ")");
       return out;
     }
+    // A key for the only project of a browser sign-in replaces that sign-in:
+    // it ends at Scenario too, as Sign out ends it.
+    var ending = accounts.sessionsEndedBy(out.project_id).map(accounts.refreshTokenOf);
     var account;
     try {
       account = await accounts.save(pair, { project_name: out.project_name, project_id: out.project_id });
@@ -279,6 +282,8 @@ function createAuth(o) {
       log("sign-in: secure storage refused the key");
       return fail("storage_failed", null);
     }
+    for (var i = 0; i < ending.length; i++) if (ending[i] && oauth) await oauth.revoke(ending[i]);
+    if (ending.length) log("sign-in: the key replaced a browser sign-in's only project; that sign-in ended");
     log("sign-in: key saved (" + accounts.list().length + " project(s) saved" + (account.project_name ? "" : ", no project name from the API") + ")");
     return { ok: true, account: account };
   });

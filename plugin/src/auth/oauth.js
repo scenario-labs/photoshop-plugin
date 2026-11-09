@@ -349,6 +349,10 @@ function createSession(o) {
 
   return {
     token: token,
+    // After a write answered 401: the next request gets a new token.
+    invalidate: function () {
+      access = null;
+    },
     ended: function () {
       return ended;
     },

@@ -10,7 +10,8 @@
 //   query parameter (the account itself has no project), except reads that
 //   ask for none (`unscoped`, the team and project listing). The token comes
 //   from the session at each request, refreshed when it is about to expire;
-//   a read answered 401 gets one new token and one more try.
+//   a read answered 401 gets one new token and one more try; a write answered
+//   401 is not sent again, and the next request gets a new token.
 // - Redirects are refused (`redirect: "error"`): no redirected request carries
 //   the key. Photoshop 26.9 and later also drop the header on a cross-origin
 //   redirect (SPEC 2.10).
@@ -236,6 +237,9 @@ function createClient(opts) {
         attempt--;
         continue;
       }
+      // A write is never sent twice, but the token it was refused with is
+      // dropped so the next request does not reuse it.
+      if (browser && !isRead && res.status === 401 && typeof browser.session.invalidate === "function") browser.session.invalidate();
       var err = errorsMod.fromResponse(res.status, body !== null ? body : res.text, res.headers, clean);
       if (attempt < retries && API.reads.retry_statuses.indexOf(res.status) >= 0) {
         var wait = res.status === 429 ? err.retryAfterS || API.reads.rate_limit_default_wait_s : API.reads.server_error_wait_s;

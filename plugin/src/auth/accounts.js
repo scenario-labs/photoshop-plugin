@@ -259,18 +259,37 @@ function createAccounts(host, redactor, opts) {
 
   // Saves a tested pair and makes it the current project. One key per
   // project: a key for a project that already has one replaces it.
+  // The browser sign-ins whose only project is projectId: a key saved for
+  // that project replaces their last row, so they end with it.
+  function sessionsEndedBy(projectId) {
+    if (!projectId) return [];
+    var out = [];
+    index.accounts.forEach(function (a) {
+      if (a.kind !== "browser" || out.indexOf(a.session) >= 0) return;
+      var rows = index.accounts.filter(function (b) {
+        return b.kind === "browser" && b.session === a.session;
+      });
+      var ends = rows.every(function (b) {
+        return b.project_id === projectId;
+      });
+      if (ends) out.push(a.session);
+    });
+    return out;
+  }
+
   async function save(p, info) {
     info = info || {};
     var hash = keyHash(p.key);
     var id = hash.slice(0, 32);
     var projectId = typeof info.project_id === "string" && info.project_id ? info.project_id : null;
+    var ending = sessionsEndedBy(projectId);
     remember(p);
     await host.secureSet(entryName(id), JSON.stringify({ v: 1, key: p.key, secret: p.secret }));
     var next = copyIndex();
     var replaced = [];
     next.accounts = next.accounts.filter(function (a) {
       var same = a.id === id || (projectId && a.project_id === projectId);
-      if (same && a.id !== id) replaced.push(a.id);
+      if (same && a.id !== id && a.kind !== "browser") replaced.push(a.id);
       return !same;
     });
     next.accounts.push({
@@ -289,6 +308,7 @@ function createAccounts(host, redactor, opts) {
       throw e;
     }
     for (var i = 0; i < replaced.length; i++) await removeEntry(replaced[i]);
+    for (var j = 0; j < ending.length; j++) await removeSessionEntry(ending[j]);
     pair = { key: p.key, secret: p.secret };
     notify();
     return current();
@@ -486,6 +506,7 @@ function createAccounts(host, redactor, opts) {
     chooseProject: chooseProject,
     session: session,
     removeSession: removeSession,
+    sessionsEndedBy: sessionsEndedBy,
     refreshTokenOf: refreshTokenOf,
     sessionOf: sessionOf,
     update: update,

@@ -349,6 +349,53 @@ test("signing out of a browser project that is not the current one still ends it
   assert.ok(![...s.host.secure.keys()].some((k) => k.startsWith(SESSION_ENTRY_PREFIX)));
 });
 
+test("a key saved for the only project of a browser sign-in ends that sign-in: its entry removed, its token revoked", async (t) => {
+  const pair = newKeyPair();
+  const s = await setup(t, {
+    teams: [{ id: "team_solo", name: "Solo", projects: [{ id: "project_only", name: "Only" }] }],
+    keyAccounts: [{ ...pair, projects: [projectRecord(pair.key, { id: "project_only", name: "Only" })] }]
+  });
+  await s.accounts.load();
+  await s.auth.signInWithBrowser({});
+  const rt = JSON.parse(s.host.secure.get(SESSION_ENTRY_PREFIX + s.auth.current().session)).refresh_token;
+  const saved = await s.auth.saveAndTest(pair.key, pair.secret);
+  assert.equal(saved.ok, true);
+  assert.deepEqual(s.auth.list().map((a) => `${a.kind || "key"}:${a.project_name}`), ["key:Only"]);
+  assert.ok(![...s.host.secure.keys()].some((k) => k.startsWith(SESSION_ENTRY_PREFIX)));
+  assert.deepEqual(s.idp.state.revoked, [rt]);
+});
+
+test("a key saved for one of a browser sign-in's projects keeps the sign-in for its other projects", async (t) => {
+  const pair = newKeyPair();
+  const s = await setup(t, { keyAccounts: [{ ...pair, projects: [projectRecord(pair.key, { id: "project_film", name: "Film" })] }] });
+  await s.accounts.load();
+  await s.auth.signInWithBrowser({});
+  await s.auth.chooseProject("project_film");
+  await s.auth.listChoices();
+  await s.auth.chooseProject("project_tests");
+  const sid = s.auth.current().session;
+  await s.auth.saveAndTest(pair.key, pair.secret);
+  assert.deepEqual(s.auth.list().map((a) => `${a.kind || "key"}:${a.project_name}`).sort(), ["browser:Tests", "key:Film"]);
+  assert.ok(s.host.secure.get(SESSION_ENTRY_PREFIX + sid));
+  assert.deepEqual(s.idp.state.revoked, []);
+});
+
+test("a write answered 401 is not sent again, and the next request already has a new token", async (t) => {
+  const s = await setup(t, { teams: [{ id: "team_solo", name: "Solo", projects: [{ id: "project_only", name: "Only" }] }] });
+  await s.accounts.load();
+  await s.auth.signInWithBrowser({});
+  s.idp.dropAccessTokens(); // revoked elsewhere
+  const refreshes = () => s.idp.state.requests.filter((r) => r.form.grant_type === "refresh_token").length;
+  const before = s.api.requests.length;
+  await assert.rejects(s.client.request("POST", "/generate/txt2img", { body: {}, paid: paidMod.PAID_REQUEST }), (e) => e.type === "Unauthorized");
+  assert.equal(s.api.requests.length - before, 1, "sent once");
+  const r0 = refreshes();
+  const next = s.api.requests.length;
+  assert.equal((await s.client.request("GET", "/models")).status, 200);
+  assert.equal(s.api.requests.length - next, 1, "no request with the refused token");
+  assert.equal(refreshes() - r0, 1);
+});
+
 test("a stored sign-in damaged or for another person is dropped at load", async (t) => {
   const s = await setup(t, { teams: [{ id: "team_solo", name: "Solo", projects: [{ id: "project_only", name: "Only" }] }] });
   await s.auth.signInWithBrowser({});
