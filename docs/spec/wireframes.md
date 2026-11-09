@@ -9,7 +9,7 @@ Status: draft for review, revision 6, 2026-10-20 (sections 2, 3, 5 to 8 and 10 r
 
 ## 1. First run and sign-in
 
-Shown when no key is saved. **Create an API key** opens the API keys page on app.scenario.com; Photoshop asks for consent on that click. Pasting `key:secret`, or two lines, into the key field moves the secret to the masked field at once.
+Shown when no key or sign-in is saved. **Sign in with Scenario** opens Scenario's sign-in page in the browser (SPEC 4.6); Photoshop may ask first. While the panel waits it shows the code with **Open the page again**, **Copy code** and **Cancel**; if the account can use several projects, **Choose a project** lists them by team. Below, **Or use an API key**: **Create an API key** opens the API keys page on app.scenario.com, and pasting `key:secret`, or two lines, into the key field moves the secret to the masked field at once.
 
 ```
 +--------------------------------------+
@@ -18,33 +18,48 @@ Shown when no key is saved. **Create an API key** opens the API keys page on app
 | Connect your Scenario account        |
 | Generative AI by Scenario.           |
 |                                      |
-| Needs a Scenario plan with API       |
-| access (Starter or above).           |
+| Sign in with your Scenario account   |
+| in the browser. Photoshop may ask    |
+| before it opens the page.            |
+| [ Sign in with Scenario ]            |
 |                                      |
-| 1. Create a Project key with the     |
-|    Editor role, in the project you   |
-|    want to use. A CU limit on the    |
-|    key caps what this plugin and     |
-|    agents can spend.                 |
-|    [ Create an API key ]             |
-|    Only team admins and project      |
-|    owners can create keys.           |
-|    [ Copy a request for your admin ] |
-|    No account, or no plan with API   |
-|    access? [ See plans ]             |
-|    [ Create a Scenario account ]     |
-| 2. Paste the key and its secret.     |
+| (waiting)                            |
+| If the page asks for a code, enter   |
+| this one:  ABCD-EFGH                 |
+| Waiting for you to approve in the    |
+| browser.                             |
+| [ Open the page again ] [ Copy code ]|
+| Cancel                               |
 |                                      |
+| Or use an API key                    |
+| Paste the key and its secret.        |
 | API key                              |
 | [ Paste key, or key:secret        ]  |
 | API secret                           |
 | [ ******************************* ]  |
-|                                      |
 | [ Save and test                   ]  |
 |                                      |
-| Keys stay in Photoshop's secure      |
-| storage on this computer.            |
-| How sign-in works  |  Privacy        |
+| Keys and your sign-in stay in        |
+| Photoshop's secure storage on this   |
+| computer.                            |
+|                                      |
+| No key yet?                          |
+| Create a Project key with the Editor |
+| role in the project you want to use. |
+| A CU limit on the key caps what this |
+| plugin and connected agents can      |
+| spend.                               |
+| [ Create an API key ]                |
+| Only team admins and project owners  |
+| can create keys.                     |
+| [ Copy a request for your admin ]    |
+| No account, or no plan with API      |
+| access?                              |
+| Needs a Scenario plan with API       |
+| access (Starter or above).           |
+| [ See plans ] [ Create a Scenario    |
+|   account ]                          |
+| Privacy                              |
 +--------------------------------------+
 ```
 
