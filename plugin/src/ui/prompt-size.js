@@ -94,11 +94,16 @@ function attachPromptSize(doc, g) {
     keep(BASE);
   });
   // Only a real change of the panel's size (UXP also sends "resize" when
-  // the layout inside changes; create-view.js has the same guard).
+  // the layout inside changes). Same guard as create-view.js: the window and
+  // the #app box, so a dock or panel resize that keeps the window's size
+  // still fits the prompt again.
+  var app = doc.getElementById("app");
   var lastSize = null;
   if (g && typeof g.addEventListener === "function") {
     g.addEventListener("resize", function () {
-      var size = g.innerWidth + "x" + g.innerHeight;
+      var a = app && typeof app.getBoundingClientRect === "function" ? app.getBoundingClientRect() : null;
+      var box = a && a.width > 0 ? Math.round(a.width) + "x" + Math.round(a.height) : "0x0";
+      var size = g.innerWidth + "x" + g.innerHeight + "x" + box;
       if (size === lastSize) return;
       lastSize = size;
       fit();

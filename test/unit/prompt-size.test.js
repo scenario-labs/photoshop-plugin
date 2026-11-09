@@ -70,6 +70,35 @@ test("double-click goes back to the stylesheet's height", () => {
   assert.equal(store.m.get(ps.KEY), String(ps.BASE));
 });
 
+test("a shorter panel box fits the prompt again even when the window keeps its size", () => {
+  const doc = createFakeDocument();
+  let midH = 300;
+  let appH = 700;
+  doc.byId("sc-body").getBoundingClientRect = () => ({ width: 320, height: midH });
+  doc.byId("app").getBoundingClientRect = () => ({ width: 320, height: appH });
+  let onResize = null;
+  const g = {
+    localStorage: memoryStore({ [ps.KEY]: "200" }),
+    innerWidth: 320,
+    innerHeight: 700,
+    addEventListener: (type, fn) => {
+      if (type === "resize") onResize = fn;
+    }
+  };
+  const sizer = ps.attachPromptSize(doc, g);
+  onResize();
+  assert.equal(sizer.height(), 200);
+  // Docked shorter: the #app box loses 200 px, innerWidth and innerHeight do not change.
+  appH = 500;
+  midH = 30;
+  onResize();
+  assert.equal(sizer.height(), 200 + 30 - ps.MID_MIN);
+  // A layout-only "resize" with the same sizes does nothing.
+  midH = 20;
+  onResize();
+  assert.equal(sizer.height(), 200 + 30 - ps.MID_MIN);
+});
+
 test("a kept height comes back within the room the panel has, and a bad value is ignored", () => {
   assert.equal(setup({ saved: 120, midH: 300 }).sizer.height(), 120);
   assert.equal(setup({ saved: 300, midH: 120 }).sizer.height(), ps.BASE + 120 - ps.MID_MIN);
