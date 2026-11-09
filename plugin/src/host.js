@@ -1,0 +1,1554 @@
+"use strict";
+// Everything the plugin reads from UXP and Photoshop goes through this adapter,
+// so the rest of the code runs under Node with a fake host in the tests.
+// Every call is wrapped: a missing API returns null instead of throwing.
+
+var utf8 = require("./util/utf8.js");
+var b64 = require("./util/base64url.js");
+var pixelsMod = require("./capture/pixels.js");
+var sha = require("./util/sha256.js");
+var xmpMod = require("./util/xmp.js");
+var slugMod = require("./util/slug.js");
+var docRefsMod = require("./panel/doc-refs.js");
+
+function toBytes(v) {
+  if (v && v.buffer && typeof v.byteLength === "number") return new Uint8Array(v.buffer, v.byteOffset || 0, v.byteLength);
+  return new Uint8Array(v);
+}
+
+// An ArrayBuffer holding exactly these bytes, for fs.writeFile.
+function bufferOf(bytes) {
+  if (bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) return bytes.buffer;
+  return bytes.slice().buffer;
+}
+
+function px(v) {
+  if (typeof v === "number") return v;
+  if (v && typeof v._value === "number") return v._value;
+  return Number(v);
+}
+
+// A failure that means Photoshop was busy (another modal operation), so a
+// Place when ready waits and tries again.
+var BUSY_RE = /modal|busy|is in use|not available/i;
+function markBusy(e) {
+  if (e && BUSY_RE.test(String(e.message || e))) e.busy = true;
+  return e;
+}
+
+// What the person reads when Photoshop stays busy: never the host's own
+// text ("host is in a modal state", live 2026-10-21).
+var BUSY_TEXT = "Photoshop is busy. Try again in a moment.";
+// Waits before each new try of a modal scope Photoshop refused as busy.
+var BUSY_RETRY_MS = [150, 300, 600];
+function busyError(cause) {
+  var e = new Error(BUSY_TEXT);
+  e.type = "PhotoshopBusy";
+  e.busy = true;
+  e.cause_text = String((cause && cause.message) || cause || "");
+  return e;
+}
+
+// hostRequire: the require function UXP gives the plugin. g: the global object.
+function createHost(hostRequire, g) {
+  function req(name) {
+    try {
+      return hostRequire(name);
+    } catch (e) {
+      return null;
+    }
+  }
+  var uxp = req("uxp");
+  var ps = req("photoshop");
+  var os = req("os");
+  var fs = req("fs");
+  var secure = uxp && uxp.storage && uxp.storage.secureStorage;
+  var lfs = uxp && uxp.storage && uxp.storage.localFileSystem;
+  var DATA = "plugin-data:/";
+  var SRGB = "sRGB IEC61966-2.1";
+  var EVENT_COALESCE_MS = 80;
+
+  // One modal scope (SPEC 2.4): fn holds only the document read or change
+  // itself, never a network wait, an upload, a poll, a download or a price
+  // check (test/unit/modal-scope.test.js). A scope Photoshop refuses
+  // because another modal operation runs is tried again a few times; then
+  // the failure reads BUSY_TEXT, typed PhotoshopBusy.
+  // The plugin's own scopes run one after the other: a Keep take clicked
+  // while the context thumbnail is read waits for that read instead of
+  // being refused (live 2026-10-21: the first Keep after a placement did
+  // nothing). A scope never waits more than MODAL_QUEUE_MAX_MS for the one
+  // before it.
+  var modalTail = Promise.resolve();
+  var MODAL_QUEUE_MAX_MS = 30000;
+  function modal(name, fn, opts) {
+    var prev = modalTail;
+    var run = new Promise(function (resolve) {
+      var timer = g && typeof g.setTimeout === "function" ? g.setTimeout(resolve, MODAL_QUEUE_MAX_MS) : null;
+      prev.then(function () {
+        if (timer !== null && g && typeof g.clearTimeout === "function") g.clearTimeout(timer);
+        resolve();
+      });
+    }).then(function () {
+      return modalOnce(name, fn, opts);
+    });
+    modalTail = run.then(
+      function () {},
+      function () {}
+    );
+    return run;
+  }
+  function modalOnce(name, fn, opts) {
+    if (!ps || !ps.core || typeof ps.core.executeAsModal !== "function") return Promise.reject(new Error("this Photoshop offers no modal scope"));
+    var options = { commandName: name };
+    if (opts && opts.timeOut) options.timeOut = opts.timeOut;
+    var retries = opts && opts.retries === 0 ? [] : BUSY_RETRY_MS;
+    function attempt(n) {
+      var inside = false;
+      return Promise.resolve()
+        .then(function () {
+          return ps.core.executeAsModal(function (ctx) {
+            inside = true;
+            return fn(ctx);
+          }, options);
+        })
+        .catch(function (e) {
+          if (inside || !markBusy(e).busy) throw e;
+          if (n >= retries.length) throw busyError(e);
+          return new Promise(function (resolve) {
+            if (g && typeof g.setTimeout === "function") g.setTimeout(resolve, retries[n]);
+            else resolve();
+          }).then(function () {
+            return attempt(n + 1);
+          });
+        });
+    }
+    return attempt(0);
+  }
+
+  function findDoc(id) {
+    if (!ps || !ps.app) return null;
+    var docs = ps.app.documents || [];
+    for (var i = 0; i < docs.length; i++) if (docs[i].id === id) return docs[i];
+    return null;
+  }
+
+  async function play(descs) {
+    return ps.action.batchPlay(descs, {});
+  }
+
+  async function selectLayers(docId, ids) {
+    for (var i = 0; i < ids.length; i++) {
+      var d = { _obj: "select", _target: [{ _ref: "layer", _id: ids[i] }], makeVisible: false };
+      if (i > 0) d.selectionModifier = { _enum: "selectionModifierType", _value: "addToSelection" };
+      await play([d]);
+    }
+  }
+
+  // Cuts a placed take with Photoshop's own Remove Background (a layer
+  // mask, no credits): a cut out New layer that the model returned opaque.
+  // On a small layer Photoshop takes the whole rectangle for the subject
+  // (seen on 27.11), so the take is scaled up to fill the canvas for the
+  // cut, then scaled back to its frame; the linked mask follows it.
+  async function subjectMask(doc, layerId) {
+    var f = await frameOf(doc.id, layerId);
+    if (!f || f.width <= 0 || f.height <= 0) throw new Error("the take's frame could not be read");
+    var W = Number(doc.width);
+    var H = Number(doc.height);
+    var k = Math.min(W / f.width, H / f.height);
+    var dx = W / 2 - (f.left + f.width / 2);
+    var dy = H / 2 - (f.top + f.height / 2);
+    var move = function (scale, x, y) {
+      return { _obj: "transform", _target: [{ _ref: "layer", _enum: "ordinal", _value: "targetEnum" }], freeTransformCenterState: { _enum: "quadCenterState", _value: "QCSAverage" }, offset: { _obj: "offset", horizontal: { _unit: "pixelsUnit", _value: x }, vertical: { _unit: "pixelsUnit", _value: y } }, width: { _unit: "percentUnit", _value: scale }, height: { _unit: "percentUnit", _value: scale } };
+    };
+    await selectLayers(doc.id, [layerId]);
+    await play([move(k * 100, dx, dy)]);
+    try {
+      await play([{ _obj: "removeBackground" }]);
+    } finally {
+      await play([move(100 / k, -dx, -dy)]);
+    }
+    if (!(await hasUserMask(doc.id, layerId))) throw new Error("Remove Background left no mask");
+  }
+
+  // The frame of a placed smart object in document pixels, from the
+  // corners in smartObjectMore.transform (verified live on 27.11).
+  async function frameOf(docId, layerId) {
+    var r = await play([{ _obj: "get", _target: [{ _ref: "layer", _id: layerId }, { _ref: "document", _id: docId }] }]);
+    var t = r && r[0] && r[0].smartObjectMore && r[0].smartObjectMore.transform;
+    if (!t || t.length < 8) return null;
+    var xs = [px(t[0]), px(t[2]), px(t[4]), px(t[6])];
+    var ys = [px(t[1]), px(t[3]), px(t[5]), px(t[7])];
+    var left = Math.min.apply(null, xs);
+    var top = Math.min.apply(null, ys);
+    return { left: left, top: top, width: Math.max.apply(null, xs) - left, height: Math.max.apply(null, ys) - top };
+  }
+
+  function findLayer(doc, id) {
+    var stack = (doc.layers || []).slice();
+    while (stack.length) {
+      var l = stack.shift();
+      if (l.id === id) return l;
+      if (l.layers && l.layers.length) for (var i = 0; i < l.layers.length; i++) stack.push(l.layers[i]);
+    }
+    return null;
+  }
+
+  function boundsOf(l) {
+    var b = l.bounds || {};
+    var left = px(b.left);
+    var top = px(b.top);
+    return { left: left, top: top, width: px(b.right) - left, height: px(b.bottom) - top };
+  }
+
+  async function hasUserMask(docId, layerId) {
+    try {
+      var r = await play([{ _obj: "get", _target: [{ _property: "hasUserMask" }, { _ref: "layer", _id: layerId }, { _ref: "document", _id: docId }] }]);
+      return !!(r && r[0] && r[0].hasUserMask);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  async function metaOf(docId, layerId) {
+    try {
+      var r = await play([{ _obj: "get", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "layer", _id: layerId }, { _ref: "document", _id: docId }] }]);
+      return xmpMod.parse(r && r[0] ? r[0].XMPMetadataAsUTF8 : null);
+    } catch (e) {
+      return {};
+    }
+  }
+
+  // A takes group's own takes: Scenario layer metadata with an asset id and
+  // the group's job (each placement makes its own group), and of layers with
+  // the same asset id only the lowest layer id: a copy the person made
+  // (Layer > Duplicate keeps the metadata) gets a higher id and stays theirs,
+  // as does one named as a copy of its take (slug.isTakeCopy), which still
+  // holds once the take itself is gone.
+  // The same test as the Takes card's (panel/controller.js takesOf).
+  async function takeIdsOf(doc, group) {
+    var gf = await metaOf(doc.id, group.id);
+    var first = {};
+    for (var j = 0; j < group.layers.length; j++) {
+      var x = group.layers[j];
+      var f = await metaOf(doc.id, x.id);
+      if (!(f.assetId && f.jobId && gf.jobId && f.jobId === gf.jobId) || slugMod.isTakeCopy(x.name, f)) continue;
+      if (!first[f.assetId] || x.id < first[f.assetId]) first[f.assetId] = x.id;
+    }
+    var ids = {};
+    for (var a in first) ids[first[a]] = true;
+    return ids;
+  }
+
+  // The document, which must be the active one (changes go to the front
+  // document only).
+  function activeDoc(docId) {
+    var doc = findDoc(docId);
+    if (!doc) throw new Error("the document was closed");
+    var active = ps.app.activeDocument;
+    if (!active || active.id !== doc.id) throw new Error("the document is not the active one");
+    return doc;
+  }
+
+  // Runs fn as one History state named `name`; a failure rolls it back.
+  async function inOneState(ctx, doc, name, fn) {
+    var hc = ctx && ctx.hostControl;
+    var sid = hc ? await hc.suspendHistory({ documentID: doc.id, name: name }) : null;
+    try {
+      await fn();
+      if (hc) await hc.resumeHistory(sid, true);
+    } catch (e) {
+      if (hc) {
+        try {
+          await hc.resumeHistory(sid, false);
+        } catch (e2) {
+          // nothing more to undo
+        }
+      }
+      throw e;
+    }
+  }
+
+  async function layerInfo(d, l) {
+    var kind = String(l.kind || "pixel");
+    var background = !!l.isBackgroundLayer;
+    return {
+      id: l.id,
+      name: String(l.name || ""),
+      visible: l.visible !== false,
+      bounds: boundsOf(l),
+      kind: kind,
+      background: background,
+      locked: !!(l.allLocked || l.pixelsLocked),
+      has_mask: await hasUserMask(d.id, l.id),
+      clipped: !!l.isClippingMask
+    };
+  }
+
+  // Pixels of an area (bounds inside the canvas) as exactly w x h, 8-bit
+  // sRGB; from one layer when layerId is given (outside its pixels: clear).
+  // Must run inside a modal scope.
+  async function readArea(doc, layerId, bounds, w, h) {
+    var opts = { documentID: doc.id, colorSpace: "RGB", colorProfile: SRGB, componentSize: 8, applyAlpha: false };
+    if (layerId) opts.layerID = layerId;
+    opts.sourceBounds = { left: bounds.left, top: bounds.top, right: bounds.left + bounds.width, bottom: bounds.top + bounds.height };
+    if (w < bounds.width || h < bounds.height) opts.targetSize = { width: w, height: h };
+    var got = await ps.imaging.getPixels(opts);
+    var image = got.imageData;
+    var img;
+    try {
+      // Width, height and components are read before dispose(): after it
+      // they are error objects (verified live on 27.11).
+      var data = toBytes(await image.getData({ chunky: true })).slice();
+      img = { width: Number(image.width), height: Number(image.height), components: Number(image.components), data: data };
+    } finally {
+      image.dispose();
+    }
+    if (!(img.components >= 1 && img.components <= 4) || img.data.length !== img.width * img.height * img.components) throw new Error("Photoshop returned pixels this plugin cannot read");
+    // With targetSize, sourceBounds come in the pyramid level's pixels
+    // (level n: document pixels / 2^n; verified live on 27.11).
+    var lv = Math.pow(2, Math.max(0, Number(got.level) || 0));
+    var sb = got.sourceBounds ? { left: px(got.sourceBounds.left) * lv, top: px(got.sourceBounds.top) * lv, right: px(got.sourceBounds.right) * lv, bottom: px(got.sourceBounds.bottom) * lv } : null;
+    var off = function (a, b) {
+      return Math.abs(a - b) >= lv;
+    };
+    if (sb && (off(sb.left, bounds.left) || off(sb.top, bounds.top) || off(sb.right, bounds.left + bounds.width) || off(sb.bottom, bounds.top + bounds.height))) {
+      // A layer smaller than the area: place what came back, clear around it.
+      var k = img.width / Math.max(1, sb.right - sb.left);
+      var rgba = img.components === 4 ? img : pixelsMod.addAlpha(img);
+      return pixelsMod.sampleRegion(rgba, { x: 0, y: 0 }, { left: (bounds.left - sb.left) * k, top: (bounds.top - sb.top) * k, width: bounds.width * k, height: bounds.height * k }, w, h, 0);
+    }
+    if (img.width !== w || img.height !== h) return pixelsMod.resize(img, w, h);
+    return img;
+  }
+
+  // getPixels leaves a layer's own mask out, so a cut-out (Cut out subject,
+  // Remove background) would send what its mask hides. The mask is read over
+  // the same area (outside its pixels it gives the mask's default, Hide All
+  // or Reveal All; verified live on 27.11) and kept in the alpha.
+  async function keepMask(docId, layerId, img, b) {
+    if (!img || !b || !(await hasUserMask(docId, layerId)) || !(await maskEnabled(docId, layerId))) return img;
+    var got = await ps.imaging.getLayerMask({ documentID: docId, layerID: layerId, kind: "user", sourceBounds: { left: b.left, top: b.top, right: b.left + b.width, bottom: b.top + b.height }, targetSize: { width: img.width, height: img.height } });
+    if (!got || !got.imageData) return img;
+    var gray;
+    try {
+      gray = { width: Number(got.imageData.width), height: Number(got.imageData.height), components: 1, data: toBytes(await got.imageData.getData({ chunky: true })).slice() };
+    } finally {
+      got.imageData.dispose();
+    }
+    return pixelsMod.keepMask(img, gray);
+  }
+
+  async function maskEnabled(docId, layerId) {
+    try {
+      var r = await play([{ _obj: "get", _target: [{ _property: "userMaskEnabled" }, { _ref: "layer", _id: layerId }, { _ref: "document", _id: docId }] }]);
+      return !(r && r[0] && r[0].userMaskEnabled === false);
+    } catch (e) {
+      return true;
+    }
+  }
+
+  // Selects the layer a result goes above: the insert point, or the top of
+  // its clipping chain (SPEC 3.8), or the top of the document.
+  // Selects the layer the takes are placed above. insert.below: the takes
+  // go under the layer instead: above the layer below it, or, when it is
+  // the bottom layer, above it and moved under it after (the returned
+  // { move_below: layer }).
+  async function selectInsertPoint(doc, insert, notes) {
+    var target = null;
+    if (insert && insert.layer_id) {
+      target = findLayer(doc, insert.layer_id);
+      if (!target) notes.push("The layer it was made from is gone; the result went to the top.");
+    }
+    if (target) {
+      var parent = target.parent && target.parent.layers ? target.parent : doc;
+      var list = parent.layers || [];
+      var at = -1;
+      for (var i = 0; i < list.length; i++) if (list[i].id === target.id) at = i;
+      if (insert.below && at >= 0) {
+        if (list[at + 1] && !list[at + 1].isClippingMask) {
+          await selectLayers(doc.id, [list[at + 1].id]);
+          return null;
+        }
+        await selectLayers(doc.id, [target.id]);
+        return { move_below: target };
+      }
+      while (at > 0 && list[at - 1] && list[at - 1].isClippingMask) at--;
+      if (at >= 0) target = list[at];
+      await selectLayers(doc.id, [target.id]);
+      return null;
+    }
+    var top = doc.layers && doc.layers[0];
+    if (top) await selectLayers(doc.id, [top.id]);
+    return null;
+  }
+
+  var ANCHOR = { tl: "TOPLEFT", br: "BOTTOMRIGHT" };
+
+  // Grows the canvas so the current image sits at offset (SPEC 3.6 Expand):
+  // left and top first (anchored bottom right), then right and bottom
+  // (anchored top left).
+  async function growCanvas(doc, c) {
+    var w0 = Math.round(Number(doc.width));
+    var h0 = Math.round(Number(doc.height));
+    var steps = [];
+    if (c.offset.x > 0 || c.offset.y > 0) steps.push({ width: w0 + c.offset.x, height: h0 + c.offset.y, anchor: "br" });
+    steps.push({ width: c.width, height: c.height, anchor: "tl" });
+    for (var i = 0; i < steps.length; i++) {
+      var s = steps[i];
+      if (Math.round(Number(doc.width)) === s.width && Math.round(Number(doc.height)) === s.height) continue;
+      var consts = ps.constants && ps.constants.AnchorPosition;
+      if (typeof doc.resizeCanvas === "function" && consts) {
+        await doc.resizeCanvas(s.width, s.height, consts[ANCHOR[s.anchor]]);
+      } else {
+        await play([
+          {
+            _obj: "canvasSize",
+            width: { _unit: "pixelsUnit", _value: s.width },
+            height: { _unit: "pixelsUnit", _value: s.height },
+            horizontal: { _enum: "horizontalLocation", _value: s.anchor === "br" ? "right" : "left" },
+            vertical: { _enum: "verticalLocation", _value: s.anchor === "br" ? "bottom" : "top" }
+          }
+        ]);
+      }
+    }
+    if (Math.round(Number(doc.width)) !== c.width || Math.round(Number(doc.height)) !== c.height) throw new Error("the canvas did not reach " + c.width + " x " + c.height);
+  }
+
+  // Places one file as an embedded smart object above the selected layer,
+  // fitted to fit {width, height, center_x, center_y}. Returns the layer.
+  async function placeFile(doc, path, fit, notes) {
+    var entry = await entryFor(path);
+    var token = lfs.createSessionToken(entry);
+    await play([
+      {
+        _obj: "placeEvent",
+        null: { _path: token, _kind: "local" },
+        freeTransformCenterState: { _enum: "quadCenterState", _value: "QCSAverage" },
+        offset: { _obj: "offset", horizontal: { _unit: "pixelsUnit", _value: 0 }, vertical: { _unit: "pixelsUnit", _value: 0 } }
+      }
+    ]);
+    var layer = doc.activeLayers[0];
+    var frame = await frameOf(doc.id, layer.id);
+    if (frame && frame.width > 0 && frame.height > 0) {
+      var sx = (fit.width / frame.width) * 100;
+      var sy = (fit.height / frame.height) * 100;
+      if (Math.abs(sx - 100) > 0.01 || Math.abs(sy - 100) > 0.01) await layer.scale(sx, sy);
+      var after = await frameOf(doc.id, layer.id);
+      var dx = fit.center_x - (after.left + after.width / 2);
+      var dy = fit.center_y - (after.top + after.height / 2);
+      if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) await layer.translate(dx, dy);
+    } else {
+      notes.push("The layer's frame could not be read; it is placed at Photoshop's default size.");
+    }
+    return layer;
+  }
+
+  async function setXmp(doc, layerId, packet) {
+    await play([{ _obj: "set", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "layer", _id: layerId }, { _ref: "document", _id: doc.id }], to: { _obj: "layer", XMPMetadataAsUTF8: packet } }]);
+  }
+
+  // A mask written only over its box reveals everything outside it, so a
+  // Free Transform that scales the layer brings up a line of its edge
+  // pixels. A new mask starts as Hide All: outside the box stays hidden.
+  async function putMask(doc, layerId, m) {
+    if (!(await hasUserMask(doc.id, layerId))) {
+      await selectLayers(doc.id, [layerId]);
+      await play([{ _obj: "make", new: { _class: "channel" }, at: { _ref: "channel", _enum: "channel", _value: "mask" }, using: { _enum: "userMaskEnabled", _value: "hideAll" } }]);
+    }
+    var data = await ps.imaging.createImageDataFromBuffer(m.data, { width: m.width, height: m.height, components: 1, chunky: true, colorSpace: "Grayscale", colorProfile: "Gray Gamma 2.2" });
+    try {
+      await ps.imaging.putLayerMask({ documentID: doc.id, layerID: layerId, kind: "user", imageData: data, targetBounds: { left: m.left, top: m.top } });
+    } finally {
+      data.dispose();
+    }
+  }
+
+  // A layer's mask loaded as the selection. Photoshop reveals everything
+  // outside the mask's own pixels, so the selection is cut to the box the
+  // mask was made for (the run's capture box), which leaves the selection.
+  async function maskToSelection(layerId, box) {
+    await play([{ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }], to: { _ref: [{ _ref: "channel", _enum: "channel", _value: "mask" }, { _ref: "layer", _id: layerId }] } }]);
+    if (box && box.width > 0 && box.height > 0) {
+      var u = function (v) {
+        return { _unit: "pixelsUnit", _value: v };
+      };
+      await play([{ _obj: "intersectWith", _target: [{ _ref: "channel", _property: "selection" }], to: { _obj: "rectangle", top: u(box.top), left: u(box.left), bottom: u(box.top + box.height), right: u(box.left + box.width) } }]);
+    }
+  }
+
+  // The Background layer becomes a normal layer (Remove BG's Mask on the
+  // layer, SPEC 3.6), as Layer > New > Layer from Background does.
+  async function fromBackground(doc, layer) {
+    await play([{ _obj: "set", _target: [{ _ref: "layer", _property: "background" }], to: { _obj: "layer", opacity: { _unit: "percentUnit", _value: 100 }, mode: { _enum: "blendMode", _value: "normal" } } }]);
+    return findLayer(doc, layer.id) || doc.activeLayers[0];
+  }
+
+  async function deleteLayer(doc, layer) {
+    if (typeof layer.delete === "function") await layer.delete();
+    else await play([{ _obj: "delete", _target: [{ _ref: "layer", _id: layer.id }] }]);
+  }
+
+  // Remove BG (SPEC 3.6): the cutout's alpha becomes a mask, on the source
+  // layer or on a copy of the source pixels. The result is placed for a
+  // moment to read its alpha, then removed.
+  async function cutout(doc, plan, notes) {
+    var c = plan.cutout;
+    var source = findLayer(doc, c.layer_id);
+    // A document reopened after a restart may give its Background a new id;
+    // the Background is still the one source of a Background cutout.
+    if (!source && c.background) {
+      source =
+        (doc.layers || []).filter(function (l) {
+          return l.isBackgroundLayer;
+        })[0] || null;
+    }
+    if (!source) throw new Error("the source layer is gone");
+    // A cut-out of a selection keeps the selection's own shape (a lasso, an
+    // Object Selection), not only its box: read here, before the result is
+    // placed for its alpha (placing drops the selection).
+    var selShape = null;
+    if (c.drop_selection) {
+      var got = null;
+      try {
+        got = await ps.imaging.getSelection({ documentID: doc.id });
+      } catch (e) {
+        got = null;
+      }
+      if (got && got.imageData) {
+        try {
+          var sb = got.sourceBounds || {};
+          var sd = await got.imageData.getData({ chunky: true });
+          selShape = { left: px(sb.left), top: px(sb.top), width: got.imageData.width, height: got.imageData.height, data: toBytes(sd).slice() };
+        } finally {
+          got.imageData.dispose();
+        }
+      }
+    }
+    await selectLayers(doc.id, [source.id]);
+    var temp = await placeFile(doc, plan.takes[0].path, plan.takes[0].fit, notes);
+    var box = c.box;
+    var read = await readArea(doc, temp.id, box, box.width, box.height);
+    var alpha = pixelsMod.alphaMask(read);
+    await deleteLayer(doc, temp);
+    var mb = c.mask_box;
+    var mask = pixelsMod.placeInto(alpha, mb.width, mb.height, box.left - mb.left, box.top - mb.top);
+    if (selShape) {
+      var shape = pixelsMod.placementMask(selShape, mb, 0);
+      for (var k = 0; k < mask.data.length; k++) mask.data[k] = Math.round((mask.data[k] * shape.data[k]) / 255);
+    }
+    var target;
+    if (c.lands === "mask") {
+      if (source.isBackgroundLayer) source = await fromBackground(doc, source);
+      target = source;
+    } else {
+      await selectLayers(doc.id, [source.id]);
+      target = await placeFile(doc, c.source_path, c.source_fit, notes);
+      target.name = c.name;
+      await setXmp(doc, target.id, c.xmp);
+    }
+    await putMask(doc, target.id, { left: mb.left, top: mb.top, width: mb.width, height: mb.height, data: mask.data });
+    // Inside the same History state as the placement.
+    if (c.drop_selection) await play([{ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }], to: { _enum: "ordinal", _value: "none" } }]);
+    return target;
+  }
+
+  async function entryFor(path) {
+    if (!lfs) throw new Error("this Photoshop offers no file access");
+    if (typeof lfs.getEntryWithUrl === "function") {
+      try {
+        return await lfs.getEntryWithUrl(DATA + path);
+      } catch (e) {
+        // fall back to the data folder below
+      }
+    }
+    var folder = await lfs.getDataFolder();
+    return folder.getEntry(path);
+  }
+
+  async function mkdirs(path) {
+    if (!fs) throw new Error("no file system");
+    var parts = String(path).split("/");
+    var at = "";
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      at = at ? at + "/" + parts[i] : parts[i];
+      try {
+        await fs.mkdir(DATA + at);
+      } catch (e) {
+        // it exists already, or the write that follows reports the problem
+      }
+    }
+  }
+
+  var shell = uxp && uxp.shell;
+
+  return {
+    WebSocket: g.WebSocket,
+    crypto: g.crypto,
+    fetch: typeof g.fetch === "function" ? g.fetch.bind(g) : null,
+    AbortController: typeof g.AbortController === "function" ? g.AbortController : null,
+    timers: {
+      setTimeout: function (fn, ms) {
+        return g.setTimeout(fn, ms);
+      },
+      clearTimeout: function (t) {
+        g.clearTimeout(t);
+      },
+      now: function () {
+        return Date.now();
+      }
+    },
+
+    secureGet: async function (key) {
+      if (!secure) throw new Error("secureStorage is not available");
+      var v = await secure.getItem(key);
+      if (v === null || v === undefined) return null;
+      if (typeof v === "string") return v;
+      return utf8.decode(toBytes(v));
+    },
+    secureSet: async function (key, value) {
+      if (!secure) throw new Error("secureStorage is not available");
+      await secure.setItem(key, value);
+    },
+    // removeItem where UXP offers it; otherwise the entry is overwritten
+    // with an empty value, which every reader treats as absent.
+    secureRemove: async function (key) {
+      if (!secure) throw new Error("secureStorage is not available");
+      if (typeof secure.removeItem === "function") {
+        await secure.removeItem(key);
+        return;
+      }
+      await secure.setItem(key, "");
+    },
+
+    // Opens a page in the browser. Photoshop asks the person first, every time.
+    openExternal: async function (url) {
+      if (!shell || typeof shell.openExternal !== "function") throw new Error("this Photoshop cannot open links");
+      return shell.openExternal(url, "Opens a Scenario page in your browser.");
+    },
+
+    photoshopVersion: function () {
+      try {
+        return (uxp && uxp.host && uxp.host.version) || (ps && ps.app && ps.app.version) || null;
+      } catch (e) {
+        return null;
+      }
+    },
+    osName: function () {
+      try {
+        if (!os) return null;
+        var name = typeof os.platform === "function" ? os.platform() : null;
+        var release = typeof os.release === "function" ? os.release() : null;
+        if (!name) return null;
+        return release ? name + " " + release : name;
+      } catch (e) {
+        return null;
+      }
+    },
+    listDocuments: function () {
+      var out = [];
+      if (!ps || !ps.app || !ps.app.documents) return out;
+      var docs = ps.app.documents;
+      for (var i = 0; i < docs.length; i++) {
+        var d = docs[i];
+        out.push({ id: d.id, title: d.title || d.name || "" });
+      }
+      return out;
+    },
+    // A short hash of a saved document's file path, so a job finds its
+    // document again after a restart (document ids last one Photoshop
+    // session). Null for a document never saved. The path itself is never
+    // stored. Read only.
+    documentKey: function (id) {
+      try {
+        var d = findDoc(id);
+        if (!d) return null;
+        var p = null;
+        try {
+          p = d.path;
+        } catch (e) {
+          p = null;
+        }
+        if (typeof p !== "string" || !p) return null;
+        return "k" + sha.toHex(sha.sha256(utf8.encode(p))).slice(0, 32);
+      } catch (e) {
+        return null;
+      }
+    },
+    // Layers in the open documents whose Scenario metadata names one of
+    // `needles` (asset or job ids): [{ document_id, layer_id, xmp }]. Read only
+    // (batchPlay get of each layer's XMP); at most `limit` layers per
+    // document are read.
+    findPlacedLayers: async function (needles, limit) {
+      var out = [];
+      if (!ps || !ps.app || !needles || !needles.length) return out;
+      var max = limit || 2000;
+      var docs = ps.app.documents || [];
+      for (var i = 0; i < docs.length; i++) {
+        var doc = docs[i];
+        var stack = [];
+        try {
+          stack = (doc.layers || []).slice();
+        } catch (e) {
+          stack = [];
+        }
+        var seen = 0;
+        while (stack.length && seen < max) {
+          var l = stack.shift();
+          seen++;
+          try {
+            if (l.layers && l.layers.length) for (var c = 0; c < l.layers.length; c++) stack.push(l.layers[c]);
+          } catch (e) {
+            // not a group
+          }
+          var x = null;
+          try {
+            var r = await play([{ _obj: "get", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "layer", _id: l.id }, { _ref: "document", _id: doc.id }] }]);
+            x = r && r[0] ? r[0].XMPMetadataAsUTF8 : null;
+          } catch (e) {
+            x = null;
+          }
+          if (typeof x !== "string" || !x) continue;
+          for (var n = 0; n < needles.length; n++) {
+            if (needles[n] && x.indexOf(needles[n]) >= 0) {
+              out.push({ document_id: doc.id, layer_id: l.id, xmp: x });
+              break;
+            }
+          }
+        }
+      }
+      return out;
+    },
+    activeDocumentId: function () {
+      if (!ps || !ps.app) return null;
+      var d = ps.app.activeDocument;
+      return d ? d.id : null;
+    },
+    // Width and height in pixels of an open document (the active one when
+    // id is null), or null. Read only: no modal state, no document change.
+    documentSize: function (id) {
+      try {
+        if (!ps || !ps.app) return null;
+        var d = null;
+        if (id === null || id === undefined) d = ps.app.activeDocument;
+        else {
+          var docs = ps.app.documents || [];
+          for (var i = 0; i < docs.length; i++) if (docs[i].id === id) d = docs[i];
+        }
+        if (!d) return null;
+        var w = Number(d.width);
+        var h = Number(d.height);
+        if (!(w > 0 && h > 0)) return null;
+        return { id: d.id, width: Math.round(w), height: Math.round(h) };
+      } catch (e) {
+        return null;
+      }
+    },
+
+    // A binary file of the data folder as bytes, or null.
+    readDataBinary: async function (name) {
+      if (!fs) return null;
+      try {
+        return toBytes(await fs.readFile(DATA + name));
+      } catch (e) {
+        return null;
+      }
+    },
+    readDataText: async function (name) {
+      if (!fs) return null;
+      try {
+        var text = await fs.readFile(DATA + name, { encoding: "utf-8" });
+        return typeof text === "string" ? text : utf8.decode(toBytes(text));
+      } catch (e) {
+        return null;
+      }
+    },
+    writeDataText: async function (name, text) {
+      if (!fs) return false;
+      try {
+        await fs.writeFile(DATA + name, text, { encoding: "utf-8" });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    },
+    removeData: async function (name) {
+      if (!fs) return false;
+      try {
+        await fs.unlink(DATA + name);
+        return true;
+      } catch (e) {
+        try {
+          await fs.writeFile(DATA + name, "", { encoding: "utf-8" });
+        } catch (e2) {
+          // nothing more to do
+        }
+        return false;
+      }
+    },
+
+    // ---- files in the plugin data folder (job records, results) ----
+
+    ensureDataDir: mkdirs,
+    listData: async function (dir) {
+      if (!fs) return [];
+      try {
+        var names = await fs.readdir(DATA + dir);
+        return Array.isArray(names) ? names.map(String) : [];
+      } catch (e) {
+        return [];
+      }
+    },
+    // Written to <name>.tmp, then renamed over <name>. If this Photoshop's
+    // rename refuses an existing target, the target is removed first; if
+    // rename fails even then, the record is written in place and the
+    // temporary copy removed. The ledger reads the temporary file back if a
+    // write stops in between.
+    writeDataAtomic: async function (name, text) {
+      if (!fs) return false;
+      try {
+        await fs.writeFile(DATA + name + ".tmp", text, { encoding: "utf-8" });
+      } catch (e) {
+        return false;
+      }
+      try {
+        await fs.rename(DATA + name + ".tmp", DATA + name);
+        return true;
+      } catch (e) {
+        // try the next way
+      }
+      try {
+        try {
+          await fs.unlink(DATA + name);
+        } catch (e2) {
+          // no previous file
+        }
+        await fs.rename(DATA + name + ".tmp", DATA + name);
+        return true;
+      } catch (e) {
+        // try the next way
+      }
+      try {
+        await fs.writeFile(DATA + name, text, { encoding: "utf-8" });
+        try {
+          await fs.unlink(DATA + name + ".tmp");
+        } catch (e3) {
+          // the newer copy is read back by revision
+        }
+        return true;
+      } catch (e) {
+        return false;
+      }
+    },
+    writeDataBinary: async function (name, bytes) {
+      if (!fs) throw new Error("no file system");
+      await fs.writeFile(DATA + name, bufferOf(bytes));
+      return true;
+    },
+    // A rename that fails twice is done as a copy, then the source goes.
+    renameData: async function (from, to) {
+      if (!fs) throw new Error("no file system");
+      try {
+        await fs.rename(DATA + from, DATA + to);
+        return true;
+      } catch (e) {
+        // try the next way
+      }
+      try {
+        try {
+          await fs.unlink(DATA + to);
+        } catch (e2) {
+          // no previous file
+        }
+        await fs.rename(DATA + from, DATA + to);
+        return true;
+      } catch (e) {
+        // try the next way
+      }
+      var data = await fs.readFile(DATA + from);
+      await fs.writeFile(DATA + to, data);
+      try {
+        await fs.unlink(DATA + from);
+      } catch (e3) {
+        // a leftover .part file is harmless
+      }
+      return true;
+    },
+
+    // ---- document reads ----
+
+    // The selection's bounds in document pixels, or null. Read only.
+    selectionBounds: async function (docId) {
+      if (!ps || !ps.action) return null;
+      try {
+        var r = await play([{ _obj: "get", _target: [{ _property: "selection" }, { _ref: "document", _id: docId }] }]);
+        var sel = r && r[0] && r[0].selection;
+        if (!sel || sel.left === undefined) return null;
+        var left = Math.round(px(sel.left));
+        var top = Math.round(px(sel.top));
+        var right = Math.round(px(sel.right));
+        var bottom = Math.round(px(sel.bottom));
+        if (!(right > left && bottom > top)) return null;
+        return { left: left, top: top, width: right - left, height: bottom - top };
+      } catch (e) {
+        return null;
+      }
+    },
+    // The active layer of a document: { id, name, visible, bounds, kind,
+    // background, locked, has_mask }, or null.
+    activeLayerInfo: async function (docId) {
+      var d = findDoc(docId);
+      if (!d) return null;
+      try {
+        var layers = d.activeLayers || [];
+        var l = layers[0];
+        if (!l) return null;
+        return await layerInfo(d, l);
+      } catch (e) {
+        return null;
+      }
+    },
+    // What the later flows' placements build on (host-more.js: split
+    // layers, text, a selection from masks, artboards, clips, frames). Kept
+    // apart from the agent tools' own internals() so both can grow.
+    moreInternals: function () {
+      return {
+        ps: ps,
+        modal: modal,
+        play: play,
+        inOneState: inOneState,
+        findDoc: findDoc,
+        findLayer: findLayer,
+        boundsOf: boundsOf,
+        frameOf: frameOf,
+        readArea: readArea,
+        selectLayers: selectLayers,
+        placeFile: placeFile,
+        setXmp: setXmp,
+        putMask: putMask,
+        maskToSelection: maskToSelection,
+        deleteLayer: deleteLayer,
+        entryFor: entryFor,
+        srgb: SRGB
+      };
+    },
+    // How many layers the document has at its top level and how many are
+    // selected (the flat-image and several-layers contexts), or null.
+    documentStats: function (docId) {
+      var d = findDoc(docId);
+      if (!d) return null;
+      try {
+        var h = d.activeHistoryState;
+        // The History state, so a context read once (a blank document) is
+        // read again after any change.
+        var state = h ? [h.id !== undefined ? h.id : "", h.name, d.historyStates ? d.historyStates.length : ""].join(":") : null;
+        return { layers: (d.layers || []).length, selected: (d.activeLayers || []).length, state: state };
+      } catch (e) {
+        return null;
+      }
+    },
+    // The same for a layer by id, or null when it is gone.
+    layerInfo: async function (docId, layerId) {
+      var d = findDoc(docId);
+      if (!d) return null;
+      try {
+        var l = findLayer(d, layerId);
+        return l ? await layerInfo(d, l) : null;
+      } catch (e) {
+        return null;
+      }
+    },
+    // The Scenario metadata of a layer (SPEC 9.2) and, for a group, of each
+    // layer in it, top first. Read only (batchPlay get of each XMP). Resolves
+    // { id, name, visible, group, parent ({ id, name } of the group holding
+    // it, or null), fields, children: [{ id, name, visible, fields }] }, or
+    // null when the layer is gone.
+    scenarioLayer: async function (docId, layerId) {
+      var d = findDoc(docId);
+      if (!d) return null;
+      try {
+        var l = findLayer(d, layerId);
+        if (!l) return null;
+        var parent = null;
+        try {
+          parent = l.parent && l.parent.id !== undefined && l.parent.layers ? { id: l.parent.id, name: String(l.parent.name || "") } : null;
+        } catch (e) {
+          parent = null;
+        }
+        var out = { id: l.id, name: String(l.name || ""), visible: l.visible !== false, group: false, parent: parent, fields: await metaOf(d.id, l.id), children: [] };
+        var kids = String(l.kind || "") === "group" && l.layers ? l.layers : null;
+        if (kids) {
+          out.group = true;
+          for (var i = 0; i < kids.length; i++) out.children.push({ id: kids[i].id, name: String(kids[i].name || ""), visible: kids[i].visible !== false, fields: await metaOf(d.id, kids[i].id) });
+        }
+        return out;
+      } catch (e) {
+        return null;
+      }
+    },
+    // Shows one take of a Scenario group in the document and hides the
+    // other takes (the Takes card), as one History state. Layers the person
+    // added to the group, a Scenario layer of another run among them, keep
+    // their visibility.
+    showTake: function (docId, groupId, layerId) {
+      return modal("Scenario: Show take", async function (ctx) {
+        var doc = activeDoc(docId);
+        var group = findLayer(doc, groupId);
+        if (!group || !group.layers) throw new Error("the takes group is gone");
+        var own = await takeIdsOf(doc, group);
+        var takes = [];
+        for (var j = 0; j < group.layers.length; j++) {
+          var x = group.layers[j];
+          if (x.id === layerId || own[x.id]) takes.push(x);
+        }
+        await inOneState(ctx, doc, "Scenario: Show take", async function () {
+          if (group.visible === false) group.visible = true;
+          for (var i = 0; i < takes.length; i++) {
+            var on = takes[i].id === layerId;
+            if ((takes[i].visible !== false) !== on) takes[i].visible = on;
+          }
+        });
+        return true;
+      });
+    },
+    // Keeps one take of a Scenario group and removes the other take layers
+    // from it, as one History state. Their files stay in the data folder.
+    // Only the group's own takes (takeIdsOf) are removed: a layer the person
+    // added to the group stays, also a Scenario layer of another run or a
+    // copy of a take.
+    keepTake: function (docId, groupId, layerId) {
+      return modal("Scenario: Keep take", async function (ctx) {
+        var doc = activeDoc(docId);
+        var group = findLayer(doc, groupId);
+        if (!group || !group.layers) throw new Error("the takes group is gone");
+        var keep = null;
+        for (var k = 0; k < group.layers.length; k++) if (group.layers[k].id === layerId) keep = group.layers[k];
+        if (!keep) throw new Error("this take is no longer in the group");
+        var own = await takeIdsOf(doc, group);
+        var others = [];
+        for (var j = 0; j < group.layers.length; j++) {
+          var x = group.layers[j];
+          if (x.id !== layerId && own[x.id]) others.push(x);
+        }
+        var removed = 0;
+        await inOneState(ctx, doc, "Scenario: Keep take", async function () {
+          for (var i = 0; i < others.length; i++) {
+            await deleteLayer(doc, others[i]);
+            removed++;
+          }
+          if (keep.visible === false) keep.visible = true;
+          if (group.visible === false) group.visible = true;
+          // "(4 takes)" no longer says what the group holds.
+          var plain = String(group.name || "").replace(/ \(\d+ takes\)$/, "");
+          if (plain && plain !== group.name) group.name = plain;
+        });
+        return removed;
+      });
+    },
+    // Makes a layer the active one (no History state).
+    selectLayer: function (docId, layerId) {
+      return modal("Scenario: Select layer", async function () {
+        activeDoc(docId);
+        await selectLayers(docId, [layerId]);
+        return true;
+      });
+    },
+    // Loads a layer's mask as the selection (Refine and More like this on
+    // a selection edit: the same selection again), cut to the run's capture
+    // box when it is known.
+    selectionFromMask: function (docId, layerId, box) {
+      return modal("Scenario: Load selection", async function (ctx) {
+        var doc = activeDoc(docId);
+        // One History state: the mask loaded and cut to the box.
+        await inOneState(ctx, doc, "Scenario: Load selection", function () {
+          return maskToSelection(layerId, box || null);
+        });
+        return true;
+      });
+    },
+    // The document references kept in a document's metadata (SPEC 9.2
+    // namespace): [{ role, layer_id, name }]. Read only.
+    documentReferences: async function (docId) {
+      if (!findDoc(docId)) return [];
+      try {
+        var r = await play([{ _obj: "get", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "document", _id: docId }] }]);
+        return docRefsMod.read(r && r[0] ? r[0].XMPMetadataAsUTF8 : null);
+      } catch (e) {
+        return [];
+      }
+    },
+    // Writes them into the document's metadata, keeping every other field
+    // of its packet. Resolves the list as written.
+    setDocumentReferences: function (docId, refs) {
+      return modal("Scenario: Document references", async function () {
+        activeDoc(docId);
+        var r = await play([{ _obj: "get", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "document", _id: docId }] }]);
+        var packet = docRefsMod.write(r && r[0] ? r[0].XMPMetadataAsUTF8 : null, refs);
+        await play([{ _obj: "set", _target: [{ _ref: "property", _property: "XMPMetadataAsUTF8" }, { _ref: "document", _id: docId }], to: { _obj: "document", XMPMetadataAsUTF8: packet } }]);
+        return docRefsMod.read(packet);
+      });
+    },
+    // Pixels as 8-bit sRGB, read at most at long_side on the long side, in
+    // one modal scope; imaging needs one (verified live on 27.11).
+    // req: { document_id, layer_id (none: all visible), bounds, long_side,
+    // exact (exactly the bounds, padded clear outside a layer) }.
+    // Resolves { width, height, components, data }.
+    readPixels: function (req) {
+      // The document area the shot covers (keepMask reads the mask there).
+      var shotBounds = null;
+      return modal("Scenario: Read reference", async function (mctx) {
+        // Layers left out of the read (Formats: the titles), hidden in a
+        // History state that is then rolled back, so the document is as it
+        // was.
+        var hide = req.hide_ids && req.hide_ids.length ? req.hide_ids : null;
+        var hc = hide && mctx ? mctx.hostControl : null;
+        var sid = null;
+        if (hide) {
+          var dh = findDoc(req.document_id);
+          if (!dh) throw new Error("the document was closed");
+          sid = hc ? await hc.suspendHistory({ documentID: dh.id, name: "Scenario: Read without titles" }) : null;
+          for (var hi = 0; hi < hide.length; hi++) {
+            var hl = findLayer(dh, hide[hi]);
+            if (hl) hl.visible = false;
+          }
+        }
+        try {
+          var shot = await readNow();
+          return req.layer_id ? await keepMask(req.document_id, req.layer_id, shot, shotBounds) : shot;
+        } finally {
+          if (hide && hc) await hc.resumeHistory(sid, false);
+          else if (hide) {
+            var dr = findDoc(req.document_id);
+            for (var ri = 0; dr && ri < hide.length; ri++) {
+              var rl = findLayer(dr, hide[ri]);
+              if (rl) rl.visible = true;
+            }
+          }
+        }
+      });
+      async function readNow() {
+        if (req.exact && req.bounds) {
+          shotBounds = req.bounds;
+          // Exactly the bounds, at most long_side on the long side; outside a
+          // layer's own pixels: clear (captures, SPEC 5.8).
+          var bw = req.bounds.width;
+          var bh = req.bounds.height;
+          var k = req.long_side && Math.max(bw, bh) > req.long_side ? req.long_side / Math.max(bw, bh) : 1;
+          var d0 = findDoc(req.document_id);
+          if (!d0) throw new Error("the document was closed");
+          return readArea(d0, req.layer_id || null, req.bounds, Math.max(1, Math.round(bw * k)), Math.max(1, Math.round(bh * k)));
+        }
+        var opts = { documentID: req.document_id, colorSpace: "RGB", colorProfile: SRGB, componentSize: 8, applyAlpha: false };
+        if (req.layer_id) opts.layerID = req.layer_id;
+        var w = null;
+        var h = null;
+        if (req.bounds) {
+          opts.sourceBounds = { left: req.bounds.left, top: req.bounds.top, right: req.bounds.left + req.bounds.width, bottom: req.bounds.top + req.bounds.height };
+          w = req.bounds.width;
+          h = req.bounds.height;
+        }
+        if (req.long_side) {
+          if (w === null) {
+            var d = findDoc(req.document_id);
+            w = d ? Number(d.width) : req.long_side;
+            h = d ? Number(d.height) : req.long_side;
+          }
+          if (Math.max(w, h) > req.long_side) opts.targetSize = w >= h ? { width: req.long_side } : { height: req.long_side };
+        }
+        var got = await ps.imaging.getPixels(opts);
+        var image = got.imageData;
+        var lv = Math.pow(2, Math.max(0, Number(got.level) || 0));
+        var gb = got.sourceBounds;
+        shotBounds = gb ? { left: px(gb.left) * lv, top: px(gb.top) * lv, width: (px(gb.right) - px(gb.left)) * lv, height: (px(gb.bottom) - px(gb.top)) * lv } : req.bounds || null;
+        try {
+          var data = await image.getData({ chunky: true });
+          return { width: image.width, height: image.height, components: image.components, data: toBytes(data).slice() };
+        } finally {
+          image.dispose();
+        }
+      }
+    },
+    // The titles of a document, top first: its visible type layers and the
+    // Text layers Split text made (their text box is in their metadata).
+    // Formats reads the picture without them and lays them out again on each
+    // artboard. Resolves [{ id, name, kind: "type" | "split_text", box }].
+    overlayLayers: async function (docId) {
+      var d = findDoc(docId);
+      if (!d) return [];
+      var out = [];
+      async function walk(list) {
+        for (var i = 0; i < (list || []).length; i++) {
+          var l = list[i];
+          if (l.visible === false) continue;
+          var kind = String(l.kind || "");
+          if (kind === "group") {
+            await walk(l.layers);
+            continue;
+          }
+          if (kind === "text") {
+            out.push({ id: l.id, name: String(l.name || ""), kind: "type", box: boundsOf(l) });
+            continue;
+          }
+          var f = await metaOf(d.id, l.id);
+          var tb = f && f.kind === "text" && typeof f.textBox === "string" ? f.textBox.split(",").map(Number) : null;
+          if (tb && tb.length === 4 && tb[2] > 0 && tb[3] > 0) out.push({ id: l.id, name: String(l.name || ""), kind: "split_text", box: { left: tb[0], top: tb[1], width: tb[2], height: tb[3] } });
+        }
+      }
+      await walk(d.layers);
+      return out;
+    },
+    // JPEG bytes of opaque RGB pixels, encoded by Photoshop.
+    encodeJpeg: function (pixels) {
+      return modal("Scenario: Encode reference", async function () {
+        var image = await ps.imaging.createImageDataFromBuffer(pixels.data, { width: pixels.width, height: pixels.height, components: 3, chunky: true, colorSpace: "RGB", colorProfile: SRGB });
+        try {
+          var text = await ps.imaging.encodeImageData({ imageData: image, base64: true });
+          var bytes = b64.decodeStandard(String(text).replace(/^data:[^,]*,/, ""));
+          if (!bytes) throw new Error("Photoshop's JPEG encoder returned no data");
+          return bytes;
+        } finally {
+          image.dispose();
+        }
+      });
+    },
+    // The selection as a gray mask in document pixels, or null.
+    readSelectionMask: function (docId) {
+      return modal("Scenario: Read selection", async function () {
+        var got = await ps.imaging.getSelection({ documentID: docId });
+        if (!got || !got.imageData) return null;
+        try {
+          var b = got.sourceBounds || {};
+          var data = await got.imageData.getData({ chunky: true });
+          return { left: px(b.left), top: px(b.top), width: got.imageData.width, height: got.imageData.height, data: toBytes(data).slice() };
+        } finally {
+          got.imageData.dispose();
+        }
+      });
+    },
+    // A PNG or JPEG the person picks; null when they cancel.
+    chooseImageFile: async function () {
+      if (!lfs || typeof lfs.getFileForOpening !== "function") throw new Error("this Photoshop cannot open a file dialog");
+      var file = await lfs.getFileForOpening({ types: ["png", "jpg", "jpeg"], allowMultiple: false });
+      if (Array.isArray(file)) file = file[0];
+      if (!file) return null;
+      var formats = uxp.storage.formats;
+      var data = await file.read(formats ? { format: formats.binary } : {});
+      return { name: String(file.name || "file"), bytes: toBytes(data) };
+    },
+
+    // ---- placement (SPEC 5.3, 5.7, 6.5) ----
+
+    // Carries out an apply/plan.js plan in one modal scope and one History
+    // state. Takes are placed with placeEvent (an embedded smart object at
+    // its native size, centered: verified live on 27.11), last take first
+    // above the insert point (the top of the document, or the layer the edit
+    // read, above its clipping chain), so take 1 ends on top; each is fitted
+    // to its box, named, and given its metadata. Several takes are grouped,
+    // takes 2 to n hidden. A mask goes on the group, or on the one layer.
+    // Expand grows the canvas first (in a copy of the document when asked);
+    // Remove BG puts the cutout's alpha on the source layer or on a copy of
+    // its pixels. plan.reads asks for small reads used by the checks: the
+    // composite before any change, each take before its mask, the composite
+    // after. opts.decide(reads) may answer { mask: false } to land unmasked,
+    // or { masks: [one per take], xmp: [packets or null], note } to land each
+    // take with its own mask (Replace inside, Bolder: the mask grown over what
+    // the model drew past the selection); the masks then go on the take
+    // layers, not on the group, and the selection loaded back is still the
+    // person's own (plan.mask).
+    // Anything failing rolls the History state back, so the document is as it
+    // was. opts.auto: Place when ready (waits at most 1 s for the modal
+    // state, restores the person's active layers).
+    // Resolves { document_id, layer_ids, group_id, notes, reads, masked }.
+    placeResults: function (plan, opts) {
+      opts = opts || {};
+      return modal(
+        plan.history_name,
+        async function (ctx) {
+          var doc;
+          var notes = [];
+          if (plan.new_document) {
+            var o = { width: plan.new_document.width, height: plan.new_document.height, resolution: 72, name: plan.new_document.name, profile: SRGB };
+            if (ps.constants && ps.constants.NewDocumentMode) o.mode = ps.constants.NewDocumentMode.RGB;
+            if (ps.constants && ps.constants.DocumentFill) o.fill = ps.constants.DocumentFill.WHITE;
+            try {
+              doc = await ps.app.createDocument(o);
+            } catch (e) {
+              delete o.profile;
+              doc = await ps.app.createDocument(o);
+            }
+          } else {
+            doc = findDoc(plan.document_id);
+            if (!doc) throw new Error("the document was closed");
+            var active = ps.app.activeDocument;
+            if (!active || active.id !== doc.id) {
+              var na = new Error("the document is not the active one");
+              na.notActive = true;
+              throw na;
+            }
+            if (plan.duplicate) {
+              doc = await doc.duplicate(plan.duplicate.name);
+              if (ps.app.activeDocument && ps.app.activeDocument.id !== doc.id) ps.app.activeDocument = doc;
+            }
+          }
+          var before = [];
+          try {
+            before = (doc.activeLayers || []).map(function (l) {
+              return l.id;
+            });
+          } catch (e) {
+            before = [];
+          }
+          // Placing a file drops the selection in Photoshop (seen on 27.11);
+          // a masked edit loads it back from its mask (SPEC 3.8 step 8).
+          var hadSelection = false;
+          if (plan.mask && !plan.cutout && !plan.new_document) {
+            try {
+              var sr = await play([{ _obj: "get", _target: [{ _property: "selection" }, { _ref: "document", _id: doc.id }] }]);
+              hadSelection = !!(sr && sr[0] && sr[0].selection && sr[0].selection.left !== undefined);
+            } catch (e) {
+              hadSelection = false;
+            }
+          }
+          var reads = { before: null, takes: [], after: null };
+          var R = plan.reads || {};
+          var hc = ctx.hostControl;
+          var sid = await hc.suspendHistory({ documentID: doc.id, name: plan.history_name });
+          var placed = [];
+          var groupId = null;
+          var masked = false;
+          try {
+            if (R.before) reads.before = await readArea(doc, null, R.before.bounds, R.before.width, R.before.height);
+            if (plan.canvas) await growCanvas(doc, plan.canvas);
+            if (plan.cutout) {
+              var t = await cutout(doc, plan, notes);
+              placed.push(t);
+              masked = true;
+            } else {
+              var after = await selectInsertPoint(doc, plan.insert, notes);
+              for (var i = plan.takes.length - 1; i >= 0; i--) {
+                var take = plan.takes[i];
+                var layer = await placeFile(doc, take.path, take.fit, notes);
+                layer.name = take.name;
+                await setXmp(doc, layer.id, take.xmp);
+                placed.unshift(layer);
+              }
+              if (plan.subject) {
+                var cut = 0;
+                for (var si = 0; si < placed.length; si++) {
+                  try {
+                    await subjectMask(doc, placed[si].id);
+                    cut++;
+                  } catch (e) {
+                    // that take stays whole
+                  }
+                }
+                if (cut) masked = true;
+                notes.push(cut === placed.length ? "The model returned an opaque picture: Photoshop's Remove Background cut it out (a layer mask, editable)." : "The model returned an opaque picture and Photoshop's Remove Background could not cut " + (cut ? "every take" : "it") + ": add a mask by hand.");
+              }
+              if (R.takes) {
+                for (var r = 0; r < placed.length; r++) reads.takes.push(await readArea(doc, placed[r].id, R.takes.bounds, R.takes.width, R.takes.height));
+              }
+              var useMask = !!plan.mask;
+              var perTake = null;
+              if (useMask && typeof opts.decide === "function") {
+                var d = opts.decide(reads);
+                if (d && d.mask === false) {
+                  useMask = false;
+                  if (d.note) notes.push(d.note);
+                } else if (d && Array.isArray(d.masks) && d.masks.length === placed.length) {
+                  perTake = d.masks;
+                  if (d.note) notes.push(d.note);
+                  for (var xi = 0; Array.isArray(d.xmp) && xi < placed.length; xi++) if (d.xmp[xi]) await setXmp(doc, placed[xi].id, d.xmp[xi]);
+                }
+              }
+              var maskTarget = placed.length === 1 ? placed[0] : null;
+              if (placed.length > 1) {
+                var group;
+                if (typeof doc.createLayerGroup === "function") group = await doc.createLayerGroup({ name: plan.group.name, fromLayers: placed });
+                else group = await doc.groupLayers(placed);
+                group.name = plan.group.name;
+                groupId = group.id;
+                await setXmp(doc, group.id, plan.group.xmp);
+                for (var v = 1; v < placed.length; v++) placed[v].visible = false;
+                maskTarget = group;
+              }
+              if (useMask && perTake) {
+                try {
+                  // The person's selection first, read back from take 1
+                  // with the selection's mask, then each take's own mask.
+                  if (hadSelection) {
+                    await putMask(doc, placed[0].id, plan.mask);
+                    try {
+                      await maskToSelection(placed[0].id, plan.mask);
+                    } catch (e) {
+                      // the selection stays dropped; the masks hold it
+                    }
+                  }
+                  for (var pt = 0; pt < placed.length; pt++) await putMask(doc, placed[pt].id, perTake[pt] || plan.mask);
+                  masked = true;
+                } catch (e) {
+                  notes.push("Placed unmasked: the mask could not be applied.");
+                }
+              } else if (useMask && maskTarget) {
+                try {
+                  await putMask(doc, maskTarget.id, plan.mask);
+                  masked = true;
+                } catch (e) {
+                  notes.push("Placed unmasked: the mask could not be applied.");
+                }
+                if (masked && hadSelection) {
+                  try {
+                    await maskToSelection(maskTarget.id, plan.mask);
+                  } catch (e) {
+                    // the selection stays dropped; the mask holds it
+                  }
+                }
+              }
+              if (after && after.move_below) {
+                var moving = placed.length > 1 ? findLayer(doc, groupId) : placed[0];
+                var placement = ps.constants && ps.constants.ElementPlacement;
+                try {
+                  if (!moving || typeof moving.move !== "function" || !placement) throw new Error("no move");
+                  await moving.move(after.move_below, placement.PLACEAFTER);
+                } catch (e) {
+                  notes.push("Placed above the layer: it could not be moved under it.");
+                }
+              }
+            }
+            if (R.after) reads.after = await readArea(doc, null, R.after.bounds, R.after.width, R.after.height);
+            if (opts.auto && before.length && !plan.new_document && !plan.duplicate) {
+              try {
+                await selectLayers(doc.id, before);
+              } catch (e) {
+                // the new layer stays active
+              }
+            }
+            await hc.resumeHistory(sid, true);
+          } catch (e) {
+            try {
+              await hc.resumeHistory(sid, false);
+            } catch (e2) {
+              // nothing more to undo
+            }
+            throw e;
+          }
+          return {
+            document_id: doc.id,
+            layer_ids: placed.map(function (l) {
+              return l.id;
+            }),
+            group_id: groupId,
+            notes: notes,
+            reads: reads,
+            masked: masked
+          };
+        },
+        // Place when ready tries again on its own, later (jobs/runner.js).
+        opts.auto ? { timeOut: 1000, retries: 0 } : null
+      );
+    },
+
+    // Undoes the last History state of a document when it is the one named
+    // (the "Changed outside" card's Undo, SPEC 6.5). Resolves true when done.
+    undoLast: function (docId, name) {
+      return modal("Scenario: Undo", async function () {
+        var doc = findDoc(docId);
+        if (!doc) return false;
+        var active = ps.app.activeDocument;
+        if (!active || active.id !== docId) return false;
+        var st = doc.activeHistoryState;
+        if (st && st.name !== undefined && st.name !== name) return false;
+        await play([{ _obj: "select", _target: [{ _ref: "historyState", _enum: "ordinal", _value: "previous" }] }]);
+        return true;
+      });
+    },
+    // Calls fn() (coalesced over 80 ms, so the context card follows a change
+    // within 200 ms) when the active document, the selection or the layers
+    // may have changed (SPEC 3.8).
+    onDocumentEvents: function (fn) {
+      if (!ps || !ps.action || typeof ps.action.addNotificationListener !== "function") return false;
+      var pending = null;
+      // transform and move: a Free Transform or a Move left the context on
+      // the layer's old bounds, and the takes landed there (live 2026-10-23).
+      // historyStateChanged: Undo and Redo send none of the others, and the
+      // card kept takes that Undo had removed (live 2026-10-23).
+      var events = ["select", "set", "make", "delete", "open", "close", "placeEvent", "crop", "canvasSize", "imageSize", "transform", "move", "duplicate", "paste", "historyStateChanged"];
+      try {
+        ps.action.addNotificationListener(
+          events.map(function (e) {
+            return { event: e };
+          }),
+          function () {
+            if (pending) return;
+            pending = g.setTimeout(function () {
+              pending = null;
+              fn();
+            }, EVENT_COALESCE_MS);
+          }
+        );
+        return true;
+      } catch (e) {
+        return false;
+      }
+    },
+
+    clipboardWrite: async function (text) {
+      var clip = g.navigator && g.navigator.clipboard;
+      if (!clip) throw new Error("clipboard is not available");
+      if (typeof clip.writeText === "function") return clip.writeText(text);
+      if (typeof clip.setContent === "function") return clip.setContent({ "text/plain": text });
+      throw new Error("clipboard is not available");
+    },
+
+    // Clears the clipboard only if it still holds `text`. Resolves true when cleared.
+    clipboardClearIf: async function (text) {
+      var clip = g.navigator && g.navigator.clipboard;
+      if (!clip) return false;
+      var now = null;
+      if (typeof clip.readText === "function") now = await clip.readText();
+      else if (typeof clip.getContent === "function") {
+        var content = await clip.getContent();
+        now = content && content["text/plain"];
+      }
+      if (now !== text) return false;
+      if (typeof clip.writeText === "function") await clip.writeText("");
+      else if (typeof clip.setContent === "function") await clip.setContent({ "text/plain": "" });
+      else return false;
+      return true;
+    },
+
+    setupEntrypoints: function (def) {
+      if (uxp && uxp.entrypoints && typeof uxp.entrypoints.setup === "function") uxp.entrypoints.setup(def);
+    },
+
+    // What the agent tools (agents/ps-host.js) build on: the Photoshop
+    // module, the modal scope, one History state, layer and metadata reads,
+    // and session tokens for files in the data folder.
+    internals: function () {
+      return {
+        ps: ps,
+        fs: fs,
+        modal: modal,
+        play: play,
+        inOneState: inOneState,
+        findDoc: findDoc,
+        findLayer: findLayer,
+        layerInfo: layerInfo,
+        metaOf: metaOf,
+        boundsOf: boundsOf,
+        readArea: readArea,
+        selectLayers: selectLayers,
+        deleteLayer: deleteLayer,
+        dataUrl: function (path) {
+          return DATA + path;
+        },
+        sessionToken: async function (path) {
+          var entry = await entryFor(path);
+          return lfs.createSessionToken(entry);
+        }
+      };
+    }
+  };
+}
+
+module.exports = { createHost: createHost };

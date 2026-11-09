@@ -1,0 +1,983 @@
+{
+ "dry_runs": [
+  {
+   "measured": "041",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 1
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 2,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 2
+    }
+   }
+  },
+  {
+   "measured": "042",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "referenceImages": [
+     "asset_fixtureCapture1024png"
+    ],
+    "mask": "asset_fixtureMask1024png",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 3,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 3
+    }
+   }
+  },
+  {
+   "measured": "043",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureCapture1024png",
+    "upscaleFactor": "2x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 10,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 10
+    }
+   }
+  },
+  {
+   "measured": "044",
+   "model_id": "model_851-labs-background-remover",
+   "body": {
+    "image": "asset_fixtureCapture1024png"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 1,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 1
+    }
+   }
+  },
+  {
+   "measured": "049",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 3,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 3
+    }
+   }
+  },
+  {
+   "measured": "050",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "referenceImages": [
+     "asset_fixtureCapture1024png"
+    ]
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 3,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 3
+    }
+   }
+  },
+  {
+   "measured": "051",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "referenceImages": [
+     "asset_fixtureCapture1024png"
+    ],
+    "mask": "asset_fixtureMask1024png"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 3,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 3
+    }
+   }
+  },
+  {
+   "measured": "052",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "referenceImages": [
+     "asset_fixtureCapture1024jpg"
+    ],
+    "mask": "asset_fixtureMask1024png"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 3,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 3
+    }
+   }
+  },
+  {
+   "measured": "053",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "referenceImages": [
+     "asset_fixtureBlank1024"
+    ],
+    "mask": "asset_fixtureMask1024png"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 3,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 3
+    }
+   }
+  },
+  {
+   "measured": "054",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "referenceImages": [
+     "asset_fixtureBlank256"
+    ]
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 3,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 3
+    }
+   }
+  },
+  {
+   "measured": "055",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "referenceImages": [
+     "asset_fixtureBlank2048"
+    ]
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 3,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 3
+    }
+   }
+  },
+  {
+   "measured": "056",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "referenceImages": [
+     "asset_fixtureBlank256",
+     "asset_fixtureBlank256",
+     "asset_fixtureBlank256"
+    ]
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 4,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 4
+    }
+   }
+  },
+  {
+   "measured": "057",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "referenceImages": [
+     "asset_fixtureCapture1024png",
+     "asset_fixtureBlank2048",
+     "asset_fixtureBlank256"
+    ]
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 4,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 4
+    }
+   }
+  },
+  {
+   "measured": "058",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "referenceImages": [
+     "asset_fixtureBlank256",
+     "asset_fixtureBlank256",
+     "asset_fixtureBlank256",
+     "asset_fixtureBlank256",
+     "asset_fixtureBlank256",
+     "asset_fixtureBlank256"
+    ]
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 6,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 6
+    }
+   }
+  },
+  {
+   "measured": "059",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 512,
+    "height": 512,
+    "quality": "low",
+    "numOutputs": 1
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 2,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 2
+    }
+   }
+  },
+  {
+   "measured": "060",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 256,
+    "height": 256,
+    "quality": "low",
+    "numOutputs": 1
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 2,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 2
+    }
+   }
+  },
+  {
+   "measured": "061",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "upscaleFactor": "2x"
+   },
+   "status": 400,
+   "response": {
+    "reason": "Input image is required"
+   }
+  },
+  {
+   "measured": "062",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureBlank256",
+    "upscaleFactor": "2x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 10,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 10
+    }
+   }
+  },
+  {
+   "measured": "063",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureBlank1024",
+    "upscaleFactor": "2x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 10,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 10
+    }
+   }
+  },
+  {
+   "measured": "064",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureCapture1024png",
+    "upscaleFactor": "2x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 10,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 10
+    }
+   }
+  },
+  {
+   "measured": "065",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureCapture1024jpg",
+    "upscaleFactor": "2x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 10,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 10
+    }
+   }
+  },
+  {
+   "measured": "066",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureBlank2048",
+    "upscaleFactor": "2x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 10,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 10
+    }
+   }
+  },
+  {
+   "measured": "067",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureBlank4096",
+    "upscaleFactor": "2x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 40,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 40
+    }
+   }
+  },
+  {
+   "measured": "068",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureBlank6144",
+    "upscaleFactor": "2x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 60,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 60
+    }
+   }
+  },
+  {
+   "measured": "069",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureBlank256",
+    "upscaleFactor": "4x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 10,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 10
+    }
+   }
+  },
+  {
+   "measured": "070",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureBlank6144",
+    "upscaleFactor": "6x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 165,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 165
+    }
+   }
+  },
+  {
+   "measured": "071",
+   "model_id": "model_851-labs-background-remover",
+   "body": {},
+   "status": 400,
+   "response": {
+    "reason": "Input image is required"
+   }
+  },
+  {
+   "measured": "072",
+   "model_id": "model_851-labs-background-remover",
+   "body": {
+    "image": "asset_fixtureBlank256"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 1,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 1
+    }
+   }
+  },
+  {
+   "measured": "073",
+   "model_id": "model_851-labs-background-remover",
+   "body": {
+    "image": "asset_fixtureCapture1024png"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 1,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 1
+    }
+   }
+  },
+  {
+   "measured": "074",
+   "model_id": "model_851-labs-background-remover",
+   "body": {
+    "image": "asset_fixtureBlank6144"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 1,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 1
+    }
+   }
+  },
+  {
+   "measured": "075",
+   "model_id": "model_photoroom-expand",
+   "body": {
+    "outputWidth": 1024,
+    "outputHeight": 1024
+   },
+   "status": 400,
+   "response": {
+    "reason": "Input image is required"
+   }
+  },
+  {
+   "measured": "076",
+   "model_id": "model_photoroom-expand",
+   "body": {
+    "image": "asset_fixtureBlank256",
+    "outputWidth": 512,
+    "outputHeight": 512
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 15,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 15
+    }
+   }
+  },
+  {
+   "measured": "077",
+   "model_id": "model_photoroom-expand",
+   "body": {
+    "image": "asset_fixtureBlank2048",
+    "outputWidth": 4096,
+    "outputHeight": 4096
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 15,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 15
+    }
+   }
+  },
+  {
+   "measured": "078",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 2,
+    "referenceImages": [
+     "asset_fixtureBlank256",
+     "asset_fixtureBlank256"
+    ]
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 4,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 4
+    }
+   }
+  },
+  {
+   "measured": "079",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 1,
+    "fooBar": 1
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 2,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 2
+    }
+   }
+  },
+  {
+   "measured": "080",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1024,
+    "height": 1024,
+    "quality": "ultra",
+    "numOutputs": 1
+   },
+   "status": 400,
+   "response": {
+    "reason": "Input quality must be one of the following values: auto, low, medium, high, xhigh, max"
+   }
+  },
+  {
+   "measured": "081",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 5000,
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 1
+   },
+   "status": 400,
+   "response": {
+    "reason": "Input width must be at most 3840"
+   }
+  },
+  {
+   "measured": "082",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1000,
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 1
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 2,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 2
+    }
+   }
+  },
+  {
+   "measured": "083",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "width": 1024,
+    "height": 1024,
+    "quality": "low"
+   },
+   "status": 400,
+   "response": {
+    "reason": "Input prompt is required"
+   }
+  },
+  {
+   "measured": "084",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 11
+   },
+   "status": 400,
+   "response": {
+    "reason": "Input numOutputs must be at most 10"
+   }
+  },
+  {
+   "measured": "085",
+   "model_id": "model_fixture-missing",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 1
+   },
+   "status": 404,
+   "response": {
+    "reason": "Model model_fixture-missing not found"
+   }
+  },
+  {
+   "measured": "086",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 1,
+    "referenceImages": [
+     "asset_fixtureMissing"
+    ]
+   },
+   "status": 404,
+   "response": {
+    "reason": "Asset asset_fixtureMissing not found"
+   }
+  },
+  {
+   "measured": "087",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 1,
+    "mask": "asset_fixtureMask1024png"
+   },
+   "status": 400,
+   "response": {
+    "reason": "A reference image is required when a mask is provided."
+   }
+  },
+  {
+   "measured": "088",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": "big",
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 1
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 2,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 2
+    }
+   }
+  },
+  {
+   "measured": "092",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "referenceImages": [
+     "asset_fixtureCapture1024jpg"
+    ],
+    "mask": "asset_fixtureMask1024png",
+    "numOutputs": 2,
+    "width": 1024,
+    "height": 1024,
+    "quality": "low"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 3,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 3
+    }
+   }
+  },
+  {
+   "measured": "096",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1000,
+    "height": 1000,
+    "quality": "low",
+    "numOutputs": 1
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 2,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 2
+    }
+   }
+  },
+  {
+   "measured": "101",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": "big",
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 1
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 2,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 2
+    }
+   }
+  },
+  {
+   "measured": "108",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureBlank256",
+    "upscaleFactor": "2x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 10,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 10
+    }
+   }
+  },
+  {
+   "measured": "112",
+   "model_id": "model_851-labs-background-remover",
+   "body": {
+    "image": "asset_fixtureBlank256"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 1,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 1
+    }
+   }
+  },
+  {
+   "measured": "116",
+   "model_id": "model_851-labs-background-remover",
+   "body": {
+    "image": "asset_fixtureBlank6144"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 1,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 1
+    }
+   }
+  },
+  {
+   "measured": "120",
+   "model_id": "model_topaz-image-upscale",
+   "body": {
+    "image": "asset_fixtureBlank6144",
+    "upscaleFactor": "2x"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 60,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 60
+    }
+   }
+  },
+  {
+   "measured": "052",
+   "model_id": "model_openai-gpt-image-2-5-flare",
+   "body": {
+    "prompt": "fixture prompt",
+    "width": 1024,
+    "height": 1024,
+    "quality": "low",
+    "numOutputs": 1,
+    "background": "transparent"
+   },
+   "status": 269,
+   "response": {
+    "creativeUnitsCost": 2,
+    "creativeUnitsDiscount": 0,
+    "costDetails": {
+     "custom-generation": 2
+    }
+   }
+  }
+ ],
+ "assets": {
+  "asset_fixtureCapture1024png": {
+   "width": 1024,
+   "height": 1024,
+   "mime": "image/png"
+  },
+  "asset_fixtureMask1024png": {
+   "width": 1024,
+   "height": 1024,
+   "mime": "image/png"
+  },
+  "asset_fixtureCapture1024jpg": {
+   "width": 1024,
+   "height": 1024,
+   "mime": "image/jpeg"
+  },
+  "asset_fixtureBlank1024": {
+   "width": 1024,
+   "height": 1024,
+   "mime": "image/png"
+  },
+  "asset_fixtureBlank256": {
+   "width": 256,
+   "height": 256,
+   "mime": "image/png"
+  },
+  "asset_fixtureBlank2048": {
+   "width": 2048,
+   "height": 2048,
+   "mime": "image/png"
+  },
+  "asset_fixtureBlank4096": {
+   "width": 4096,
+   "height": 4096,
+   "mime": "image/png"
+  },
+  "asset_fixtureBlank6144": {
+   "width": 6144,
+   "height": 6144,
+   "mime": "image/png"
+  }
+ },
+ "upload_shape": {
+  "mimeType": "image/png",
+  "kind": "image",
+  "source": "uploaded",
+  "privacy": "private",
+  "status": "success",
+  "metadata": {
+   "type": "uploaded",
+   "kind": "image"
+  }
+ }
+}

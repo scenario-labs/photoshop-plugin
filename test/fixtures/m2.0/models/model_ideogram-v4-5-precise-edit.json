@@ -1,0 +1,124 @@
+{
+  "model": {
+    "id": "model_ideogram-v4-5-precise-edit",
+    "name": "Ideogram 4.5 Precise Edit",
+    "shortDescription": "Edit an image in place and leave the rest untouched: swap text, recolor, add or remove objects, with an optional mask and up to four reference images (three with a mask).",
+    "type": "custom",
+    "privacy": "public",
+    "capabilities": [
+      "img2img"
+    ],
+    "tags": [
+      "Ideogram",
+      "editing",
+      "sc:third-party"
+    ],
+    "status": "trained",
+    "createdAt": "2026-09-28T08:48:14.757Z",
+    "inputs": [
+      {
+        "description": "Describe the edit to apply. Say what must stay unchanged for the strictest result.",
+        "label": "Prompt",
+        "maxLength": 10000,
+        "name": "prompt",
+        "costImpact": false,
+        "prompt": true,
+        "required": {
+          "always": true
+        },
+        "type": "string",
+        "promptSpark": true
+      },
+      {
+        "description": "The image to edit. The output keeps its size.",
+        "kind": "image",
+        "label": "Image",
+        "name": "image",
+        "costImpact": false,
+        "parent": true,
+        "required": {
+          "always": true
+        },
+        "type": "file"
+      },
+      {
+        "description": "Optional mask over the image. White marks the region to edit, black the region to keep.",
+        "kind": "image",
+        "label": "Mask",
+        "name": "mask",
+        "costImpact": false,
+        "parent": true,
+        "type": "file",
+        "maskFrom": "image"
+      },
+      {
+        "description": "Optional images that guide the edit (up to 4, or 3 with a mask), such as a pose skeleton or a product to insert.",
+        "kind": "image",
+        "label": "Reference Images",
+        "maxLength": 4,
+        "name": "referenceImages",
+        "costImpact": false,
+        "parent": true,
+        "type": "file_array"
+      },
+      {
+        "allowedValues": [
+          "very_low",
+          "low",
+          "medium",
+          "high"
+        ],
+        "description": "The quality-versus-speed tradeoff. High picks the best of several candidates: slower and costs more.",
+        "default": "medium",
+        "group": "Settings",
+        "label": "Quality",
+        "name": "quality",
+        "costImpact": true,
+        "type": "string"
+      },
+      {
+        "description": "How many images to generate (1-8). Each additional image adds to the cost.",
+        "default": 1,
+        "group": "Settings",
+        "label": "Image Count",
+        "max": 8,
+        "min": 1,
+        "name": "numOutputs",
+        "costImpact": true,
+        "step": 1,
+        "type": "number"
+      },
+      {
+        "description": "A number that locks in the randomness of the edit. Leave blank for a new result each time.",
+        "group": "Settings",
+        "label": "Seed",
+        "max": 2147483647,
+        "min": 0,
+        "name": "seed",
+        "costImpact": false,
+        "type": "number"
+      },
+      {
+        "description": "Screens outputs for copyrighted content. Flagged images are withheld. Adds latency.",
+        "default": false,
+        "group": "Settings",
+        "label": "Copyright Detection",
+        "name": "enableCopyrightDetection",
+        "costImpact": false,
+        "type": "boolean"
+      }
+    ],
+    "uiConfig": {
+      "selects": {
+        "quality": {
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "very_low": "Very Low"
+        }
+      }
+    },
+    "custom": true,
+    "source": "other"
+  }
+}

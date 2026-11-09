@@ -1,0 +1,95 @@
+{
+ "model": {
+  "id": "model_851-labs-background-remover",
+  "name": "851 Labs Background Remover",
+  "shortDescription": "Cut out any subject in one click. Open-source InSPyReNet gives clean edges on hair, fur, and glass, output as a transparent PNG, white, green screen, or blurred background.",
+  "type": "custom",
+  "privacy": "public",
+  "capabilities": [
+   "img2img"
+  ],
+  "tags": [
+   "851 Labs",
+   "Background Removal",
+   "Cutout",
+   "Green Screen",
+   "Product Photography",
+   "Transparent PNG",
+   "remove-background",
+   "tool"
+  ],
+  "status": "trained",
+  "createdAt": "2026-07-10T10:33:06.110Z",
+  "inputs": [
+   {
+    "description": "The image you want to remove the background from.",
+    "kind": "image",
+    "label": "Image",
+    "name": "image",
+    "costImpact": false,
+    "parent": true,
+    "required": {
+     "always": true
+    },
+    "type": "file"
+   },
+   {
+    "description": "Controls how sharply the subject is cut out. At 0, edges are soft and natural (good for hair or fur); higher values give a harder, cleaner-edged cutout.",
+    "default": 0,
+    "group": "Settings",
+    "label": "Threshold",
+    "max": 1,
+    "min": 0,
+    "name": "threshold",
+    "costImpact": false,
+    "step": 0.01,
+    "type": "number"
+   },
+   {
+    "description": "Removes the subject instead of the background, keeping the background only.",
+    "default": false,
+    "group": "Settings",
+    "label": "Reverse",
+    "name": "reverse",
+    "costImpact": false,
+    "type": "boolean"
+   },
+   {
+    "allowedValues": [
+     "rgba",
+     "map",
+     "green",
+     "white",
+     "blur",
+     "overlay"
+    ],
+    "description": "What to put behind the subject: Transparent (see-through), a solid color like white or green screen, a blurred version of the original, or an overlay. Map returns the cutout mask itself.",
+    "default": "rgba",
+    "group": "Settings",
+    "label": "Background Type",
+    "name": "backgroundType",
+    "costImpact": false,
+    "type": "string"
+   }
+  ],
+  "uiConfig": {
+   "selects": {
+    "format": {
+     "png": "PNG",
+     "jpg": "JPG",
+     "webp": "WebP"
+    },
+    "backgroundType": {
+     "rgba": "Transparent (RGBA)",
+     "blur": "Blur",
+     "green": "Green Screen",
+     "white": "White",
+     "overlay": "Overlay",
+     "map": "Map"
+    }
+   }
+  },
+  "custom": true,
+  "source": "other"
+ }
+}

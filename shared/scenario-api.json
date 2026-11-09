@@ -1,0 +1,67 @@
+{
+  "$comment": "How the plugin talks to Scenario's REST API (docs/spec/SPEC.md sections 2.3, 3.13 and 4). Data, not code, so a change on Scenario's side needs no code change. The Authorization header goes to base_url only. Measured live on 2026-10-19 with an Editor Project key unless a comment says otherwise.",
+  "base_url": "https://api.cloud.scenario.com/v1",
+  "sign_in": {
+    "$comment": "Save and test and Test connection run two free reads. auth_check needs a valid key (private models). projects returns the key's project with its name, id and keys; the plugin finds its own key by apiKeyId and keeps only the project name, the project id and its own role and scope. The same answer lists members' emails and every key id: it is never logged, stored or sent to the helper.",
+    "auth_check": { "path": "/models", "query": { "pageSize": "1" } },
+    "projects": { "path": "/projects", "page_size": 100, "max_pages": 5 }
+  },
+  "reads": {
+    "timeout_ms": 30000,
+    "retries": 2,
+    "retry_statuses": [429, 502, 503, 504],
+    "rate_limit_default_wait_s": 5,
+    "rate_limit_max_wait_s": 30,
+    "server_error_wait_s": 1
+  },
+  "paid": {
+    "$comment": "SPEC 6.1 items 8 and 9: the paid request is sent once, never retried, and times out after 60 s; a 429 pauses paid requests for Retry-After, else pause_default_s.",
+    "timeout_ms": 60000,
+    "pause_default_s": 60
+  },
+  "downloads": {
+    "$comment": "SPEC 6.4 item 3: results are fetched only from these origins, which are also in the plugin manifest, without any Authorization header. A result link on any other host stops the download (ResultUnreachable). Measured live 2026-10-19: result links are signed cdn.cloud.scenario.com links that answer 302 to the same host, then the file.",
+    "origins": ["https://cdn.cloud.scenario.com"]
+  },
+  "jobs": {
+    "$comment": "SPEC 6.2 step 5 and 3.11. GET /v1/jobs lists the project's jobs newest first, `pageSize` and `paginationToken` in, `jobs` and `nextPaginationToken` out; `createdAfter` cannot be combined with `status` or `type` (documented). Rows carry jobId, jobType (`custom` for model jobs), status, createdAt, billing and metadata.input with modelId and every valid input; a processed prompt is a text asset id whose text is in that asset's metadata.preview (measured live 2026-10-19). Unknown resolution lists from the claim time minus before_ms and keeps jobs created until the claim time plus after_ms; a scan that stops at max_pages is incomplete, so nothing is marked not sent from it.",
+    "path": "/jobs",
+    "page_size": 50,
+    "max_pages": 20,
+    "model_job_type": "custom",
+    "window": { "before_ms": 600000, "after_ms": 3600000 },
+    "check_valid_ms": 600000,
+    "poll_offline_ms": 15000
+  },
+  "blocked": {
+    "$comment": "SPEC 2.5 and 6.1 item 10: texts that mark a content-policy refusal, in a failed job's metadata.error or hint, or in a refused paid request's reason. None was measured in M2.0 (item 10), so the list is empty and every failure reads as failed; a text added here reads as blocked, matched without case as a substring.",
+    "texts": []
+  },
+  "uploads": {
+    "$comment": "SPEC 5.5: uploads go through POST /v1/assets as base64 only, so a file must stay under max_file_bytes; the request body cap is about 6 MiB (413 Request Too Long above it, measured live 2026-10-19). Captures that do not fit are read again with the long side 10% smaller, at most reduce_steps times.",
+    "max_file_bytes": 4000000,
+    "reduce_step": 0.9,
+    "reduce_steps": 12,
+    "min_long_side_px": 256
+  },
+  "roles_that_cannot_generate": {
+    "$comment": "Inferred from Scenario's description of the Reader role (read-only); a Reader key's dry run was not measured. Custom roles are not judged.",
+    "roles": ["reader"]
+  },
+  "known_errors": {
+    "$comment": "Error bodies carry `reason` (400, 403, 404) or `message` (401, 413), never a code. A known text (matched without case, as a substring) at its status gives an error type of shared/errors.json; any other answer is classified by status and shows Scenario's text. An unknown key answers 403, not 401.",
+    "texts": [
+      { "status": 403, "text": "Given APIKey does not exists", "type": "Unauthorized" }
+    ]
+  },
+  "links": {
+    "$comment": "Opened in the browser after Photoshop asks the person. Scenario documents no deep link to the API keys page (Settings > Organization > API Keys), so create_key opens the help center article that explains it.",
+    "create_key": "https://help.scenario.com/articles/2952168846-api-keys-and-scopes",
+    "plans": "https://app.scenario.com/settings/organization-plans",
+    "create_account": "https://app.scenario.com/",
+    "open_on_scenario": "https://app.scenario.com/",
+    "get_help": "https://help.scenario.com/",
+    "report_problem": "https://github.com/scenario-labs/photoshop-plugin/issues/new/choose",
+    "privacy": "https://github.com/scenario-labs/photoshop-plugin/blob/main/PRIVACY.md"
+  }
+}

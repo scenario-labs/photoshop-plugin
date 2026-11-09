@@ -1,0 +1,28 @@
+{
+ "model": {
+  "id": "model_JJ54CEwcWD5upeaCuLD83Ddh",
+  "name": "3D Platformer Environments 2.0",
+  "shortDescription": "A Flux 2 LoRA for 3D low-poly environments suited to platformers and adventure games, with geometric shapes, vibrant colors, and soft lighting.",
+  "type": "flux.2-dev-lora",
+  "privacy": "public",
+  "capabilities": [
+   "txt2img"
+  ],
+  "tags": [
+   "Flux 2",
+   "Flux.2 LoRA",
+   "Low Poly Style"
+  ],
+  "status": "trained",
+  "createdAt": "2026-03-11T14:34:29.338Z",
+  "concepts": [
+   {
+    "modelId": "model_JJ54CEwcWD5upeaCuLD83Ddh",
+    "scale": 0.8
+   }
+  ],
+  "parentModelId": "model_kLUg2VpxGWMm9cztbQPAbSmm",
+  "custom": false,
+  "source": "scenario"
+ }
+}

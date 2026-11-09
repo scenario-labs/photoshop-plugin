@@ -1,0 +1,111 @@
+{
+  "$comment": "Enums shared by the helper, the plugin and the tool catalog (docs/spec/MCP.md section 2, SPEC 2.5). Machine values are what agents send and receive; labels are what the panel shows. Job statuses use the Scenario Blender plugin's machine values where the meaning is the same. This build defines them; no tool of this build returns them yet.",
+  "job_status": [
+    {
+      "value": "uploading_inputs",
+      "label": "uploading inputs",
+      "final": false
+    },
+    {
+      "value": "awaiting_approval",
+      "label": "awaiting approval",
+      "final": false
+    },
+    {
+      "value": "submitting",
+      "label": "sending",
+      "final": false
+    },
+    {
+      "value": "queued",
+      "label": "queued",
+      "final": false
+    },
+    {
+      "value": "generating",
+      "label": "generating",
+      "final": false
+    },
+    {
+      "value": "cancel_requested",
+      "label": "canceling",
+      "final": false
+    },
+    {
+      "value": "succeeded",
+      "label": "finished on Scenario",
+      "final": false
+    },
+    {
+      "value": "downloading",
+      "label": "downloading results",
+      "final": false
+    },
+    {
+      "value": "download_failed",
+      "label": "download stopped",
+      "final": false
+    },
+    {
+      "value": "ready",
+      "label": "results saved",
+      "final": false
+    },
+    {
+      "value": "applying",
+      "label": "placing",
+      "final": false
+    },
+    {
+      "value": "apply_failed",
+      "label": "place failed",
+      "final": false
+    },
+    {
+      "value": "applied",
+      "label": "placed",
+      "final": true
+    },
+    {
+      "value": "failed",
+      "label": "Failed",
+      "final": true
+    },
+    {
+      "value": "blocked",
+      "label": "Blocked",
+      "final": true
+    },
+    {
+      "value": "canceled",
+      "label": "Canceled",
+      "final": true
+    },
+    {
+      "value": "not_sent",
+      "label": "Not sent",
+      "final": true
+    },
+    {
+      "value": "uncertain",
+      "label": "Unknown",
+      "final": false
+    }
+  ],
+  "lane": {
+    "v1": [
+      "image",
+      "edit",
+      "upscale",
+      "expand",
+      "remove_background"
+    ],
+    "v1_1": [
+      "vectorize",
+      "layers",
+      "segment",
+      "maps",
+      "video"
+    ]
+  }
+}

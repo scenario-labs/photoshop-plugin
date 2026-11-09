@@ -1,0 +1,36 @@
+{
+  "manifestVersion": 5,
+  "id": "com.scenario.photoshop",
+  "name": "Scenario",
+  "version": "0.7.1",
+  "main": "index.html",
+  "host": {
+    "app": "PS",
+    "minVersion": "26.9",
+    "data": { "apiVersion": 2, "loadEvent": "startup" }
+  },
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "scenarioPanel",
+      "label": { "default": "Scenario" },
+      "minimumSize": { "width": 280, "height": 420 },
+      "maximumSize": { "width": 2000, "height": 4000 },
+      "preferredDockedSize": { "width": 320, "height": 640 },
+      "preferredFloatingSize": { "width": 360, "height": 720 }
+    }
+  ],
+  "requiredPermissions": {
+    "network": {
+      "domains": [
+        "https://api.cloud.scenario.com",
+        "https://cdn.cloud.scenario.com",
+        "ws://localhost:9890",
+        "ws://127.0.0.1:9890"
+      ]
+    },
+    "localFileSystem": "request",
+    "launchProcess": { "schemes": ["https"], "extensions": [] },
+    "clipboard": "readAndWrite"
+  }
+}

@@ -1,0 +1,50 @@
+{
+ "model": {
+  "id": "model_MYqiLuoTmgR2F1hzXPX3BBgY",
+  "name": "Sleek 3D Characters",
+  "shortDescription": "Flux.1 LoRA for polished, stylized 3D character art. Generates warriors, robots, and wizards with expressive faces and detailed outfits.",
+  "type": "flux.1-composition",
+  "privacy": "public",
+  "capabilities": [
+   "txt2img",
+   "img2img",
+   "img2img_texture",
+   "txt2img_texture",
+   "controlnet",
+   "controlnet_texture",
+   "controlnet_img2img",
+   "controlnet_inpaint",
+   "inpaint",
+   "outpaint",
+   "txt2img_ip_adapter",
+   "img2img_ip_adapter",
+   "controlnet_ip_adapter"
+  ],
+  "tags": [
+   "3d",
+   "Flux.1 LoRA",
+   "cartoon",
+   "characters",
+   "sc:scenario",
+   "stylized"
+  ],
+  "status": "trained",
+  "createdAt": "2025-03-13T11:34:15.780Z",
+  "compliantModelIds": [
+   "flux.1-dev",
+   "flux.1-schnell"
+  ],
+  "concepts": [
+   {
+    "modelId": "model_MvBSFmTxgqq4R7UJDPBnQ1ZS",
+    "scale": 0.8
+   },
+   {
+    "modelId": "model_jSopiuVBC9oNFJu2hszHZRfT",
+    "scale": 0.8
+   }
+  ],
+  "custom": false,
+  "source": "scenario"
+ }
+}

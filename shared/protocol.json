@@ -1,0 +1,385 @@
+{
+  "$comment": "Link protocol between the scenario-photoshop helper and the Scenario UXP plugin (docs/spec/SPEC.md section 2.6). The token never travels: both sides prove they hold it, then every message is one text frame '<counter>.<mac>.<body>' whose MAC covers the body bytes as received.",
+  "protocol": 1,
+  "port": 9890,
+  "owner_hosts": [
+    "127.0.0.1",
+    "::1"
+  ],
+  "plugin_urls": [
+    "ws://localhost:9890",
+    "ws://127.0.0.1:9890"
+  ],
+  "peer_url_host": "127.0.0.1",
+  "allowed_host_headers": [
+    "localhost",
+    "127.0.0.1",
+    "[::1]"
+  ],
+  "plugin_origin": "file://",
+  "plugin_user_agent_prefix": "WebSocket++",
+  "token": {
+    "$comment": "Read from the environment variable when the agent client sets it, otherwise from the user-only token file the setup command writes. Never from a command argument.",
+    "env": "SCENARIO_PHOTOSHOP_TOKEN",
+    "bytes": 32,
+    "chars": 43,
+    "secure_storage_key": "scenario.pairing_token",
+    "file": {
+      "posix": "~/.config/scenario-photoshop/token",
+      "windows": "%APPDATA%\\scenario-photoshop\\token",
+      "file_mode": "0600",
+      "folder_mode": "0700"
+    }
+  },
+  "nonce_bytes": 32,
+  "sessions": {
+    "$comment": "SPEC 2.6, Client sessions. The owner gives every client (its own included) a session id of 16 random bytes (22 base64url characters), never reused, and new ids to every client each time a plugin link opens. The name is set once, from the client's first initialize, cut to 64 characters; until then the panel shows default_name. The plugin takes names from the clients list, never from a call, and refuses a call whose session is not in its current list.",
+    "id_bytes": 16,
+    "id_chars": 22,
+    "name_max_chars": 64,
+    "default_name": "Agent client"
+  },
+  "labels": {
+    "owner": "owner",
+    "plugin": "plugin",
+    "peer": "peer",
+    "session": "session",
+    "owner_to_client": "o2c",
+    "client_to_owner": "c2o"
+  },
+  "limits": {
+    "max_message_bytes": 10485760,
+    "max_handshake_message_bytes": 4096,
+    "handshake_ms": 2000,
+    "max_peers": 8,
+    "max_pending_handshakes": 16,
+    "ping_ms": 20000,
+    "idle_ms": 60000,
+    "dial_interval_ms": 3000,
+    "redial_after_drop_ms": 500,
+    "call_timeout_ms": 120000
+  },
+  "close_codes": {
+    "$comment": "plugin_busy: a second plugin passed the proof while another Photoshop holds the plugin link; it is refused, the first link stays.",
+    "normal": 1000,
+    "pairing_failed": 4001,
+    "version_mismatch": 4002,
+    "bad_message": 4003,
+    "handshake_timeout": 4004,
+    "plugin_busy": 4005,
+    "idle": 4006,
+    "shutting_down": 4007,
+    "too_many_peers": 4008
+  },
+  "handshake": {
+    "challenge": {
+      "type": "object",
+      "required": [
+        "t",
+        "protocol",
+        "role",
+        "nonce_o"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "t": {
+          "const": "challenge"
+        },
+        "protocol": {
+          "type": "integer"
+        },
+        "role": {
+          "const": "owner"
+        },
+        "nonce_o": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43
+        }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "required": [
+        "t",
+        "role",
+        "nonce_c",
+        "proof"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "t": {
+          "const": "proof"
+        },
+        "role": {
+          "enum": [
+            "plugin",
+            "peer"
+          ]
+        },
+        "nonce_c": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43
+        },
+        "proof": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43
+        }
+      }
+    },
+    "owner_proof": {
+      "type": "object",
+      "required": [
+        "t",
+        "proof_o"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "t": {
+          "const": "owner_proof"
+        },
+        "proof_o": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43
+        }
+      }
+    },
+    "pairing_failed": {
+      "$comment": "Owner to a connecting side whose proof failed, then close 4001. Unauthenticated: it only changes which error the receiver shows.",
+      "type": "object",
+      "required": [
+        "t"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "t": {
+          "const": "pairing_failed"
+        }
+      }
+    }
+  },
+  "byte_layout": {
+    "$comment": "HMAC-SHA-256 inputs. The proof key is the token's 32 raw bytes. Each input is the UTF-8 label, one 0x00 byte, then the fields shown, nonces as their 32 raw bytes (they travel as 43 base64url characters).",
+    "proof": "HMAC(token, role 0x00 nonce_o nonce_c), role is plugin or peer",
+    "proof_o": "HMAC(token, 'owner' 0x00 nonce_c nonce_o)",
+    "session_key": "K = HMAC(token, 'session' 0x00 nonce_o nonce_c)",
+    "message_mac": "HMAC(K, direction 0x00 counter_as_8_bytes_big_endian body_utf8_bytes_as_received), direction o2c or c2o"
+  },
+  "frame": {
+    "$comment": "Every message after the proofs: one WebSocket text frame '<counter>.<mac>.<body>'. counter: decimal, no leading zero, starts at 1 per direction and must increase on every frame. mac: 43 base64url characters. body: the JSON message, MAC'd over its bytes exactly as received and never re-serialized.",
+    "separator": ".",
+    "counter_pattern": "^[1-9][0-9]{0,15}$",
+    "mac_chars": 43
+  },
+  "messages": {
+    "hello": {
+      "$comment": "Owner to plugin (with the clients list) or owner to peer (without it).",
+      "type": "object",
+      "required": [
+        "t",
+        "protocol",
+        "helper_version"
+      ],
+      "properties": {
+        "t": {
+          "const": "hello"
+        },
+        "protocol": {
+          "type": "integer"
+        },
+        "helper_version": {
+          "type": "string"
+        },
+        "clients": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/client"
+          }
+        }
+      }
+    },
+    "welcome": {
+      "$comment": "Plugin to owner, answer to hello.",
+      "type": "object",
+      "required": [
+        "t",
+        "plugin_version",
+        "photoshop_version",
+        "os",
+        "catalog_hash",
+        "switches"
+      ],
+      "properties": {
+        "t": {
+          "const": "welcome"
+        },
+        "plugin_version": {
+          "type": "string"
+        },
+        "photoshop_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "os": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "catalog_hash": {
+          "type": "string"
+        },
+        "switches": {
+          "type": "object"
+        }
+      }
+    },
+    "clients": {
+      "$comment": "Owner to plugin: the whole list, sent whenever a session opens, closes or gets its name.",
+      "type": "object",
+      "required": [
+        "t",
+        "clients"
+      ],
+      "properties": {
+        "t": {
+          "const": "clients"
+        },
+        "clients": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/client"
+          }
+        }
+      }
+    },
+    "client_info": {
+      "$comment": "Peer to owner: the name its agent client gave at its first initialize. Sent once; later ones are ignored.",
+      "type": "object",
+      "required": [
+        "t",
+        "client_name"
+      ],
+      "properties": {
+        "t": {
+          "const": "client_info"
+        },
+        "client_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "call": {
+      "$comment": "Owner to plugin carries the caller's session; peer to owner does not (the owner adds the peer's session). No client name: the plugin takes names from the clients list.",
+      "type": "object",
+      "required": [
+        "t",
+        "id",
+        "tool",
+        "args"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "t": {
+          "const": "call"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "session": {
+          "type": "string",
+          "minLength": 22,
+          "maxLength": 22
+        },
+        "tool": {
+          "type": "string"
+        },
+        "args": {
+          "type": "object"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "required": [
+        "t",
+        "id",
+        "ok"
+      ],
+      "properties": {
+        "t": {
+          "const": "result"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "result": {},
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "ping": {
+      "type": "object",
+      "required": [
+        "t"
+      ],
+      "properties": {
+        "t": {
+          "const": "ping"
+        }
+      }
+    },
+    "pong": {
+      "type": "object",
+      "required": [
+        "t"
+      ],
+      "properties": {
+        "t": {
+          "const": "pong"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "client": {
+      "type": "object",
+      "required": [
+        "session",
+        "client_name",
+        "connected_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "type": "string",
+          "minLength": 22,
+          "maxLength": 22
+        },
+        "client_name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
+        },
+        "connected_at": {
+          "type": "string",
+          "description": "ISO 8601, when this client connected to the owner."
+        }
+      }
+    }
+  }
+}

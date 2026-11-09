@@ -1,0 +1,99 @@
+{
+ "model": {
+  "id": "model_photoroom-expand",
+  "name": "Photoroom Expand",
+  "shortDescription": "Expand any image's background to a new canvas size with AI-generated fill. Original content stays intact, new areas blend seamlessly.",
+  "type": "custom",
+  "privacy": "public",
+  "capabilities": [
+   "img2img"
+  ],
+  "tags": [
+   "Photoroom",
+   "expand",
+   "image",
+   "reframe",
+   "sc:third-party",
+   "tool"
+  ],
+  "status": "trained",
+  "createdAt": "2025-12-18T12:34:04.925Z",
+  "inputs": [
+   {
+    "description": "Input image file",
+    "kind": "image",
+    "label": "Image",
+    "name": "image",
+    "costImpact": false,
+    "parent": true,
+    "required": {
+     "always": true
+    },
+    "type": "file"
+   },
+   {
+    "description": "Output width in pixels",
+    "default": 1024,
+    "group": "Settings",
+    "label": "Output Width",
+    "max": 4096,
+    "min": 1,
+    "name": "outputWidth",
+    "costImpact": false,
+    "required": {
+     "always": true
+    },
+    "step": 1,
+    "type": "number"
+   },
+   {
+    "description": "Output height in pixels",
+    "default": 1024,
+    "group": "Settings",
+    "label": "Output Height",
+    "max": 4096,
+    "min": 1,
+    "name": "outputHeight",
+    "costImpact": false,
+    "required": {
+     "always": true
+    },
+    "step": 1,
+    "type": "number"
+   },
+   {
+    "description": "Seed for expand generation",
+    "group": "Settings",
+    "label": "Seed",
+    "min": 0,
+    "name": "seed",
+    "costImpact": false,
+    "type": "number"
+   }
+  ],
+  "uiConfig": {
+   "selects": {
+    "keepExistingTransparency": {
+     "auto": "Auto",
+     "never": "Never"
+    },
+    "outputFormat": {
+     "jpg": "JPG",
+     "png": "PNG",
+     "webp": "WebP"
+    },
+    "outputSize": {
+     "auto": "Auto",
+     "cropped_subject": "Cropped Subject",
+     "original_image": "Original Image"
+    },
+    "referenceBox": {
+     "original_image": "Original Image",
+     "subject_box": "Subject Box"
+    }
+   }
+  },
+  "custom": true,
+  "source": "other"
+ }
+}

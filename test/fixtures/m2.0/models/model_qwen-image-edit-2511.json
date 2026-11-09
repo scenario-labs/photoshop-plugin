@@ -1,0 +1,221 @@
+{
+ "model": {
+  "id": "model_qwen-image-edit-2511",
+  "name": "Qwen Edit 2511",
+  "shortDescription": "Qwen Edit 2511 by Alibaba edits images from plain text instructions. Add, remove, or restyle elements, with up to 6 LoRA styles and multi-reference image support.",
+  "type": "custom",
+  "privacy": "public",
+  "capabilities": [
+   "img2img"
+  ],
+  "tags": [
+   "Qwen",
+   "editing",
+   "sc:third-party"
+  ],
+  "status": "trained",
+  "createdAt": "2026-03-04T09:43:27.317Z",
+  "inputs": [
+   {
+    "description": "A single LoRA model ID. If provided, it will be added to the loras array.",
+    "modelTypes": [
+     "qwen-image-edit-2511-lora"
+    ],
+    "default": "",
+    "label": "LoRA Model",
+    "name": "modelId",
+    "costImpact": false,
+    "type": "model"
+   },
+   {
+    "description": "List of one or more LoRA model IDs. If modelId is a LoRA and this is not provided, it will be automatically populated with the modelId.",
+    "modelTypes": [
+     "qwen-image-edit-2511-lora"
+    ],
+    "default": [],
+    "label": "Qwen LoRA",
+    "maxLength": 6,
+    "name": "loras",
+    "costImpact": false,
+    "type": "model_array"
+   },
+   {
+    "description": "Scales for the LoRA weights",
+    "label": "LoRA Scale",
+    "max": 2,
+    "min": 0,
+    "name": "lorasScale",
+    "costImpact": false,
+    "step": 0.05,
+    "type": "number_array"
+   },
+   {
+    "description": "Text prompt for image editing",
+    "label": "Instructions",
+    "maxLength": 2048,
+    "name": "prompt",
+    "costImpact": false,
+    "prompt": true,
+    "required": {
+     "always": true
+    },
+    "type": "string",
+    "promptSpark": true
+   },
+   {
+    "description": "Reference images for editing",
+    "kind": "image",
+    "label": "Reference Images",
+    "name": "referenceImages",
+    "costImpact": true,
+    "parent": true,
+    "required": {
+     "always": true
+    },
+    "type": "file_array"
+   },
+   {
+    "description": "Number of images to generate",
+    "default": 1,
+    "group": "Settings",
+    "label": "Image Count",
+    "max": 4,
+    "min": 1,
+    "name": "numOutputs",
+    "costImpact": true,
+    "step": 1,
+    "type": "number"
+   },
+   {
+    "description": "The number of denoising steps",
+    "default": 28,
+    "group": "Settings",
+    "label": "Inference Steps",
+    "max": 100,
+    "min": 1,
+    "name": "numInferenceSteps",
+    "costImpact": true,
+    "step": 1,
+    "type": "number"
+   },
+   {
+    "description": "The width of the generated images, must be a multiple of 16",
+    "group": "Settings",
+    "label": "Width",
+    "max": 2048,
+    "min": 128,
+    "name": "width",
+    "costImpact": false,
+    "step": 16,
+    "type": "number"
+   },
+   {
+    "description": "The height of the generated images, must be a multiple of 16",
+    "group": "Settings",
+    "label": "Height",
+    "max": 2048,
+    "min": 128,
+    "name": "height",
+    "costImpact": false,
+    "step": 16,
+    "type": "number"
+   },
+   {
+    "description": "Controls how closely the generated image follows the prompt",
+    "default": 4,
+    "group": "Settings",
+    "label": "Guidance",
+    "max": 10,
+    "min": 1,
+    "name": "guidance",
+    "costImpact": false,
+    "step": 0.1,
+    "type": "number"
+   },
+   {
+    "description": "Applies a 8-step Lightning acceleration LoRA during generation. Speeds up generation at the cost of some quality.",
+    "default": false,
+    "group": "Settings",
+    "label": "Go Fast",
+    "name": "goFast",
+    "costImpact": true,
+    "type": "boolean"
+   },
+   {
+    "description": "Used to reproduce previous results",
+    "group": "Settings",
+    "label": "Seed",
+    "max": 2147483647,
+    "min": 0,
+    "name": "seed",
+    "costImpact": false,
+    "type": "number"
+   }
+  ],
+  "uiConfig": {
+   "lorasComponent": {
+    "label": "Model",
+    "modelIdInput": "modelId",
+    "modelInput": "loras",
+    "scaleInput": "lorasScale"
+   },
+   "resolutionComponent": {
+    "heightInput": "height",
+    "label": "Dimensions",
+    "presets": [
+     {
+      "label": "Auto (match input)"
+     },
+     {
+      "height": 768,
+      "label": "16:9 (1344x768)",
+      "width": 1344
+     },
+     {
+      "height": 832,
+      "label": "3:2 (1216x832)",
+      "width": 1216
+     },
+     {
+      "height": 832,
+      "label": "4:3 (1104x832)",
+      "width": 1104
+     },
+     {
+      "height": 896,
+      "label": "5:4 (1088x896)",
+      "width": 1088
+     },
+     {
+      "height": 1024,
+      "label": "1:1 (1024x1024)",
+      "width": 1024
+     },
+     {
+      "height": 1088,
+      "label": "4:5 (896x1088)",
+      "width": 896
+     },
+     {
+      "height": 1104,
+      "label": "3:4 (832x1104)",
+      "width": 832
+     },
+     {
+      "height": 1216,
+      "label": "2:3 (832x1216)",
+      "width": 832
+     },
+     {
+      "height": 1344,
+      "label": "9:16 (768x1344)",
+      "width": 768
+     }
+    ],
+    "widthInput": "width"
+   }
+  },
+  "custom": true,
+  "source": "other"
+ }
+}

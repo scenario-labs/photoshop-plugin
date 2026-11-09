@@ -1,0 +1,6 @@
+# The web app rejects automated clients (429).
+^https://app\.scenario\.com
+# The MCP endpoint answers only authenticated JSON-RPC POSTs.
+^https://mcp\.scenario\.com/
+# These repository pages redirect to GitHub login when unauthenticated.
+^https://github\.com/scenario-labs/photoshop-plugin/(issues/new|security/advisories/new)

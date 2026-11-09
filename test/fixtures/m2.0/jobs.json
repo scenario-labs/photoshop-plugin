@@ -1,0 +1,327 @@
+{
+  "$comment": "Paid generation answers measured live on 2026-10-19 (M2.0), scrubbed: job, project, author and error ids replaced by short fixture ids, asset ids by fixture names, signed links by {CDN}/...?{SIGNED}, one long dash by a comma. Status, billing, metadata and timing fields are as measured.",
+  "submit_image": {
+    "status": 200,
+    "body": {
+      "job": {
+        "jobId": "job_fx1",
+        "jobType": "custom",
+        "billing": {
+          "cuCost": 2,
+          "cuDiscount": 0
+        },
+        "metadata": {
+          "input": {
+            "modelId": "model_openai-gpt-image-2-5-flare",
+            "prompt": "A small brass lantern on a wooden table",
+            "width": 1000,
+            "height": 1000,
+            "quality": "low",
+            "numOutputs": 1
+          },
+          "assetIds": []
+        },
+        "ownerId": "proj_fx",
+        "authorId": "apiu_fx",
+        "createdAt": "2026-10-19T07:17:06.160Z",
+        "updatedAt": "2026-10-19T07:17:06.821Z",
+        "status": "in-progress",
+        "statusHistory": [
+          {
+            "status": "pending",
+            "date": "2026-10-19T07:17:06.160Z"
+          },
+          {
+            "status": "in-progress",
+            "date": "2026-10-19T07:17:06.821Z"
+          }
+        ],
+        "progress": 0
+      },
+      "creativeUnitsCost": 2,
+      "creativeUnitsDiscount": 0,
+      "costDetails": {
+        "custom-generation": 2
+      }
+    }
+  },
+  "final_image": {
+    "status": 200,
+    "body": {
+      "job": {
+        "jobId": "job_fx1",
+        "jobType": "custom",
+        "billing": {
+          "cuCost": 2,
+          "cuDiscount": 0
+        },
+        "metadata": {
+          "input": {
+            "modelId": "model_openai-gpt-image-2-5-flare",
+            "height": 1000,
+            "numOutputs": 1,
+            "prompt": "A small brass lantern on a wooden table",
+            "quality": "low",
+            "width": 1000
+          },
+          "assetIds": [
+            "asset_fixtureImageTake"
+          ]
+        },
+        "ownerId": "proj_fx",
+        "authorId": "apiu_fx",
+        "createdAt": "2026-10-19T07:17:06.160Z",
+        "updatedAt": "2026-10-19T07:17:18.451Z",
+        "status": "success",
+        "statusHistory": [
+          {
+            "status": "pending",
+            "date": "2026-10-19T07:17:06.160Z"
+          },
+          {
+            "status": "in-progress",
+            "date": "2026-10-19T07:17:06.821Z"
+          },
+          {
+            "status": "success",
+            "date": "2026-10-19T07:17:18.451Z"
+          }
+        ],
+        "progress": 1
+      }
+    }
+  },
+  "submit_edit_two_takes": {
+    "status": 200,
+    "body": {
+      "job": {
+        "jobId": "job_fx2",
+        "jobType": "custom",
+        "billing": {
+          "cuCost": 3,
+          "cuDiscount": 0
+        },
+        "metadata": {
+          "input": {
+            "modelId": "model_openai-gpt-image-2-5-flare",
+            "prompt": "Make the owl's eye ice blue",
+            "referenceImages": [
+              "asset_fixtureReference"
+            ],
+            "mask": "asset_fixtureMask",
+            "numOutputs": 2,
+            "width": 1024,
+            "height": 1024,
+            "quality": "low"
+          },
+          "assetIds": []
+        },
+        "ownerId": "proj_fx",
+        "authorId": "apiu_fx",
+        "createdAt": "2026-10-19T07:16:23.132Z",
+        "updatedAt": "2026-10-19T07:16:23.278Z",
+        "status": "in-progress",
+        "statusHistory": [
+          {
+            "status": "pending",
+            "date": "2026-10-19T07:16:23.132Z"
+          },
+          {
+            "status": "in-progress",
+            "date": "2026-10-19T07:16:23.278Z"
+          }
+        ],
+        "progress": 0
+      },
+      "creativeUnitsCost": 3,
+      "creativeUnitsDiscount": 0,
+      "costDetails": {
+        "custom-generation": 3
+      }
+    }
+  },
+  "final_edit_two_takes": {
+    "status": 200,
+    "body": {
+      "job": {
+        "jobId": "job_fx2",
+        "jobType": "custom",
+        "billing": {
+          "cuCost": 3,
+          "cuDiscount": 0
+        },
+        "metadata": {
+          "input": {
+            "modelId": "model_openai-gpt-image-2-5-flare",
+            "height": 1024,
+            "mask": "asset_fixtureMask",
+            "numOutputs": 2,
+            "prompt": "Make the owl's eye ice blue",
+            "quality": "low",
+            "referenceImages": [
+              "asset_fixtureReference"
+            ],
+            "width": 1024
+          },
+          "assetIds": [
+            "asset_fixtureEditTakeOne",
+            "asset_fixtureEditTakeTwo"
+          ]
+        },
+        "ownerId": "proj_fx",
+        "authorId": "apiu_fx",
+        "createdAt": "2026-10-19T07:16:23.132Z",
+        "updatedAt": "2026-10-19T07:16:37.200Z",
+        "status": "success",
+        "statusHistory": [
+          {
+            "status": "pending",
+            "date": "2026-10-19T07:16:23.132Z"
+          },
+          {
+            "status": "in-progress",
+            "date": "2026-10-19T07:16:23.278Z"
+          },
+          {
+            "status": "success",
+            "date": "2026-10-19T07:16:37.200Z"
+          }
+        ],
+        "progress": 1
+      }
+    }
+  },
+  "paid_bad_enum": {
+    "status": 400,
+    "body": {
+      "reason": "Input quality must be one of the following values: auto, low, medium, high, xhigh, max"
+    }
+  },
+  "final_failure": {
+    "status": 200,
+    "body": {
+      "job": {
+        "jobId": "job_fx3",
+        "jobType": "custom",
+        "billing": {
+          "cuCost": 2,
+          "cuDiscount": 0
+        },
+        "metadata": {
+          "input": {
+            "modelId": "model_openai-gpt-image-2-5-flare",
+            "height": 1024,
+            "numOutputs": 1,
+            "prompt": "A small brass lantern on a wooden table",
+            "quality": "low"
+          },
+          "assetIds": [],
+          "error": "An internal error occurred. Please contact support and provide this id:  error_fx",
+          "hint": "Ensure that both width and height are either specified together or both left empty, you cannot set one without the other. Retry your request with matching dimension settings."
+        },
+        "ownerId": "proj_fx",
+        "authorId": "apiu_fx",
+        "createdAt": "2026-10-19T07:17:37.776Z",
+        "updatedAt": "2026-10-19T07:17:40.048Z",
+        "status": "failure",
+        "statusHistory": [
+          {
+            "status": "pending",
+            "date": "2026-10-19T07:17:37.776Z"
+          },
+          {
+            "status": "in-progress",
+            "date": "2026-10-19T07:17:37.934Z"
+          },
+          {
+            "status": "failure",
+            "date": "2026-10-19T07:17:40.048Z"
+          }
+        ],
+        "progress": 1
+      }
+    }
+  },
+  "cancel_refused": {
+    "status": 400,
+    "body": {
+      "reason": "Cannot cancel this type of job. Action not permitted."
+    }
+  },
+  "result_record": {
+    "status": 200,
+    "body": {
+      "asset": {
+        "id": "asset_fixtureEditTakeOne",
+        "url": "{CDN}/assets-transform/asset_fixtureEditTakeOne?{SIGNED}",
+        "mimeType": "image/png",
+        "metadata": {
+          "type": "image-prompt-editing",
+          "referenceImages": [
+            "asset_fixtureReference"
+          ],
+          "rootParentId": "asset_fixtureReference",
+          "modelId": "model_openai-gpt-image-2-5-flare",
+          "kind": "image",
+          "modelType": "custom",
+          "numOutputs": 2,
+          "parentId": "asset_fixtureReference",
+          "quality": "low",
+          "parentJobId": "job_fx2",
+          "width": 1024,
+          "baseModelId": "custom",
+          "prompt": "asset_fixturePromptText",
+          "height": 1024,
+          "mask": "asset_fixtureMask",
+          "size": 2092603
+        },
+        "properties": {
+          "size": 2092603,
+          "width": 1024,
+          "height": 1024
+        },
+        "kind": "image",
+        "source": "image-prompt-editing",
+        "ownerId": "proj_fx",
+        "authorId": "apiu_fx",
+        "description": "A close up portrait shows an owl with dark brown feathers white brow markings and striking bright blue eyes staring directly forward with a sharp beak.",
+        "automaticCaptioning": "A close up portrait shows an owl with dark brown feathers white brow markings and striking bright blue eyes staring directly forward with a sharp beak.",
+        "createdAt": "2026-10-19T07:16:37.153Z",
+        "updatedAt": "2026-10-19T07:17:01.681Z",
+        "privacy": "private",
+        "tags": [],
+        "collectionIds": [],
+        "nsfw": [],
+        "status": "success",
+        "editCapabilities": [
+          "REMOVE_BACKGROUND",
+          "REFINE",
+          "PIXELATE",
+          "PROMPT_EDITING",
+          "UPSCALE",
+          "DETECTION",
+          "VECTORIZATION",
+          "SEGMENTATION",
+          "REFRAME",
+          "GENERATIVE_FILL"
+        ]
+      }
+    }
+  },
+  "redirect_chain": [
+    {
+      "status": 302,
+      "content_type": "application/json",
+      "location_query_param_names": [
+        "Key-Pair-Id",
+        "Policy",
+        "Signature"
+      ]
+    },
+    {
+      "status": 200,
+      "content_type": "image/png",
+      "location_query_param_names": null
+    }
+  ]
+}
