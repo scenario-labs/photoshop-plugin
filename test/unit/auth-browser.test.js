@@ -419,6 +419,19 @@ test("after a restart, signing out of a browser project that is not current stil
   assert.ok(![...s.host.secure.keys()].some((k) => k.startsWith(SESSION_ENTRY_PREFIX)));
 });
 
+test("the same person signing in again revokes the refresh token their saved sign-in held", async (t) => {
+  const s = await setup(t, { teams: [{ id: "team_solo", name: "Solo", projects: [{ id: "project_only", name: "Only" }] }] });
+  await s.accounts.load();
+  await s.auth.signInWithBrowser({});
+  const sid = s.auth.current().session;
+  const first = JSON.parse(s.host.secure.get(SESSION_ENTRY_PREFIX + sid)).refresh_token;
+  await s.auth.signInWithBrowser({});
+  const second = JSON.parse(s.host.secure.get(SESSION_ENTRY_PREFIX + sid)).refresh_token;
+  assert.notEqual(second, first);
+  assert.deepEqual(s.idp.state.revoked, [first]);
+  assert.equal(s.auth.list().length, 1);
+});
+
 test("a stored sign-in damaged or for another person is dropped at load", async (t) => {
   const s = await setup(t, { teams: [{ id: "team_solo", name: "Solo", projects: [{ id: "project_only", name: "Only" }] }] });
   await s.auth.signInWithBrowser({});

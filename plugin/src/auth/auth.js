@@ -31,6 +31,7 @@ var API = require("../../../shared/scenario-api.json");
 var split = require("./split.js");
 var clientMod = require("../scenario/client.js");
 var oauthMod = require("./oauth.js");
+var accountsMod = require("./accounts.js");
 
 var STEPS = 2;
 // Error types that end a check at once, with the state the panel shows.
@@ -425,6 +426,9 @@ function createAuth(o) {
 
   async function useChoice(signIn, choice, session, tokens) {
     var account;
+    // The same person signing in again replaces their saved sign-in: the
+    // refresh token it held is revoked once the new one is saved.
+    var previous = await accounts.refreshTokenOf(accountsMod.sessionId(signIn.issuer, signIn.subject));
     try {
       if (session) signIn.refresh_token = session.refreshToken();
       // The sign-in's access token is still valid: the first request needs no refresh.
@@ -434,6 +438,7 @@ function createAuth(o) {
       return fail("storage_failed", null);
     }
     pending = null;
+    if (previous && previous !== signIn.refresh_token && oauth) await oauth.revoke(previous);
     log("browser sign-in: saved (" + accounts.list().length + " project(s) saved)");
     return { ok: true, account: account };
   }
