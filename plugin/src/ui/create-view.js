@@ -10,6 +10,7 @@
 
 var icons = require("./icons.js");
 var thumbs = require("./thumbs.js");
+var promptSize = require("./prompt-size.js");
 
 var TILE_GAP = 8;
 var REFINE_TIP = "Keeps this take, then edits it";
@@ -1546,6 +1547,9 @@ function createCreateView(doc, ctl, o) {
     onClick(jobsHit, function () {
       togglePop(jobsHit, "jobs");
     });
+
+  // The grip on the composer's top edge sets the prompt box's height.
+  promptSize.attachPromptSize(doc, o.global);
 
   ctl.onChange(render);
   // A resized panel or dock fits the middle again. Only a real change of

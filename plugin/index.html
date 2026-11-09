@@ -119,6 +119,8 @@
 
         <!-- The composer, pinned: references, prompt, chips, the button. -->
         <div class="composer" id="composer">
+          <!-- Drag to change the prompt box's height (ui/prompt-size.js). -->
+          <div class="cgrip" id="composer-grip" title="Drag to change the prompt's height. Double-click to reset it."><div class="bar"></div></div>
           <!-- F14: an agent's multi-step plan, only while one waits. -->
           <div class="agentcard" id="plan-card">
             <div class="who"><span class="dot on"></span><span id="plan-who"></span></div>
@@ -157,7 +159,7 @@
             <div class="noprompt" id="noprompt"><span class="ico" data-icon="info" data-size="14"></span><span class="ct" id="noprompt-text"></span></div>
             <!-- The prompt box: the field, then Suggest at its bottom right. -->
             <div class="pbox" id="pbox">
-              <div class="pfield"><sp-textarea quiet class="prompt" id="prompt" placeholder="Describe the image"></sp-textarea><div class="prompt-ghost" id="prompt-ghost"></div></div>
+              <div class="pfield" id="pfield"><sp-textarea quiet class="prompt" id="prompt" placeholder="Describe the image"></sp-textarea><div class="prompt-ghost" id="prompt-ghost"></div></div>
               <div class="pfoot" id="pfoot"></div>
             </div>
             <div class="cchips" id="cchips"></div>

@@ -183,7 +183,8 @@ test("the creation panel's controls are plain elements: no sp-picker or sp-actio
   const main = section("view-main");
   const own = main.slice(0, main.indexOf('id="view-picker"'));
   assert.ok(!/<sp-picker|<sp-action-button|<sp-button|<sp-menu/.test(own), "chips, menus and the button are divs (sp-picker shows no value, sp-action-button stacks icon and label)");
-  assert.ok(/<div class="pfield"><sp-textarea quiet class="prompt" id="prompt"/.test(own), "the prompt stays a Spectrum text area, quiet, inside the box that draws the field");
+  assert.ok(/<div class="pfield" id="pfield"><sp-textarea quiet class="prompt" id="prompt"/.test(own), "the prompt stays a Spectrum text area, quiet, inside the box that draws the field");
+  assert.ok(/<div class="composer" id="composer">\s*<!--[^>]*-->\s*<div class="cgrip" id="composer-grip"/.test(own), "the grip that sets the prompt's height is the composer's first child, on its top edge");
   assert.ok(own.indexOf('id="prompt-ghost"') > own.indexOf('id="prompt"') && own.indexOf('id="prompt-ghost"') < own.indexOf('id="pfoot"'), "the stand-in takes the field's place, above Suggest");
   assert.equal(R[".cp .acts"]["flex-wrap"], "wrap", "action chips wrap to a second row at narrow widths");
   assert.equal(R[".cp .chip"]["height"], "24px");
