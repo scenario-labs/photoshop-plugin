@@ -432,6 +432,19 @@ test("the same person signing in again revokes the refresh token their saved sig
   assert.equal(s.auth.list().length, 1);
 });
 
+test("a sign-in cancelled while its teams are read saves nothing and revokes its token", async (t) => {
+  const s = await setup(t, { teams: [{ id: "team_solo", name: "Solo", projects: [{ id: "project_only", name: "Only" }] }] });
+  await s.accounts.load();
+  const teams = s.box.teams;
+  // Back or Cancel lands while GET /v1/teams is in flight.
+  Object.defineProperty(s.box, "teams", { get: () => (s.auth.cancelBrowser(), teams) });
+  const out = await s.auth.signInWithBrowser({});
+  assert.equal(out.state, "cancelled");
+  assert.equal(s.auth.list().length, 0);
+  assert.equal(s.idp.state.revoked.length, 1);
+  assert.ok(![...s.host.secure.keys()].some((k) => k.startsWith(SESSION_ENTRY_PREFIX)));
+});
+
 test("a stored sign-in damaged or for another person is dropped at load", async (t) => {
   const s = await setup(t, { teams: [{ id: "team_solo", name: "Solo", projects: [{ id: "project_only", name: "Only" }] }] });
   await s.auth.signInWithBrowser({});

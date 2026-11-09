@@ -397,6 +397,11 @@ function createAuth(o) {
         var f = browserFail(e, "browser_failed");
         return f.state === "session_ended" ? fail("browser_failed", e, { scenario_message: (e && e.message) || null }) : f;
       }
+      // Left with Back or Cancel while the teams were read: nothing is saved.
+      if (me.cancelled) {
+        await oauth.revoke(latest);
+        return { ok: false, state: "cancelled", type: null, scenario_message: null };
+      }
       var signIn = { issuer: oauth.issuer, client_id: oauth.target.client_id, subject: tokens.subject, email: tokens.email || null, refresh_token: latest };
       var choices = choicesOf(teams);
       if (!choices.length) {
