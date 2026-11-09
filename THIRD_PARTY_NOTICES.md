@@ -4,7 +4,13 @@ The UXP plugin (`plugin/`) has no third-party code: SHA-256, HMAC, UTF-8, base64
 
 The helper (`helper/`, published as `@scenario-labs/photoshop-mcp`) depends on one package at run time. The tests use only Node's built-in modules.
 
-## ws 8.22.0
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:1e9f8956576079ef677657695004791030e504618013349f83bd7ae2c4597c97 -->
+
+## ws 8.22.1
+
+<!-- /coderabbit-ai-generated:v1 -->
 
 WebSocket client and server for Node.js, used by the helper for the link to the plugin. https://github.com/websockets/ws
 
