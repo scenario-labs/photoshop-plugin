@@ -33,6 +33,7 @@ Claims here are marked *verified live* (in Photoshop), *tested automated* (Node,
 | `test/fixtures/m2.0/` | Catalog rows, model records, price-check answers and paid-job answers (`jobs.json`) recorded from the live API on 2026-10-19, with account ids and links removed (`test/unit/png-fixtures.test.js` checks this) |
 | `test/vectors/pairing.json` | Known-answer vectors for the proofs, the session key and two frames |
 | `test/live/` | Manual checks against a running Photoshop; not part of `npm test` |
+| `site/` | The photoshop.scenario.com page, published by `.github/workflows/pages.yml` |
 
 ## Commands
 
@@ -48,7 +49,9 @@ npm run package:dev    # build/scenario-photoshop-0.7.1-dev.ccx
 npm run handbook       # build/handbook/ from the docs (PDF through headless Chrome; --no-pdf skips it)
 ```
 
-**The handbook** (`tools/handbook/`) is generated from README.md, docs/USER_GUIDE.md, docs/MCP.md, docs/KNOWN_LIMITATIONS.md, PRIVACY.md, SECURITY.md and CHANGELOG.md; the chapter list is at the top of `tools/handbook/build.js`. Edit the docs, never the output. The build fails on a link or picture it cannot resolve, an em dash, an address other than support@scenario.com, a machine path or a bare "MCP". The site is meant for photoshop.scenario.com (the build writes `CNAME`); the Pages workflow waits, disabled, in `tools/handbook/pages.yml`, with the steps to turn it on.
+**The handbook** (`tools/handbook/`) is generated from README.md, docs/USER_GUIDE.md, docs/MCP.md, docs/KNOWN_LIMITATIONS.md, PRIVACY.md, SECURITY.md and CHANGELOG.md; the chapter list is at the top of `tools/handbook/build.js`. Edit the docs, never the output. The build fails on a link or picture it cannot resolve, an em dash, an address other than support@scenario.com, a machine path or a bare "MCP". Its own Pages workflow waits, disabled, in `tools/handbook/pages.yml`.
+
+**The site** photoshop.scenario.com is the static page in `site/` (`index.html`, `CNAME`, `assets/`: pictures, the two example films, the PDF guide and its page images). `.github/workflows/pages.yml` publishes it by hand from main, after `npm run lint` and `node test/run.js site-page` (every file the page links to is in `site/`); the steps before the first run are at the top of that file.
 
 `npm test` and `npm run lint` pass on Node 20 and 22 on macOS (*tested automated*). CI runs them on Node 20 and 22, on Ubuntu and macOS.
 
