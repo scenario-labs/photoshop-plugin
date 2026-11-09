@@ -1,0 +1,14 @@
+{
+  "name": "scenario-photoshop-commitlint",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Commit message and pull request title checks for CI and contributors; not part of the plugin or the helper",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "21.2.3",
+    "@commitlint/config-conventional": "21.2.3"
+  }
+}
