@@ -81,7 +81,8 @@ test("every GitHub workflow pins its actions by full commit and declares its per
     assert.match(text, /^permissions:\s*$/m, `${f} declares top-level permissions`);
     assert.ok(!/write-all/.test(text), `${f} never asks for write-all`);
     const uses = [...text.matchAll(/^\s*-?\s*uses:\s*(\S+)/gm)].map((m) => m[1]);
-    assert.ok(uses.length >= 1, `${f} uses actions`);
+    // publish-changelog.yml runs gh, jq and curl only; every other workflow uses actions.
+    if (!f.endsWith("publish-changelog.yml")) assert.ok(uses.length >= 1, `${f} uses actions`);
     for (const u of uses) {
       if (u.startsWith("./")) continue; // a local action is part of this repository
       assert.match(u, /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, `${f}: ${u} is pinned by full commit`);
