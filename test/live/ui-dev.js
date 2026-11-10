@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // The panel's look, without restarting Photoshop: drives the development
-// build's UI loop (plugin/src/dev/ui-loop.js). Not part of `npm test`. macOS.
+// build's UI loop (plugin/src/dev/ui-loop.js). Not part of `pnpm test`. macOS.
 //
 //   node test/live/ui-dev.js push              build the dev bundle, copy index.html,
 //                                              styles.css and dist/main.js into the
@@ -21,7 +21,7 @@
 //
 // Any other first argument is sent as a command with the JSON that follows
 // (see ui-loop.js for the list). The loop exists only in development builds;
-// the installed plugin must be one (`npm run package:dev`, AGENTS.md).
+// the installed plugin must be one (`pnpm run package:dev`, AGENTS.md).
 
 const fs = require("node:fs");
 const os = require("node:os");

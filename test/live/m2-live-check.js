@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // M2 live check: an agent client gets exact prices from a live Photoshop for
-// the three model families of the M2 exit. Not part of `npm test`. Run it by
+// the three model families of the M2 exit. Not part of `pnpm test`. Run it by
 // hand with a development build installed (see AGENTS.md) and the panel
 // signed in to Scenario.
 //

@@ -9,15 +9,15 @@ Thanks for helping. This guide covers what a pull request needs; the commands, r
 
 ## Set up
 
-- Node.js 20 or 22 and git. `npm ci` installs the helper's one run-time dependency; the tests use only Node's built-in modules.
-- For changes in Photoshop: Photoshop 27.11 on macOS and a development build (`npm run package:dev`), installed as `AGENTS.md` describes.
-- For the commit checks: Node.js 22.12 or later, then `npm ci --prefix tools/commitlint --ignore-scripts`.
+- Node.js 20 or 22, git and pnpm (the version `packageManager` names in `package.json`). `pnpm install` installs ws, the helper's one run-time dependency, which the tests also use; everything else in the tests is Node's built-in modules.
+- For changes in Photoshop: Photoshop 27.11 on macOS and a development build (`pnpm run package:dev`), installed as `AGENTS.md` describes.
+- For the commit checks: Node.js 22.12 or later, then `pnpm install --frozen-lockfile --ignore-scripts --dir tools/commitlint`.
 
 ## Run the checks
 
-`npm test` (unit and integration tests on a fake Photoshop and a mock of Scenario's API, 0 CU) and `npm run lint` for every change, `npm run package` for build and packaging changes, and `npm run handbook -- --no-pdf` for changes to the docs the handbook is built from. CI runs `npm run lint`, `npm test` and `npm run package` on Node 20 and 22, on Ubuntu and macOS.
+`pnpm test` (unit and integration tests on a fake Photoshop and a mock of Scenario's API, 0 CU) and `pnpm run lint` for every change, `pnpm run package` for build and packaging changes, and `pnpm run handbook --no-pdf` for changes to the docs the handbook is built from. CI runs `pnpm run lint`, `pnpm test` and `pnpm run package` on Node 20 and 22, on Ubuntu and macOS.
 
-The checks under `test/live/` run against a live Photoshop and are not part of `npm test`. Several spend Creative Units: they need authorization for the project and budget first.
+The checks under `test/live/` run against a live Photoshop and are not part of `pnpm test`. Several spend Creative Units: they need authorization for the project and budget first.
 
 ## Commits and pull requests
 
@@ -26,7 +26,7 @@ The checks under `test/live/` run against a live Photoshop and are not part of `
 - Say how each claim was checked, as the docs do: *verified live* (in Photoshop), *tested automated* or *not tested*.
 - Write the pull request title as a Conventional Commit people can read: release-please turns the titles into the changelog. Do not edit version fields or the generated part of `CHANGELOG.md` ([RELEASING.md](RELEASING.md)).
 - Show panel changes with before/after screenshots at the docked width (280 px), attached to the pull request rather than committed. Pictures for the docs go under `docs/media/`.
-- The repository is public: no machine paths, personal or customer names, email addresses, secrets or em dashes. `npm run lint` checks what it can.
+- The repository is public: no machine paths, personal or customer names, email addresses, secrets or em dashes. `pnpm run lint` checks what it can.
 
 ## Coding agents
 

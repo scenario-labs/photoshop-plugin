@@ -32,11 +32,11 @@ Before and after pictures for each action are in the [User Guide](docs/USER_GUID
 
 You need Photoshop 2026 (27.x; tested on 27.11 on macOS) and a Scenario account on a plan with API access (Starter or above).
 
-1. Build the package from a checkout (Node.js 20 or later):
+1. Build the package from a checkout (Node.js 20 or later and pnpm):
 
    ```sh
-   npm ci
-   npm run package   # writes build/scenario-photoshop-0.7.1.ccx
+   pnpm install
+   pnpm run package   # writes build/scenario-photoshop-0.7.1.ccx
    ```
 
 2. Install it with Creative Cloud's plugin installer, then restart Photoshop (the plugin loads at the next launch):
@@ -68,11 +68,11 @@ The full walkthrough, with every action, is in the [User Guide](docs/USER_GUIDE.
 ## Build and test
 
 ```sh
-npm ci
-npm test          # unit and integration tests (Node's built-in test runner)
-npm run lint      # syntax, typography and public-content checks
-npm run package   # build/scenario-photoshop-0.7.1.ccx
-npm run handbook  # build/handbook/: the handbook as a web page, one HTML file and a PDF
+pnpm install
+pnpm test          # unit and integration tests (Node's built-in test runner)
+pnpm run lint      # syntax, typography and public-content checks
+pnpm run package   # build/scenario-photoshop-0.7.1.ccx
+pnpm run handbook  # build/handbook/: the handbook as a web page, one HTML file and a PDF
 ```
 
 Contributors and coding agents: [AGENTS.md](AGENTS.md). Design: [docs/spec/SPEC.md](docs/spec/SPEC.md) and the tool reference [docs/spec/MCP.md](docs/spec/MCP.md).

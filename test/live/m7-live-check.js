@@ -2,8 +2,8 @@
 "use strict";
 // M7 live check: SPEC 12.2 item 5, the Trained and Library parts (and the
 // Run with part of item 3), against a live Photoshop and the live Scenario
-// API, through the panel itself. Not part of `npm test`. Run it once by hand
-// with a development build installed (`npm run package:dev`, AGENTS.md) and
+// API, through the panel itself. Not part of `pnpm test`. Run it once by hand
+// with a development build installed (`pnpm run package:dev`, AGENTS.md) and
 // the panel signed in and open. Written in the M7 headless pass; not run
 // there (Photoshop was not available).
 //

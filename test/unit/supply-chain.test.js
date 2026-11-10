@@ -12,17 +12,51 @@ const ROOT = path.resolve(__dirname, "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const MIT_COMPATIBLE = new Set(["MIT", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "0BSD"]);
 
+// What the test reads from pnpm-lock.yaml: the helper's direct dependencies
+// (importers > helper) and each package's integrity, from the document that
+// locks the workspace (pnpm 12 writes another one first, for pnpm itself).
+function pnpmLock() {
+  const doc = read("pnpm-lock.yaml").split(/^---$/m).find((d) => /^importers:\n/m.test(d) && /^ {2}helper:\n/m.test(d));
+  assert.ok(doc, "pnpm-lock.yaml locks the workspace");
+  const helper = {};
+  const block = doc.split(/^ {2}helper:\n/m)[1].split(/^ {2}\S/m)[0];
+  for (const m of block.matchAll(/^ {6}(\S+):\n {8}specifier: (\S+)\n {8}version: (\S+)$/gm)) helper[m[1]] = { specifier: m[2], version: m[3] };
+  const integrity = {};
+  for (const m of doc.matchAll(/^ {2}'?([^\s':]+@[^\s':]+)'?:\n {4}resolution: \{integrity: (\S+)\}$/gm)) integrity[m[1]] = m[2];
+  return { helper, integrity };
+}
+
+test("pnpm installs the workspace: one pinned pnpm, one lock, no npm lock", () => {
+  const pkg = JSON.parse(read("package.json"));
+  const pin = /^pnpm@(\d+\.\d+\.\d+)\+sha512\.[0-9a-f]{128}$/.exec(pkg.packageManager || "");
+  assert.ok(pin, "package.json pins pnpm by version and hash");
+  assert.equal(pkg.workspaces, undefined, "the workspace is pnpm-workspace.yaml");
+  assert.equal(read("pnpm-workspace.yaml"), "packages:\n  - helper\n  - plugin\n");
+  // The tests use ws to stand in for UXP's WebSocket. pnpm gives the root no
+  // access to the helper's dependencies, so the root pins ws too, at the
+  // helper's version.
+  assert.deepEqual(pkg.devDependencies, { ws: JSON.parse(read("helper/package.json")).dependencies.ws });
+  assert.equal(pkg.dependencies, undefined);
+  assert.match(read("pnpm-lock.yaml"), new RegExp(`packageManagerDependencies:\\n {6}pnpm:\\n {8}specifier: ${pin[1].replace(/\./g, "\\.")}\\n`));
+  for (const f of ["package-lock.json", "npm-shrinkwrap.json", "tools/commitlint/package-lock.json", "helper/package-lock.json"]) {
+    assert.ok(!fs.existsSync(path.join(ROOT, f)), `no ${f}: npm installs nothing here`);
+  }
+  assert.ok(fs.existsSync(path.join(ROOT, "tools", "commitlint", "pnpm-lock.yaml")), "commitlint has its own pnpm lock");
+});
+
 test("the helper ships an npm-shrinkwrap.json that pins every package by integrity, in step with the workspace lock", () => {
   const pkg = JSON.parse(read("helper/package.json"));
   const shrink = JSON.parse(read("helper/npm-shrinkwrap.json"));
-  const lock = JSON.parse(read("package-lock.json"));
+  const lock = pnpmLock();
   assert.equal(shrink.lockfileVersion, 3);
   assert.equal(shrink.name, pkg.name);
   assert.equal(shrink.version, pkg.version);
   assert.deepEqual(shrink.packages[""].dependencies, pkg.dependencies);
   for (const [name, range] of Object.entries(pkg.dependencies)) {
     assert.match(range, /^\d+\.\d+\.\d+$/, `${name} is pinned to an exact version`);
+    assert.deepEqual(lock.helper[name], { specifier: range, version: range }, `${name}: pnpm-lock.yaml locks what the helper pins`);
   }
+  assert.deepEqual(Object.keys(lock.helper).sort(), Object.keys(pkg.dependencies).sort(), "pnpm-lock.yaml locks no other helper dependency");
   const deps = Object.entries(shrink.packages).filter(([k]) => k.startsWith("node_modules/"));
   assert.ok(deps.length >= 1);
   const notices = read("THIRD_PARTY_NOTICES.md");
@@ -31,10 +65,7 @@ test("the helper ships an npm-shrinkwrap.json that pins every package by integri
     assert.match(entry.integrity, /^sha512-[A-Za-z0-9+/]+=*$/, `${name} has a sha512 integrity`);
     assert.ok(entry.resolved.startsWith("https://registry.npmjs.org/"), `${name} comes from the npm registry`);
     assert.ok(MIT_COMPATIBLE.has(entry.license), `${name} has an MIT-compatible license (${entry.license})`);
-    const workspace = lock.packages[key];
-    assert.ok(workspace, `${name} is in the workspace lock too`);
-    assert.equal(workspace.version, entry.version, `${name}: same version in both locks`);
-    assert.equal(workspace.integrity, entry.integrity, `${name}: same integrity in both locks`);
+    assert.equal(lock.integrity[`${name}@${entry.version}`], entry.integrity, `${name} ${entry.version}: in pnpm-lock.yaml with the same integrity`);
     assert.ok(notices.includes(`## ${name} ${entry.version}`), `${name} ${entry.version} is in THIRD_PARTY_NOTICES.md`);
   }
 });
@@ -86,8 +117,8 @@ test("every GitHub workflow pins its actions by full commit and declares its per
       const push = text.match(/^\s+push:\s*\n\s+branches: \[main\]\s*\n\s+paths:\s*\n((?:\s+- .+\n)+)/m);
       assert.ok(push, `${f} runs on pushes to main, filtered by path`);
       assert.deepEqual([...push[1].matchAll(/- "([^"]+)"/g)].map((m) => m[1]), SITE_PATHS, `${f}: the push paths are the site, the handbook and its docs`);
-      assert.match(text, /npm run handbook -- --out "\$RUNNER_TEMP\/site\/handbook"/, `${f} builds the handbook under /handbook/`);
-      assert.match(text, /npm run handbook -- --no-pdf --out "\$RUNNER_TEMP\/site\/handbook"/, `${f}: a PDF failure falls back to the handbook without it`);
+      assert.match(text, /pnpm run handbook --out "\$RUNNER_TEMP\/site\/handbook"/, `${f} builds the handbook under /handbook/`);
+      assert.match(text, /pnpm run handbook --no-pdf --out "\$RUNNER_TEMP\/site\/handbook"/, `${f}: a PDF failure falls back to the handbook without it`);
       assert.match(text, /github\.repository == 'scenario-labs\/photoshop-plugin'/, `${f} publishes from this repository only`);
       assert.match(text, /github\.event\.workflow_run\.conclusion == 'success'/, `${f} publishes only after a release run that succeeded`);
       assert.match(text, /ref: main\n/, `${f} builds main`);

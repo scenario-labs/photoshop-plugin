@@ -23,9 +23,9 @@ Show a visible change with screenshots of the panel, before/after for UI.
 
 ## Validation
 
-- [ ] `npm test` and `npm run lint` pass; commands and results are listed below.
-- [ ] Build or packaging changes pass `npm run package`, and the `.ccx` contents were inspected.
-- [ ] Docs changes build with `npm run handbook -- --no-pdf`.
+- [ ] `pnpm test` and `pnpm run lint` pass; commands and results are listed below.
+- [ ] Build or packaging changes pass `pnpm run package`, and the `.ccx` contents were inspected.
+- [ ] Docs changes build with `pnpm run handbook --no-pdf`.
 - [ ] Panel or Photoshop changes were tried in Photoshop with a development build; Photoshop and OS versions are listed, with before/after screenshots of the panel for UI.
 - [ ] Each claim says how it was checked (*verified live*, *tested automated* or *not tested*); any paid run had prior authorization for its project and budget.
 

@@ -104,7 +104,7 @@ jobs:
           echo "VERSION=$V" >> "$GITHUB_ENV"
 
       # The package and the handbook use Node's built-in modules only, so no
-      # npm install runs here. The handbook links its files at the release tag.
+      # install runs here. The handbook links its files at the release tag.
       - name: Build the package and the standalone handbook, check the package, then checksum
         env:
           HANDBOOK_GITHUB_REF: ${{ needs.release-please.outputs.tag_name }}

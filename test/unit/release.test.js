@@ -48,17 +48,13 @@ test("every copy of the version is one release-please updates, and they agree", 
     { type: "json", path: "plugin/manifest.json", jsonpath: "$.version" },
     { type: "json", path: "helper/package.json", jsonpath: "$.version" },
     { type: "json", path: "helper/npm-shrinkwrap.json", jsonpath: "$.version" },
-    { type: "json", path: "helper/npm-shrinkwrap.json", jsonpath: "$.packages[''].version" },
-    { type: "json", path: "package-lock.json", jsonpath: "$.packages.helper.version" }
+    { type: "json", path: "helper/npm-shrinkwrap.json", jsonpath: "$.packages[''].version" }
   ]);
   for (const f of PKG["extra-files"]) assert.equal(at(json(f.path), f.jsonpath), VERSION, `${f.path} ${f.jsonpath}`);
-  // The two private packages carry no version, so nothing else can drift.
+  // The two private packages carry no version, so nothing else can drift;
+  // pnpm-lock.yaml records no workspace package's version.
   assert.equal(json("package.json").version, undefined);
   assert.equal(json("plugin/package.json").version, undefined);
-  const lock = json("package-lock.json");
-  assert.equal(lock.version, undefined);
-  assert.equal(lock.packages[""].version, undefined);
-  assert.equal(lock.packages.plugin.version, undefined);
   // No other JSON file in the repository spells the version out.
   const counts = {};
   const skip = new Set(["node_modules", ".git", "build", "fixtures", "site"]);
@@ -74,7 +70,7 @@ test("every copy of the version is one release-please updates, and they agree", 
     }
   })(ROOT);
   delete counts[".release-please-manifest.json"];
-  assert.deepEqual(counts, { "helper/npm-shrinkwrap.json": 2, "helper/package.json": 1, "package-lock.json": 1, "plugin/manifest.json": 1 });
+  assert.deepEqual(counts, { "helper/npm-shrinkwrap.json": 2, "helper/package.json": 1, "plugin/manifest.json": 1 });
 });
 
 test("manifest.json keeps the layout release-please writes back, so a release changes one line", () => {

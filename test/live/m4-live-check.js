@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // M4 live check: the Edit and Enhance lanes against a live Photoshop and the
-// live Scenario API, one real take per route. Not part of `npm test`. Run it
+// live Scenario API, one real take per route. Not part of `pnpm test`. Run it
 // by hand with a development build installed (see AGENTS.md) and the panel
 // signed in. It SPENDS Scenario credits unless --price-only is given.
 //

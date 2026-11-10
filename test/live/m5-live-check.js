@@ -5,7 +5,7 @@
 // points of item 9 and starts again; each job must come back in the state
 // SPEC 6.4 gives it, without a second charge, and its paid result must land
 // in its own document once that document is open again. Not part of
-// `npm test`. Run it by hand with a development build installed (see
+// `pnpm test`. Run it by hand with a development build installed (see
 // AGENTS.md) and the panel signed in. It SPENDS Scenario credits: one job
 // per case at the cheapest settings (four cases reach a paid call).
 //
