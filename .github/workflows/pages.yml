@@ -102,7 +102,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if ! tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"; then
+          # An empty answer means no release yet; an error from GitHub fails the
+          # step rather than publishing the site without its download.
+          tag="$(gh release list --repo "$GITHUB_REPOSITORY" --json tagName,isLatest --jq '[.[] | select(.isLatest)][0].tagName // ""')"
+          if [ -z "$tag" ]; then
             echo "::notice::No release yet: the site has no download"
             exit 0
           fi
