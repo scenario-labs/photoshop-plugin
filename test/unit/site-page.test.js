@@ -10,6 +10,9 @@ const path = require("node:path");
 
 const SITE = path.resolve(__dirname, "..", "..", "site");
 const MAX_BYTES = 50 * 1024 * 1024;
+// Built into the site at publish time by .github/workflows/pages.yml
+// (npm run handbook), so not in site/; handbook.test.js checks the build.
+const BUILT = ["handbook/"];
 
 function files(dir, out = []) {
   for (const name of fs.readdirSync(dir)) {
@@ -29,7 +32,8 @@ test("the site publishes to photoshop.scenario.com", () => {
 test("every local file the page links to is in site/", () => {
   const html = fs.readFileSync(path.join(SITE, "index.html"), "utf8");
   const refs = [...html.matchAll(/\b(?:src|href|poster)="([^"]+)"/g)].map((m) => m[1]);
-  const local = refs.filter((u) => !/^(?:[a-z]+:|#|\/\/)/i.test(u));
+  const local = refs.filter((u) => !/^(?:[a-z]+:|#|\/\/)/i.test(u) && !BUILT.includes(u));
+  assert.ok(refs.includes("handbook/"), "the page links to the handbook");
   assert.ok(local.length >= 10, "the page links to its pictures and films");
   for (const u of local) {
     const p = decodeURI(u.split(/[?#]/)[0]);
