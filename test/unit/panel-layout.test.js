@@ -252,6 +252,7 @@ test("Not signed in screen: Sign in with Scenario first, then the key fields and
     'id="signin-code-open"',
     'id="signin-code-copy"',
     'id="signin-code-cancel"',
+    'id="signin-code-note"',
     'id="signin-key-title"',
     'id="signin-step2"'
   ]);

@@ -122,9 +122,19 @@ test("a declined sign-in says so with Sign in again; Cancel stops waiting; Back 
   const waiting = await bootPanel(t, { oauth: { approveAfter: 100000 }, sleep: () => new Promise((r) => setTimeout(r, 10)) });
   waiting.doc.byId("signin-browser").click();
   await waitFor(() => waiting.doc.shown("signin-code-box"), { label: "code shown" });
-  waiting.doc.byId("signin-code-copy").click();
-  await waitFor(() => waiting.host.clipboard === waiting.doc.text("signin-code"), { label: "code copied" });
-  waiting.doc.byId("signin-code-cancel").click();
+  // Cancel runs even when a check fails: the sign-in would otherwise poll on.
+  try {
+    waiting.doc.byId("signin-code-copy").click();
+    await waitFor(() => waiting.host.clipboard === waiting.doc.text("signin-code"), { label: "code copied" });
+    await waitFor(() => waiting.doc.text("signin-code-note") === view.TEXT.code_copied, { label: "copy confirmed" });
+    waiting.host.clipboardWrite = async () => {
+      throw new Error("the clipboard is busy");
+    };
+    waiting.doc.byId("signin-code-copy").click();
+    await waitFor(() => waiting.doc.text("signin-code-note") === "Could not copy: the clipboard is busy.", { label: "copy failure shown" });
+  } finally {
+    waiting.doc.byId("signin-code-cancel").click();
+  }
   await waitFor(() => !waiting.doc.shown("signin-code-box"), { label: "stopped" });
   assert.ok(waiting.doc.shown("view-signin") && !waiting.doc.shown("signin-status"), "a cancel is not a failure");
   assert.equal(waiting.doc.byId("signin-browser").getAttribute("disabled"), null);
