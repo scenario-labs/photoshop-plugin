@@ -413,8 +413,18 @@ function restore(s, keep) {
   return out;
 }
 
+// Removes tags until none is left, so taking one out cannot join a new one.
+function stripTags(s) {
+  let prev;
+  do {
+    prev = s;
+    s = s.replace(/<[^>]*>/g, "");
+  } while (s !== prev);
+  return s;
+}
+
 function claimClass(text) {
-  const t = text.replace(/<[^>]+>/g, "").trim().toLowerCase();
+  const t = stripTags(text).trim().toLowerCase();
   if (/^(verified live|seen live)/.test(t)) return "claim-live";
   if (/^not verified live|^not tested/.test(t)) return "claim-none";
   if (/^tested (automated|headless)/.test(t)) return "claim-auto";
@@ -529,7 +539,7 @@ function page(meta, chapters, docs, mode, extra = {}) {
   const guideIntro = docs["docs/USER_GUIDE.md"].intro.find((b) => b.type === "para");
   const hero = heroBlock ? /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(heroBlock.text.trim()) : null;
   const heroImg = hero ? r.imgTag("README.md", hero[2], hero[1]) : null;
-  const logo = fs.readFileSync(path.join(__dirname, "scenario-logo.svg"), "utf8").replace(/<!--[\s\S]*?-->\s*/, "").replace("<svg ", '<svg role="img" aria-label="Scenario" ');
+  const logo = fs.readFileSync(path.join(__dirname, "scenario-logo.svg"), "utf8").replace(/^[\s\S]*?(?=<svg )/, "").replace("<svg ", '<svg role="img" aria-label="Scenario" ');
 
   const index = [];
   const toc = [];
@@ -654,7 +664,7 @@ ${body}
 // ---------------------------------------------------------------- checks
 
 function check(full, outDir, label, problems, later = []) {
-  const html = full.replace(/<script[\s\S]*?<\/script>/g, " ");
+  const html = full.replace(/<script\b[\s\S]*?<\/script[^>]*>/gi, " ");
   const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
   for (const m of html.matchAll(/href="#([^"]*)"/g)) if (m[1] && !ids.has(m[1])) problems.push(`${label}: link #${m[1]} has no target`);
   for (const m of html.matchAll(/\s(?:src|href)="([^"#][^"]*)"/g)) {
@@ -669,7 +679,7 @@ function check(full, outDir, label, problems, later = []) {
     const ok = m[1] === GITHUB_REF ? inRepo(m[2]) : fs.existsSync(path.join(ROOT, m[2]));
     if (!ok) problems.push(`${label}: GitHub link to a file not in the repository${m[1] === GITHUB_REF && TREE ? ` at ${TREE}` : ""}: ${m[2]}`);
   }
-  const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, " ");
+  const text = html.replace(/<script\b[\s\S]*?<\/script[^>]*>|<style\b[\s\S]*?<\/style[^>]*>/gi, " ");
   if (EM_DASH.test(text)) problems.push(`${label}: em dash`);
   if (/\/Users\/|\/home\/[a-z]|[A-Z]:\\Users\\/.test(text.replace(/data:[^"]+/g, ""))) problems.push(`${label}: machine path`);
   for (const m of text.replace(/data:[^"]+/g, "").matchAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g)) {

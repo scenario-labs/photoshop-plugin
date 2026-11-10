@@ -91,12 +91,20 @@ function showCall(call) {
   return [call.cmd, ...call.args].map(shellQuote).join(" ");
 }
 
+// One argument for a Windows command line, quoted as the C runtime reads it:
+// backslashes are literal unless they precede a quote, so the backslashes
+// before a quote and at the end (before the closing quote) are doubled.
+function winArg(a) {
+  if (a && !/[\s"]/.test(a)) return a;
+  return `"${a.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, "$1$1")}"`;
+}
+
 // Default runner. The child gets this environment without the token.
 function defaultRun(cmd, args, { env, platform }) {
   const childEnv = { ...env };
   delete childEnv[lc.P.token.env];
   const win = platform === "win32";
-  const r = spawnSync(cmd, win ? args.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)) : args, {
+  const r = spawnSync(cmd, win ? args.map(winArg) : args, {
     env: childEnv,
     encoding: "utf8",
     shell: win,
@@ -314,4 +322,4 @@ async function runSetup(argv, { env, stdin, out, err, version, platform, now, ru
   }
 }
 
-module.exports = { runSetup, defaultRun, configPath, serverEntry, cliCalls, updateJson, writeEntry, SetupError, CLIENTS, SERVER_NAME };
+module.exports = { runSetup, defaultRun, winArg, configPath, serverEntry, cliCalls, updateJson, writeEntry, SetupError, CLIENTS, SERVER_NAME };
