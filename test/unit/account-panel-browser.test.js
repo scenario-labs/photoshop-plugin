@@ -227,3 +227,33 @@ test("leaving the chooser by the panel menu ends the waiting sign-in; Choose ano
   assert.ok(chooserRows(doc).includes("  Film *"), "the saved sign-in's projects, its own checked");
   assert.ok(!chooserRows(doc).includes("# Other"));
 });
+
+test("Back while the chosen project is saved keeps that sign-in; a save that fails after the chooser was left revokes it", async (t) => {
+  const { doc, app, host, idp } = await bootPanel(t);
+  doc.byId("signin-browser").click();
+  await waitFor(() => doc.shown("view-choose"), { label: "chooser" });
+  const write = host.secureSet;
+  let onWrite = () => doc.byId("choose-back").click();
+  host.secureSet = async (key, value) => {
+    const fn = onWrite;
+    onWrite = null;
+    if (fn) fn();
+    return write(key, value);
+  };
+  rowOf(doc, "project_film").click();
+  await waitFor(() => doc.shown("view-main"), { label: "signed in" });
+  assert.equal(app.auth.status().signed_in, true);
+  assert.equal(idp.state.revoked.length, 0, "the refresh token being saved is not revoked");
+
+  const second = await bootPanel(t);
+  second.doc.byId("signin-browser").click();
+  await waitFor(() => second.doc.shown("view-choose"), { label: "second chooser" });
+  second.host.secureSet = async () => {
+    second.app.menu.invoke("settings");
+    throw new Error("secure storage refused");
+  };
+  rowOf(second.doc, "project_film").click();
+  await waitFor(() => second.idp.state.revoked.length === 1, { label: "revoked after the failed save" });
+  assert.equal(second.app.auth.waiting(), false);
+  assert.equal(second.app.auth.status().signed_in, false);
+});

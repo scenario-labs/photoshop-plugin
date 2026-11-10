@@ -438,7 +438,11 @@ function createAccountPanel(doc, actions) {
       setText("choose-progress", "");
     }
     if (out.ok) signedIn(out.account);
-    else setText("choose-error", view.describeFailure(out).text);
+    else {
+      setText("choose-error", view.describeFailure(out).text);
+      // Left while the choice was saved, and it failed: nothing waits for it now.
+      if (st.view !== "choose") auth.cancelBrowser();
+    }
   }
 
   // ---- Settings > Account ----

@@ -455,7 +455,15 @@ function createAuth(o) {
       var choice = findChoice(pending.teams, projectId);
       if (!choice) return fail("project_gone", null);
       pending.signIn.refresh_token = pending.latest();
-      return await useChoice(pending.signIn, choice, pending.session, pending.tokens);
+      // Back or Cancel while the choice is saved leaves it alone: its refresh
+      // token is the one being saved.
+      var saving = pending;
+      saving.saving = true;
+      try {
+        return await useChoice(saving.signIn, choice, saving.session, saving.tokens);
+      } finally {
+        saving.saving = false;
+      }
     }
     var c = accounts.current();
     if (!c || c.kind !== "browser") return fail("not_signed_in", null);
@@ -489,10 +497,10 @@ function createAuth(o) {
   }
 
   // Cancels the sign-in in progress, or forgets one waiting for its project
-  // (its refresh token is revoked).
+  // (its refresh token is revoked), unless that project is being saved.
   function cancelBrowser() {
     if (attempt) attempt.cancelled = true;
-    if (pending) {
+    if (pending && !pending.saving) {
       if (oauth) oauth.revoke(pending.latest());
       pending = null;
       log("browser sign-in: cancelled before choosing a project");
