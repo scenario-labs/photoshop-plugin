@@ -489,3 +489,22 @@ test("a new sign-in while one waits for its project revokes the waiting one's to
   assert.equal((await s.auth.chooseProject("project_poster")).ok, true);
   assert.equal(s.auth.list().length, 1);
 });
+
+test("a refresh refused for the application (invalid_client, unauthorized_client) keeps the sign-in; only invalid_grant ends it", async (t) => {
+  const clock = { now: Date.now() };
+  const s = await setup(t, { clock });
+  await s.accounts.load();
+  await s.auth.signInWithBrowser({});
+  await s.auth.chooseProject("project_film");
+  for (const [status, error] of [[401, "invalid_client"], [400, "unauthorized_client"]]) {
+    s.idp.setHandler((r) => (r.path === "/oauth/token" && r.form.grant_type === "refresh_token" ? { status, body: { error } } : undefined));
+    clock.now += 2 * 3600 * 1000;
+    await assert.rejects(s.client.request("GET", "/models"), (e) => e.type === "Internal" && e.message.includes(error));
+    assert.deepEqual(s.ended, [], `${error} keeps the sign-in`);
+    assert.equal(s.auth.current().kind, "browser");
+  }
+  // Once the application is accepted again, the saved refresh token still works.
+  s.idp.setHandler(null);
+  await s.client.request("GET", "/models");
+  assert.match(s.api.requests.at(-1).authorization, /^Bearer /);
+});

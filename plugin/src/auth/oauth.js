@@ -242,7 +242,9 @@ function createOAuth(o) {
   }
 
   // A refresh: new tokens, the refresh token rotated. A refused refresh token
-  // ends the session ("ended"); a lost answer is "offline" and keeps it.
+  // ends the session ("ended"); a lost answer is "offline" and keeps it. A
+  // client error (invalid_client, unauthorized_client) is about the
+  // application's registration, not this person's grant: it keeps the session.
   async function refresh(refreshToken) {
     var sent = now();
     var res = await post(CFG.token_path, { grant_type: "refresh_token", refresh_token: refreshToken, client_id: target.client_id });
@@ -253,7 +255,7 @@ function createOAuth(o) {
       return t;
     }
     var code = errorCode(res);
-    if (code === "invalid_grant" || code === "invalid_client" || code === "unauthorized_client") throw new OAuthError("ended", "The Scenario sign-in ended. Sign in again.");
+    if (code === "invalid_grant") throw new OAuthError("ended", "The Scenario sign-in ended. Sign in again.");
     if (res.status === 429 || res.status >= 500) throw new OAuthError("offline", "Scenario's sign-in is busy. Try again in a moment.");
     throw new OAuthError("failed", "Scenario's sign-in refused the refresh (HTTP " + res.status + (code ? ", " + code : "") + ").");
   }
