@@ -486,7 +486,7 @@ td:first-child { font-weight: 500; min-width: 140px; }
     <a class="brand" href="#top" aria-label="Scenario for Photoshop, top of the page">
       <svg class="wordmark" viewBox="0 0 1024 252" role="img" aria-label="Scenario"><use href="#logo"></use></svg>
       <span class="chip product">Photoshop</span>
-      <span class="chip version" title="Development build">0.7.1 dev build</span>
+      <span class="chip version" title="Development build">{{version}} dev build</span>
     </a>
     <div class="search" role="search" id="search">
       <label class="visually-hidden" for="q">Search this page</label>
@@ -622,7 +622,7 @@ td:first-child { font-weight: 500; min-width: 140px; }
         <figcaption>The launch film, 4 min. One poster, RED HORIZON, made step by step in the panel, then the rest of the Scenario suite: the web app, a workflow in the node editor and Scenario MCP.</figcaption>
       </figure>
       <div class="note" style="margin-top:1.6rem">
-        <span class="nk">Development build 0.7.1</span>
+        <span class="nk">Development build {{version}}</span>
         <p>Not on the Adobe Marketplace yet: you build the <code>.ccx</code> package from the repository (see <a href="#install">Install</a>). Tested in Photoshop 27.11 on macOS. Open source under the MIT licence.</p>
       </div>
     </div>
@@ -1197,7 +1197,7 @@ td:first-child { font-weight: 500; min-width: 140px; }
       <h3 id="tools-29">The 29 tools</h3>
       <p>Each square is one tool of the local server; hover or focus it for its name. Amber squares need a switch.</p>
       <div class="tools" id="tools"></div>
-      <p class="small">Setup per client, the approvals and the tool reference: <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/docs/MCP.md">docs/MCP.md</a>. <b>Copy skills command</b> in Connect a client copies <code>npx skills add scenario-labs/skills</code>, which installs the Scenario skills in your agent.</p>
+      <p class="small">Setup per client, the approvals and the tool reference: <a href="https://github.com/scenario-labs/photoshop-plugin/blob/{{ref}}/docs/MCP.md">docs/MCP.md</a>. <b>Copy skills command</b> in Connect a client copies <code>npx skills add scenario-labs/skills</code>, which installs the Scenario skills in your agent.</p>
     </section>
 
     <!-- ================================================================ THE LAST KEEPER -->
@@ -1255,10 +1255,10 @@ td:first-child { font-weight: 500; min-width: 140px; }
       <ol class="steps">
         <li><b>Build the package</b> from a checkout of <a href="https://github.com/scenario-labs/photoshop-plugin">scenario-labs/photoshop-plugin</a>:
           <pre><code>npm ci
-npm run package   # writes build/scenario-photoshop-0.7.1.ccx</code></pre></li>
+npm run package   # writes build/scenario-photoshop-{{version}}.ccx</code></pre></li>
         <li><b>Install it</b> with Creative Cloud's plugin installer, then restart Photoshop:
           <pre><code>"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" \
-  --install "$PWD/build/scenario-photoshop-0.7.1.ccx"</code></pre></li>
+  --install "$PWD/build/scenario-photoshop-{{version}}.ccx"</code></pre></li>
         <li><b>Open the panel</b> from <b>Plugins › Scenario</b>. Photoshop hides docked panels on its Home screen, so open or make a document first.</li>
       </ol>
       <p class="small">Checked live with the release package on macOS: install, restart, sign-in and a first image took 1 min 53 s, with a script doing the clicks. Installing by double-clicking the <code>.ccx</code> was not tested.</p>
@@ -1414,7 +1414,7 @@ npm run package   # writes build/scenario-photoshop-0.7.1.ccx</code></pre></li>
         <tr><td>Deleting</td><td>On this computer: sign out, reset the pairing token, delete the plugin data folder. On Scenario: delete uploads and results in the web app, or write to support@scenario.com. Signing out ends a Scenario sign-in, but does not revoke a key: delete it on app.scenario.com.</td></tr>
       </tbody></table></div>
       <p class="small">This page is served at photoshop.scenario.com by Vercel from the copy hosted by GitHub Pages. It counts visits with Vercel Web Analytics, without cookies: it records the page address, referrer, location, browser, operating system and device type, and tells visitors apart for 24 hours by a hash of the request.</p>
-      <p class="small">The plugin sends nothing else: no update check, no analytics. Details: <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/PRIVACY.md">PRIVACY.md</a>. Security reports: privately to support@scenario.com, with "security" in the subject.</p>
+      <p class="small">The plugin sends nothing else: no update check, no analytics. Details: <a href="https://github.com/scenario-labs/photoshop-plugin/blob/{{ref}}/PRIVACY.md">PRIVACY.md</a>. Security reports: privately to support@scenario.com, with "security" in the subject.</p>
     </section>
 
     <section id="troubleshooting" data-toc="Troubleshooting">
@@ -1494,12 +1494,12 @@ npm run package   # writes build/scenario-photoshop-0.7.1.ccx</code></pre></li>
           </ul>
         </div>
       </div>
-      <p class="small">Every limit, with how it was checked: <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/docs/KNOWN_LIMITATIONS.md">docs/KNOWN_LIMITATIONS.md</a>.</p>
+      <p class="small">Every limit, with how it was checked: <a href="https://github.com/scenario-labs/photoshop-plugin/blob/{{ref}}/docs/KNOWN_LIMITATIONS.md">docs/KNOWN_LIMITATIONS.md</a>.</p>
     </section>
 
     <section id="licence" data-toc="Licence">
       <h2>Licence</h2>
-      <p>Scenario for Photoshop is open source under the MIT licence. Third-party code is listed in <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>. The Scenario logo is a trademark of Scenario, not covered by the licence.</p>
+      <p>Scenario for Photoshop is open source under the MIT licence. Third-party code is listed in <a href="https://github.com/scenario-labs/photoshop-plugin/blob/{{ref}}/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>. The Scenario logo is a trademark of Scenario, not covered by the licence.</p>
       <p class="small">Adobe and Photoshop are trademarks of Adobe. This project is not affiliated with or endorsed by Adobe.</p>
     </section>
   </main>
@@ -1509,9 +1509,9 @@ npm run package   # writes build/scenario-photoshop-0.7.1.ccx</code></pre></li>
   <div class="bar">
     <svg class="wordmark" viewBox="0 0 1024 252" role="img" aria-label="Scenario"><use href="#logo"></use></svg>
     <a href="https://github.com/scenario-labs/photoshop-plugin">Source on GitHub</a>
-    <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/CHANGELOG.md">Changelog</a>
-    <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/PRIVACY.md">Privacy</a>
-    <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/SECURITY.md">Security</a>
+    <a href="https://github.com/scenario-labs/photoshop-plugin/blob/{{ref}}/CHANGELOG.md">Changelog</a>
+    <a href="https://github.com/scenario-labs/photoshop-plugin/blob/{{ref}}/PRIVACY.md">Privacy</a>
+    <a href="https://github.com/scenario-labs/photoshop-plugin/blob/{{ref}}/SECURITY.md">Security</a>
     <a href="https://docs.scenario.com">Scenario docs</a>
     <a href="https://www.scenario.com">scenario.com</a>
     <span class="addr legal">support@scenario.com</span>

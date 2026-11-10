@@ -10,7 +10,7 @@ Generate, edit, upscale and cut out with [Scenario](https://www.scenario.com) mo
 
 *Remove on a selection, recorded in Photoshop 27.11 (3x speed). [MP4](docs/media/video/selection-edit.mp4).*
 
-> **Development build 0.7.1.** Not yet on the Adobe Marketplace, and the agent helper is not on npm yet. You install it from a `.ccx` file built from this repository.
+> **Development build.** Not yet on the Adobe Marketplace, and the agent helper is not on npm yet. You install it from a `.ccx` file built from this repository.
 
 ## What it does
 
@@ -36,13 +36,13 @@ You need Photoshop 2026 (27.x; tested on 27.11 on macOS) and a Scenario account 
 
    ```sh
    npm ci
-   npm run package   # writes build/scenario-photoshop-0.7.1.ccx
+   npm run package   # prints the file it writes: build/scenario-photoshop-<version>.ccx
    ```
 
-2. Install it with Creative Cloud's plugin installer, then restart Photoshop (the plugin loads at the next launch):
+2. Install it with Creative Cloud's plugin installer, then restart Photoshop (the plugin loads at the next launch), with the version from step 1:
 
    ```sh
-   "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/build/scenario-photoshop-0.7.1.ccx"
+   "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/build/scenario-photoshop-<version>.ccx"
    ```
 
    *Verified live* with the release package on macOS on 2026-10-23, with Photoshop's Developer Mode on (whether the installer needs it was not tested): install, restart, sign-in and a first image took 1 min 53 s. A script did the clicks and typing, so this time has no reading in it, and 59 s of it was the generation. Double-clicking the `.ccx` should do the same through Creative Cloud; *not tested*.
@@ -71,7 +71,7 @@ The full walkthrough, with every action, is in the [User Guide](docs/USER_GUIDE.
 npm ci
 npm test          # unit and integration tests (Node's built-in test runner)
 npm run lint      # syntax, typography and public-content checks
-npm run package   # build/scenario-photoshop-0.7.1.ccx
+npm run package   # build/scenario-photoshop-<version>.ccx
 npm run handbook  # build/handbook/: the handbook as a web page, one HTML file and a PDF
 ```
 

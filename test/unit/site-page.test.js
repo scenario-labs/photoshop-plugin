@@ -74,3 +74,53 @@ test("every local file the page links to is in site/", () => {
 test("no file in site/ reaches GitHub's 50 MB warning", () => {
   for (const f of files(SITE)) assert.ok(fs.statSync(f).size < MAX_BYTES, `${path.relative(SITE, f)} is under 50 MB`);
 });
+
+// ------------------------------------------------------------ the version
+
+const { stamp } = require("../../tools/release/stamp-site.js");
+const ROOT = path.resolve(__dirname, "..", "..");
+const { CHAPTERS } = require("../../tools/handbook/build.js");
+
+test("the page names the build only through {{version}}, filled at publish time", () => {
+  // As for blender.scenario.com: .github/workflows/pages.yml takes the page
+  // from the newest published release and stamps its version and tag. A
+  // version written in the page went stale when 0.8.0 shipped: the site
+  // still said 0.7.1.
+  const html = fs.readFileSync(path.join(SITE, "index.html"), "utf8");
+  assert.match(html, /<span class="chip version"[^>]*>\{\{version\}\} dev build<\/span>/);
+  assert.match(html, /Development build \{\{version\}\}/);
+  assert.match(html, /scenario-photoshop-\{\{version\}\}\.ccx/);
+  assert.doesNotMatch(html, /\d+\.\d+\.\d+ dev build|[Dd]evelopment build \d|scenario-photoshop-\d/);
+  // Its links into the repository open the release's files, not main's.
+  const repo = [...html.matchAll(/https:\/\/github\.com\/scenario-labs\/photoshop-plugin\/(?:blob|tree)\/([^/"]+)\//g)].map((m) => m[1]);
+  assert.ok(repo.length >= 5);
+  assert.deepEqual([...new Set(repo)], ["{{ref}}"]);
+  const out = stamp(html, "0.9.0", "photoshop-plugin-v0.9.0");
+  assert.match(out, /<span class="chip version"[^>]*>0\.9\.0 dev build<\/span>/);
+  assert.match(out, /blob\/photoshop-plugin-v0\.9\.0\/PRIVACY\.md/);
+  assert.doesNotMatch(out, /\{\{/);
+});
+
+test("stamp-site refuses a page or a release it cannot fill exactly", () => {
+  const page = "<b>{{version}}</b> <a href=\"x/blob/{{ref}}/A.md\">";
+  assert.equal(stamp(page, "1.2.3", "main"), '<b>1.2.3</b> <a href="x/blob/main/A.md">');
+  assert.throws(() => stamp(page, "1.2", "main"), /Not a release version/);
+  assert.throws(() => stamp(page, "1.2.3-dev", "main"), /Not a release version/);
+  assert.throws(() => stamp(page, "1.2.3", "blender-plugin-v1.2.3"), /Not main or a release tag/);
+  assert.throws(() => stamp(page, "1.2.3", "main; rm"), /Not main or a release tag/);
+  assert.throws(() => stamp("<b>0.8.0</b>", "1.2.3", "main"), /no \{\{version\}\}/);
+  assert.throws(() => stamp(page + "{{date}}", "1.2.3", "main"), /keeps \{\{date\}\}/);
+});
+
+test("the docs the site publishes spell no build version, which would go stale", () => {
+  // The handbook under /handbook/ shows the release's version from its
+  // manifest; the prose leaves the number out.
+  const docs = [...new Set(CHAPTERS.flatMap((c) => (c.parts || []).map((p) => p.file)))];
+  assert.ok(docs.includes("README.md") && docs.includes("docs/USER_GUIDE.md") && docs.includes("PRIVACY.md"));
+  for (const f of docs) {
+    if (f === "CHANGELOG.md") continue;
+    const text = fs.readFileSync(path.join(ROOT, f), "utf8");
+    const m = /[Dd]evelopment build \(?\d+\.\d+\.\d+|scenario-photoshop-\d+\.\d+\.\d+/.exec(text);
+    assert.equal(m, null, `${f} names ${m && m[0]}`);
+  }
+});

@@ -1,6 +1,6 @@
 # User Guide
 
-Scenario for Photoshop, development build 0.7.1. Pictures and recordings in this guide come from real runs in Photoshop 27.11 on macOS with the panel docked at 320 px, at each action's default model and its normal quality; inputs were made with GPT Image 2.5. Claims carry how they were checked: *verified live* (in Photoshop), *tested automated* (test suite, no Photoshop) or *not tested*.
+Scenario for Photoshop, development build. Pictures and recordings in this guide come from real runs in Photoshop 27.11 on macOS with the panel docked at 320 px, at each action's default model and its normal quality; inputs were made with GPT Image 2.5. Claims carry how they were checked: *verified live* (in Photoshop), *tested automated* (test suite, no Photoshop) or *not tested*.
 
 - [Quick start](#quick-start)
 - [Find your way around](#find-your-way-around)
