@@ -7,17 +7,34 @@
   "host": {
     "app": "PS",
     "minVersion": "26.9",
-    "data": { "apiVersion": 2, "loadEvent": "startup" }
+    "data": {
+      "apiVersion": 2,
+      "loadEvent": "startup"
+    }
   },
   "entrypoints": [
     {
       "type": "panel",
       "id": "scenarioPanel",
-      "label": { "default": "Scenario" },
-      "minimumSize": { "width": 280, "height": 420 },
-      "maximumSize": { "width": 2000, "height": 4000 },
-      "preferredDockedSize": { "width": 320, "height": 640 },
-      "preferredFloatingSize": { "width": 360, "height": 720 }
+      "label": {
+        "default": "Scenario"
+      },
+      "minimumSize": {
+        "width": 280,
+        "height": 420
+      },
+      "maximumSize": {
+        "width": 2000,
+        "height": 4000
+      },
+      "preferredDockedSize": {
+        "width": 320,
+        "height": 640
+      },
+      "preferredFloatingSize": {
+        "width": 360,
+        "height": 720
+      }
     }
   ],
   "requiredPermissions": {
@@ -31,7 +48,12 @@
       ]
     },
     "localFileSystem": "request",
-    "launchProcess": { "schemes": ["https"], "extensions": [] },
+    "launchProcess": {
+      "schemes": [
+        "https"
+      ],
+      "extensions": []
+    },
     "clipboard": "readAndWrite"
   }
 }
