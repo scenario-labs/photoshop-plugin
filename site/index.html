@@ -486,7 +486,7 @@ td:first-child { font-weight: 500; min-width: 140px; }
     <a class="brand" href="#top" aria-label="Scenario for Photoshop, top of the page">
       <svg class="wordmark" viewBox="0 0 1024 252" role="img" aria-label="Scenario"><use href="#logo"></use></svg>
       <span class="chip product">Photoshop</span>
-      <span class="chip version" title="Development build">{{version}} dev build</span>
+      <span class="chip version" title="Version">{{version}}</span>
     </a>
     <div class="search" role="search" id="search">
       <label class="visually-hidden" for="q">Search this page</label>
@@ -622,8 +622,8 @@ td:first-child { font-weight: 500; min-width: 140px; }
         <figcaption>The launch film, 4 min. One poster, RED HORIZON, made step by step in the panel, then the rest of the Scenario suite: the web app, a workflow in the node editor and Scenario MCP.</figcaption>
       </figure>
       <div class="note" style="margin-top:1.6rem">
-        <span class="nk">Development build {{version}}</span>
-        <p>Not on the Adobe Marketplace yet: you build the <code>.ccx</code> package from the repository (see <a href="#install">Install</a>). Tested in Photoshop 27.11 on macOS. Open source under the MIT licence.</p>
+        <span class="nk">Version {{version}}</span>
+        <p>Not on the Adobe Marketplace yet: <a href="/download/latest">download the <code>.ccx</code> package</a> and install it as described in <a href="#install">Install</a>. Tested in Photoshop 27.11 on macOS. Open source under the MIT licence.</p>
       </div>
     </div>
 
@@ -752,7 +752,7 @@ td:first-child { font-weight: 500; min-width: 140px; }
         <a class="step" href="#motion"><span class="ph"><img src="assets/img/rh/clip-poster.webp" alt="" loading="lazy" width="600" height="900"></span><span class="tx"><b><span>7</span>Animate</b><small>Animate</small></span></a>
         <a class="step" href="#agents"><span class="ph top"><img src="assets/img/connect-client.webp" alt="" loading="lazy" width="565" height="1040"></span><span class="tx"><b><span>8</span>Hand it to an agent</b><small>Scenario MCP</small></span></a>
       </div>
-      <p class="small" style="margin-top:1.2rem">Every picture is a real run in Photoshop 2026 with this development build, at the models the panel showed. Pictures from the second film carry the label <span class="src">THE LAST KEEPER</span>. Prices are the ones the buttons showed; they change with the model, the document and the settings. The project name in the panel is blurred.</p>
+      <p class="small" style="margin-top:1.2rem">Every picture is a real run in Photoshop 2026 with the plugin, at the models the panel showed. Pictures from the second film carry the label <span class="src">THE LAST KEEPER</span>. Prices are the ones the buttons showed; they change with the model, the document and the settings. The project name in the panel is blurred.</p>
     </section>
 
     <!-- ================================================================ 1 CREATE -->
@@ -1147,7 +1147,7 @@ td:first-child { font-weight: 500; min-width: 140px; }
         </ol>
         <figure class="pc"><img src="assets/img/connect-client.webp" alt="Connect a client: rows for Claude Code, Codex, Cursor and Claude Desktop with Copy command, Get the extension and Copy token" loading="lazy" width="565" height="1040"><figcaption>A row per client.</figcaption></figure>
       </div>
-      <div class="note look"><span class="nk">In this development build</span>
+      <div class="note look"><span class="nk">Until the server is on npm</span>
         <p>The server is not on npm yet, so the copied <code>npx</code> commands work once it is published. From a checkout of the repository, after <b>Copy pairing token</b>:</p>
         <pre><code>pbpaste | node helper/bin/scenario-photoshop.js setup claude-code --local --token-stdin</code></pre>
         <p>Buttons that copy the pairing token clear the clipboard after 60 seconds.</p>
@@ -1244,23 +1244,22 @@ td:first-child { font-weight: 500; min-width: 140px; }
 
     <section id="install" data-toc="Install and sign in">
       <h2>Install and sign in</h2>
-      <p class="what">The plugin is not on the Adobe Marketplace yet. You build the <code>.ccx</code> package from the repository and install it with Creative Cloud's installer.</p>
+      <p class="what">The plugin is not on the Adobe Marketplace yet. Download the <code>.ccx</code> package of the latest release and install it with Creative Cloud's installer.</p>
       <h4>You need</h4>
       <ul class="list">
         <li>Photoshop 2026 (27.x). Tested on 27.11 on macOS; Windows not tested.</li>
-        <li>Node.js 20 or later, to build the package.</li>
         <li>A Scenario account on a plan with API access (Starter or above).</li>
       </ul>
       <h4>Install</h4>
       <ol class="steps">
-        <li><b>Build the package</b> from a checkout of <a href="https://github.com/scenario-labs/photoshop-plugin">scenario-labs/photoshop-plugin</a>:
-          <pre><code>npm ci
-npm run package   # writes build/scenario-photoshop-{{version}}.ccx</code></pre></li>
+        <li><b>Download</b> <a href="/download/latest">scenario-photoshop-{{version}}.ccx</a>, the package of the latest release.</li>
         <li><b>Install it</b> with Creative Cloud's plugin installer, then restart Photoshop:
           <pre><code>"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" \
-  --install "$PWD/build/scenario-photoshop-{{version}}.ccx"</code></pre></li>
+  --install "$HOME/Downloads/scenario-photoshop-{{version}}.ccx"</code></pre></li>
         <li><b>Open the panel</b> from <b>Plugins › Scenario</b>. Photoshop hides docked panels on its Home screen, so open or make a document first.</li>
       </ol>
+      <p class="small">The <a href="https://github.com/scenario-labs/photoshop-plugin/releases/tag/photoshop-plugin-v{{version}}">release page</a> has the same package with its <code>SHA256SUMS</code> and a build attestation: <code>gh attestation verify "$HOME/Downloads/scenario-photoshop-{{version}}.ccx" -R scenario-labs/photoshop-plugin</code>.</p>
+      <p class="small"><b>Or build it</b> from a checkout of <a href="https://github.com/scenario-labs/photoshop-plugin">scenario-labs/photoshop-plugin</a> with Node.js 20 or later: <code>npm ci</code>, then <code>npm run package</code> writes <code>build/scenario-photoshop-{{version}}.ccx</code>. Install that file instead.</p>
       <p class="small">Checked live with the release package on macOS: install, restart, sign-in and a first image took 1 min 53 s, with a script doing the clicks. Installing by double-clicking the <code>.ccx</code> was not tested.</p>
 
       <h3 id="sign-in">Sign in</h3>

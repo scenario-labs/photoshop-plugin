@@ -14,7 +14,7 @@ The full tool reference is [spec/MCP.md](spec/MCP.md). Claims carry how they wer
 | Claude Desktop | Config file writing *tested automated*. The `.mcpb` extension *not tested* |
 | Windows | *Not tested* |
 
-> **Development build.** The helper is not on npm yet, so the commands that read `npx -y @scenario-labs/photoshop-mcp@X.Y.Z` do not work until it is published. From a checkout of this repository, use `node helper/bin/scenario-photoshop.js` in their place and add `--local`, which registers this checkout's helper with your Node:
+> **Not on npm yet.** The helper is not published to npm, so the commands that read `npx -y @scenario-labs/photoshop-mcp@X.Y.Z` do not work until it is published. From a checkout of this repository, use `node helper/bin/scenario-photoshop.js` in their place and add `--local`, which registers this checkout's helper with your Node:
 >
 > ```sh
 > pbpaste | node helper/bin/scenario-photoshop.js setup claude-code --local --token-stdin

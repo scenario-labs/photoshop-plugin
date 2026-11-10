@@ -81,18 +81,22 @@ async function latestVersion(wanted?: string, ttl = LATEST_TTL_MS): Promise<stri
   if (cached && age < ttl && (wanted === undefined || cached.version === wanted || age < LATEST_RETRY_MS)) {
     return cached.version;
   }
-  let latest = cached?.version ?? "";
-  try {
-    const response = await fetch(`${origin}/download/latest.json`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-    if (response.ok) {
-      const version = ((await response.json()) as { version?: unknown }).version;
-      latest = typeof version === "string" && VERSION.test(version) ? version : "";
-    }
-  } catch {
-    // Keep the last version read; an unreadable file only makes this count unknown.
-  }
+  // Keep the last version read when the read fails; an unreadable file only makes this count unknown.
+  const latest = (await readLatest(origin)) ?? cached?.version ?? "";
   published.set(origin, { version: latest, at: now });
   return latest;
+}
+
+/** One read of download/latest.json: its version, "" when it names none, or null when it cannot be read. */
+async function readLatest(origin: string): Promise<string | null> {
+  try {
+    const response = await fetch(`${origin}/download/latest.json`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    if (!response.ok) return null;
+    const version = ((await response.json()) as { version?: unknown }).version;
+    return typeof version === "string" && VERSION.test(version) ? version : "";
+  } catch {
+    return null;
+  }
 }
 
 async function send(token: string, version: string, properties: Properties): Promise<void> {
@@ -111,9 +115,16 @@ async function send(token: string, version: string, properties: Properties): Pro
   }
 }
 
-/** /download/latest: a redirect to the latest package on this site, or to the releases page before the first release. */
+/**
+ * /download/latest: a redirect to the latest package on this site, read
+ * afresh, or to the releases page before the first release or when
+ * latest.json cannot be read. A version remembered from an earlier read could
+ * name a package Pages no longer serves, since it keeps the latest one only.
+ */
 async function redirectToLatest(): Promise<Response> {
-  const version = await latestVersion(undefined, 0);
+  const origin = env("SITE_ORIGIN") || ORIGIN;
+  const version = await readLatest(origin);
+  if (version !== null) published.set(origin, { version, at: Date.now() });
   const location = version
     ? `/download/scenario-photoshop-${version}.ccx`
     : "https://github.com/scenario-labs/photoshop-plugin/releases";

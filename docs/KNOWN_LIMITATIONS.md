@@ -1,6 +1,6 @@
 # Known limitations
 
-This page lists what the development build does not do yet, what it does imperfectly, and what was not tested. The evidence: the Node test suite (493 tests, with a mock of Scenario's API and a fake Photoshop: *tested automated*), and live passes in Photoshop 27.11 on macOS, one paid run per action at its default model, with the panel docked at 320 px (*verified live*). Everything the live passes did not reach is marked *not tested*. Each part of the plugin and how it was checked: [STATUS.md](STATUS.md).
+This page lists what the plugin does not do yet, what it does imperfectly, and what was not tested. The evidence: the Node test suite (493 tests, with a mock of Scenario's API and a fake Photoshop: *tested automated*), and live passes in Photoshop 27.11 on macOS, one paid run per action at its default model, with the panel docked at 320 px (*verified live*). Everything the live passes did not reach is marked *not tested*. Each part of the plugin and how it was checked: [STATUS.md](STATUS.md).
 
 ## Not in this build
 
@@ -10,7 +10,7 @@ This page lists what the development build does not do yet, what it does imperfe
 - **Large uploads**: every upload goes through Scenario's API and stays under 4,000,000 bytes as sent. A capture over the limit is reduced in 10% steps; when the result's size follows the capture (Upscale, for example), the panel stops first and shows the new size and price. A reference file still over 4 MB without its metadata is refused.
 - **Log and capture rotation** after 7 days.
 - **The agent's plan card** is built, but the agent link does not send plans yet.
-- **Not on the Adobe Marketplace, and the helper is not on npm.** You build the `.ccx` from this repository, and agent clients run the helper from a checkout (see [MCP.md](MCP.md)).
+- **Not on the Adobe Marketplace, and the helper is not on npm.** You install the `.ccx` package of a release, from [photoshop.scenario.com/download/latest](https://photoshop.scenario.com/download/latest), or build it from this repository; agent clients run the helper from a checkout (see [MCP.md](MCP.md)).
 
 ## Runtime and authentication
 

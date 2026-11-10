@@ -73,6 +73,9 @@ test("the handbook links to the given ref and checks those links in the given tr
   assert.deepEqual(ok.r.problems, []);
   assert.ok(ok.html.includes("/blob/photoshop-plugin-v9.9.9/"), "links open the given ref");
   assert.match(ok.html, /<code>abc1234<\/code>/);
+  // A release, not a development package: the cover and the header say the version only.
+  assert.doesNotMatch(ok.html, /, development build<|title="Development build"/);
+  assert.match(ok.html, /href="https:\/\/photoshop\.scenario\.com\/download\/latest"/);
   // The release workflow: a tag that does not exist yet, no tree.
   assert.deepEqual(run("photoshop-plugin-v9.9.9").r.problems, []);
   // Git's empty tree holds none of the linked files.
