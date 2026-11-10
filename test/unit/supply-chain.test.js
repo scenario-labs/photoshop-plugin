@@ -112,6 +112,7 @@ test("every GitHub workflow pins its actions by full commit and declares its per
       assert.doesNotMatch(text, /\| *grep -q/, `${f}: a pipe into grep -q fails under pipefail`);
       assert.match(text, /node tools\/release\/stamp-site\.js "\$RUNNER_TEMP\/site\/index\.html" "\$VERSION" "\$REF"/, `${f} stamps the release into the page`);
       assert.match(text, /HANDBOOK_GITHUB_REF: \$\{\{ steps\.release\.outputs\.ref \}\}/, `${f}: the handbook links to the release`);
+      assert.match(text, /HANDBOOK_TREE: \$\{\{ steps\.release\.outputs\.tree \}\}/, `${f}: the handbook checks its links in the release's tree`);
     }
     for (const m of text.matchAll(/^\s+([a-z-]+):\s*write\s*$/gm)) {
       const allowed = ["id-token", "contents", "attestations", ...(pages ? ["pages"] : [])];

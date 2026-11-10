@@ -127,12 +127,16 @@ function gitInfo() {
   return r.status === 0 ? r.stdout.trim() : "";
 }
 
-// Whether a repository file exists where the handbook's links point: in the
-// checkout for main, else in the tree of HANDBOOK_GITHUB_REF (a release tag
-// Publish site fetched), since a file on main may not be in the release.
+// Whether a repository file exists where the handbook's links point. Publish
+// site builds a release's docs on main's checkout, so it names the release's
+// commit in HANDBOOK_TREE and the files are looked up there: a file on main
+// may not be in the release. Otherwise the checkout is that tree: main, or
+// the release commit in the release workflow, whose HANDBOOK_GITHUB_REF tag
+// does not exist yet while the release is a draft.
+const TREE = process.env.HANDBOOK_TREE || "";
 function inRepo(target) {
-  if (GITHUB_REF === "main") return fs.existsSync(path.join(ROOT, target));
-  return spawnSync("git", ["cat-file", "-e", `${GITHUB_REF}:${target}`], { cwd: ROOT }).status === 0;
+  if (!TREE) return fs.existsSync(path.join(ROOT, target));
+  return spawnSync("git", ["cat-file", "-e", `${TREE}:${target}`], { cwd: ROOT }).status === 0;
 }
 
 function formatDate(d) {
@@ -245,7 +249,7 @@ class Renderer {
       if (frag) return this.anchor(target, frag, href, file);
       if (this.ctx.fileHome[target]) return `#${this.ctx.fileHome[target]}`;
     }
-    if (!inRepo(target)) this.ctx.problems.push(`${file}: link to a missing file ${href}${GITHUB_REF === "main" ? "" : ` in ${GITHUB_REF}`}`);
+    if (!inRepo(target)) this.ctx.problems.push(`${file}: link to a missing file ${href}${TREE ? ` in ${TREE}` : ""}`);
     return BLOB + target + (frag ? `#${frag}` : "");
   }
 
