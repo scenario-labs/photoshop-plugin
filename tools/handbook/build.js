@@ -718,12 +718,13 @@ function chapterPages(pdfFile, chapters) {
 // ---------------------------------------------------------------- main
 
 function build(opts) {
-  const pkg = JSON.parse(read("package.json"));
+  // The plugin's version lives in its manifest (release-please updates it).
+  const { version } = JSON.parse(read("plugin/manifest.json"));
   const when = process.env.HANDBOOK_DATE ? new Date(process.env.HANDBOOK_DATE) : new Date();
   const docs = loadDocs();
   const { chapters, anchors, fileHome } = assemble(docs);
   const meta = {
-    version: pkg.version,
+    version,
     date: formatDate(when),
     commit: gitInfo(),
     anchors,
@@ -732,8 +733,8 @@ function build(opts) {
     problems: [],
     // Built with --no-pdf, the pages offer no PDF, so none links to a missing file.
     pdf: opts.pdf,
-    pdfName: `scenario-photoshop-handbook-${pkg.version}.pdf`,
-    htmlName: `scenario-photoshop-handbook-${pkg.version}.html`
+    pdfName: `scenario-photoshop-handbook-${version}.pdf`,
+    htmlName: `scenario-photoshop-handbook-${version}.html`
   };
   fs.mkdirSync(opts.out, { recursive: true });
 
