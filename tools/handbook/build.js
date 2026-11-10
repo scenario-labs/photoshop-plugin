@@ -490,7 +490,7 @@ function gallery(chapters, r) {
 function downloads(meta, mode) {
   const link = (file, text) => (mode === "web" ? `<a href="${file}">${text}</a>` : `<strong>${text}</strong> (<code>${file}</code>)`);
   return `<ul>
-<li>This handbook, ${meta.version}: ${link(meta.pdfName, "PDF for print, A4")} and ${link(meta.htmlName, "one HTML file that works offline")}.</li>
+<li>This handbook, ${meta.version}: ${meta.pdf ? `${link(meta.pdfName, "PDF for print, A4")} and ` : ""}${link(meta.htmlName, "one HTML file that works offline")}.</li>
 <li>The plugin is not on the Adobe Marketplace yet. Build the <code>.ccx</code> from the source and install it as described in <a href="#install">Install</a>.</li>
 <li>The agent helper is not on npm yet. Agent clients run it from a checkout; see <a href="#agents">Agents (Scenario MCP)</a>.</li>
 <li>Source code, issues and the changelog: <a href="${REPO_URL}" rel="noopener">github.com/scenario-labs/photoshop-plugin</a>, MIT license.</li>
@@ -730,6 +730,8 @@ function build(opts) {
     fileHome,
     assets: new Map(),
     problems: [],
+    // Built with --no-pdf, the pages offer no PDF, so none links to a missing file.
+    pdf: opts.pdf,
     pdfName: `scenario-photoshop-handbook-${pkg.version}.pdf`,
     htmlName: `scenario-photoshop-handbook-${pkg.version}.html`
   };
@@ -748,7 +750,7 @@ function build(opts) {
   fs.writeFileSync(path.join(opts.out, meta.htmlName), single);
 
   const problems = meta.problems;
-  check(web, opts.out, "index.html", problems, [meta.pdfName]);
+  check(web, opts.out, "index.html", problems, opts.pdf ? [meta.pdfName] : []);
   check(single, opts.out, meta.htmlName, problems);
   if (/\s(?:src)="(?!data:|https:)/.test(single)) problems.push(`${meta.htmlName}: a picture is not embedded`);
   const result = { out: opts.out, version: meta.version, pages: null, pdf: null, problems: [...new Set(problems)] };

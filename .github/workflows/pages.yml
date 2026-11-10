@@ -8,6 +8,9 @@
 name: Publish site
 
 on:
+  # workflow_run is safe here: the build checks out main, never the
+  # triggering run's head_sha, uses none of its artifacts, keeps no
+  # credentials, and runs only after a successful push run on main.
   workflow_run:
     workflows: [release-please]
     types: [completed]
@@ -65,9 +68,10 @@ jobs:
           cp -R site "$RUNNER_TEMP/site"
           # A PDF problem (Chrome, Poppler, page numbers) keeps the site and
           # the handbook web page; a problem in the docs themselves, which
-          # npm test catches on every pull request, still stops the publish.
+          # npm test catches on every pull request, fails the retry too and
+          # stops the publish. The first run's output names the cause.
           if ! npm run handbook -- --out "$RUNNER_TEMP/site/handbook"; then
-            echo "::warning::The handbook PDF did not build: publishing the handbook without it"
+            echo "::warning::The handbook build failed (cause above): retrying without the PDF"
             rm -rf "$RUNNER_TEMP/site/handbook"
             npm run handbook -- --no-pdf --out "$RUNNER_TEMP/site/handbook"
           fi

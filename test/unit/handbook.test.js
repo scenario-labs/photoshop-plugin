@@ -34,6 +34,8 @@ test("the handbook builds from the docs with every link and picture resolved", (
   for (const c of CHAPTERS) assert.ok(html.includes(`<h2 id="${c.id}">`), `chapter ${c.id}`);
   // The site at the root holds the domain; the handbook is published under it.
   assert.ok(!fs.existsSync(path.join(out, "CNAME")), "no CNAME");
+  // Built without the PDF, no page links to or names it.
+  assert.ok(!html.includes(".pdf"), "no PDF link without the PDF");
   // Every picture the docs show is copied next to the page.
   for (const m of html.matchAll(/<img src="(media\/[^"]+)"/g)) assert.ok(fs.existsSync(path.join(out, m[1])), m[1]);
   assert.ok(/media\/before-after\//.test(html), "before and after pictures");
