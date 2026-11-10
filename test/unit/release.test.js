@@ -288,3 +288,17 @@ test("the release workflow runs on main, builds and checks before it publishes, 
   // Every write goes through the release App's token.
   for (const m of WORKFLOW.matchAll(/^\s+(?:token|GH_TOKEN): (.+)$/gm)) assert.equal(m[1], "${{ steps.app-token.outputs.token }}");
 });
+
+test("each published release posts its notes to www.scenario.com/changelog, as blender-plugin", () => {
+  const text = read(".github/workflows/publish-changelog.yml");
+  // The publish job flips the draft with the App's token, so release: published starts this workflow.
+  assert.match(text, /^on:\n {2}release:\n {4}types: \[published\]\n {2}workflow_dispatch:\n/m);
+  assert.match(text, /if: github\.repository == 'scenario-labs\/photoshop-plugin'/);
+  assert.match(text, /\.isDraft == false and \.isPrerelease == false/, "stable published releases only");
+  assert.match(text, /--arg repo photoshop-plugin '\{repo: \$repo, changelog: \.\}'/, "the website knows this source as photoshop-plugin");
+  assert.match(text, /--request POST https:\/\/www\.scenario\.com\/api\/changelog\/ingest/);
+  assert.match(text, /version="\$\{TAG#photoshop-plugin-v\}"/, "the version checked in the answer is the tag's");
+  // The secret goes to curl on stdin, never on its command line.
+  assert.match(text, /printf 'header = "Authorization: Bearer %s"\\n' "\$CHANGELOG_INGEST_SECRET" \\\n\s+\| curl --config -/);
+  assert.ok(!/-H "Authorization/.test(text) && !/--header "Authorization/.test(text));
+});

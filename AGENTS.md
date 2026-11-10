@@ -35,7 +35,7 @@ Claims here are marked *verified live* (in Photoshop), *tested automated* (Node,
 | `test/live/` | Manual checks against a running Photoshop; not part of `npm test` |
 | `site/` | The photoshop.scenario.com page, published by `.github/workflows/pages.yml` |
 | `tools/site_proxy/` | `vercel.json` only: the Vercel project behind photoshop.scenario.com forwards every path to the GitHub Pages address |
-| `tools/release/` | Release workflow helpers (`.github/workflows/release-please.yml`, [RELEASING.md](RELEASING.md)): the draft a rerun may finish (`find-draft.js`), the Contributors section (`contributors.js`), the package check (`check-package.js`). `release-please-config.json` lists every file that holds the version |
+| `tools/release/` | Release workflow helpers (`.github/workflows/release-please.yml`, [RELEASING.md](RELEASING.md)): the draft a rerun may finish (`find-draft.js`), the Contributors section (`contributors.js`), the package check (`check-package.js`). `release-please-config.json` lists every file that holds the version. `.github/workflows/publish-changelog.yml` posts each published release's notes to www.scenario.com/changelog |
 
 ## Commands
 

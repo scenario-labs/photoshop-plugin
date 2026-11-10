@@ -5,8 +5,9 @@
 # a draft release, the jobs below build the .ccx and the handbook from the
 # release commit, check them, attach them with checksums and a build
 # attestation, then publish the draft, which creates the photoshop-plugin-vX.Y.Z
-# tag. The Publish site workflow (pages.yml) runs after this one by its name.
-# docs/RELEASING.md has the steps, the settings it needs and the recovery.
+# tag. The Publish site workflow (pages.yml) runs after this one by its name,
+# and publish-changelog.yml on the published release.
+# RELEASING.md has the steps, the settings it needs and the recovery.
 name: release-please
 
 on:
@@ -192,8 +193,9 @@ jobs:
 
       - run: node tools/release/check-package.js "dist/scenario-photoshop-${TAG#photoshop-plugin-v}.ccx" "${TAG#photoshop-plugin-v}"
 
-  # Publishing the draft creates the tag and makes the release public. Nothing
-  # may be attached after this once immutable releases are on.
+  # Publishing the draft creates the tag, makes the release public and fires
+  # `release: published`, which publish-changelog.yml consumes. Nothing may be
+  # attached after this once immutable releases are on.
   publish:
     needs: [release-please, assets, validate]
     runs-on: ubuntu-24.04
