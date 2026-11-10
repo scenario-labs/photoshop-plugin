@@ -34,6 +34,7 @@ Claims here are marked *verified live* (in Photoshop), *tested automated* (Node,
 | `test/vectors/pairing.json` | Known-answer vectors for the proofs, the session key and two frames |
 | `test/live/` | Manual checks against a running Photoshop; not part of `npm test` |
 | `site/` | The photoshop.scenario.com page, published by `.github/workflows/pages.yml` |
+| `tools/release/` | Release workflow helpers (`.github/workflows/release-please.yml`, [RELEASING.md](RELEASING.md)): the draft a rerun may finish (`find-draft.js`), the Contributors section (`contributors.js`), the package check (`check-package.js`). `release-please-config.json` lists every file that holds the version |
 
 ## Commands
 

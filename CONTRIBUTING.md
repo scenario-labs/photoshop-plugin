@@ -24,7 +24,7 @@ The checks under `test/live/` run against a live Photoshop and are not part of `
 - Branch from `main`. Pull requests are squash-merged: the PR title becomes the commit header, so it follows Conventional Commits with a scope from `tools/commitlint/commitlint.config.mjs`, for example `fix(panel): keep the button in view on short panels`. CI checks the title and every commit message with that config.
 - Keep one concern per pull request and fill the template briefly: the checks you ran, any action needed after merge and any known gap. Tick only what you ran.
 - Say how each claim was checked, as the docs do: *verified live* (in Photoshop), *tested automated* or *not tested*.
-- Note a change people will notice under **Unreleased** in `CHANGELOG.md`. Version fields change only for a new build.
+- Write the pull request title as a Conventional Commit people can read: release-please turns the titles into the changelog. Do not edit version fields or the generated part of `CHANGELOG.md` ([RELEASING.md](RELEASING.md)).
 - Show panel changes with before/after screenshots at the docked width (280 px), attached to the pull request rather than committed. Pictures for the docs go under `docs/media/`.
 - The repository is public: no machine paths, personal or customer names, email addresses, secrets or em dashes. `npm run lint` checks what it can.
 
