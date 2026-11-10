@@ -42,7 +42,7 @@ test("the helper ships an npm-shrinkwrap.json that pins every package by integri
 const WORKFLOWS = fs.readdirSync(path.join(ROOT, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f)).map((f) => path.join(".github", "workflows", f));
 // Every push path the site's workflow lists: the page, the handbook's builder
 // and the docs it is built from, and the workflow itself.
-const SITE_PATHS = ["site/**", "tools/handbook/**", "README.md", "docs/USER_GUIDE.md", "docs/MCP.md", "docs/KNOWN_LIMITATIONS.md", "docs/media/**", "PRIVACY.md", "SECURITY.md", "CHANGELOG.md", ".github/workflows/pages.yml"];
+const SITE_PATHS = ["site/**", "tools/handbook/**", "README.md", "docs/USER_GUIDE.md", "docs/MCP.md", "docs/KNOWN_LIMITATIONS.md", "docs/media/**", "PRIVACY.md", "SECURITY.md", "CHANGELOG.md", "tools/release/stamp-site.js", ".github/workflows/pages.yml"];
 
 // The keys of a workflow's top-level `on:` block, comments and blank lines
 // skipped, quoted or not. Any other spelling (`on: [push]`, a flow mapping,
@@ -105,6 +105,14 @@ test("every GitHub workflow pins its actions by full commit and declares its per
       assert.match(text, /github\.repository == 'scenario-labs\/photoshop-plugin'/, `${f} publishes from this repository only`);
       assert.match(text, /github\.event\.workflow_run\.conclusion == 'success'/, `${f} publishes only after a release run that succeeded`);
       assert.match(text, /ref: main\n/, `${f} builds main`);
+      // As for blender.scenario.com: the newest release's page and docs, its
+      // version and tag stamped into the page, the builders from main.
+      assert.match(text, /git restore --source="\$commit" -- site docs README\.md PRIVACY\.md SECURITY\.md CHANGELOG\.md\n/, `${f} publishes the release's page and docs, without main's newer files`);
+      assert.match(text, /git grep -qF '\{\{version\}\}' "\$commit" -- site\/index\.html/, `${f}: no pipe into grep -q under pipefail`);
+      assert.doesNotMatch(text, /\| *grep -q/, `${f}: a pipe into grep -q fails under pipefail`);
+      assert.match(text, /node tools\/release\/stamp-site\.js "\$RUNNER_TEMP\/site\/index\.html" "\$VERSION" "\$REF"/, `${f} stamps the release into the page`);
+      assert.match(text, /HANDBOOK_GITHUB_REF: \$\{\{ steps\.release\.outputs\.ref \}\}/, `${f}: the handbook links to the release`);
+      assert.match(text, /HANDBOOK_TREE: \$\{\{ steps\.release\.outputs\.tree \}\}/, `${f}: the handbook checks its links in the release's tree`);
     }
     for (const m of text.matchAll(/^\s+([a-z-]+):\s*write\s*$/gm)) {
       const allowed = ["id-token", "contents", "attestations", ...(pages ? ["pages"] : [])];

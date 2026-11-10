@@ -119,9 +119,24 @@ function imageSize(file) {
 
 const MIME = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".svg": "image/svg+xml", ".mp4": "video/mp4" };
 
+// The commit the handbook names: HANDBOOK_COMMIT when Publish site builds a
+// release's docs on main's checkout, else the checkout's own.
 function gitInfo() {
+  if (process.env.HANDBOOK_COMMIT) return process.env.HANDBOOK_COMMIT;
   const r = spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT, encoding: "utf8" });
   return r.status === 0 ? r.stdout.trim() : "";
+}
+
+// Whether a repository file exists where the handbook's links point. Publish
+// site builds a release's docs on main's checkout, so it names the release's
+// commit in HANDBOOK_TREE and the files are looked up there: a file on main
+// may not be in the release. Otherwise the checkout is that tree: main, or
+// the release commit in the release workflow, whose HANDBOOK_GITHUB_REF tag
+// does not exist yet while the release is a draft.
+const TREE = process.env.HANDBOOK_TREE || "";
+function inRepo(target) {
+  if (!TREE) return fs.existsSync(path.join(ROOT, target));
+  return spawnSync("git", ["cat-file", "-e", `${TREE}:${target}`], { cwd: ROOT }).status === 0;
 }
 
 function formatDate(d) {
@@ -234,7 +249,7 @@ class Renderer {
       if (frag) return this.anchor(target, frag, href, file);
       if (this.ctx.fileHome[target]) return `#${this.ctx.fileHome[target]}`;
     }
-    if (!fs.existsSync(path.join(ROOT, target))) this.ctx.problems.push(`${file}: link to a missing file ${href}`);
+    if (!inRepo(target)) this.ctx.problems.push(`${file}: link to a missing file ${href}${TREE ? ` in ${TREE}` : ""}`);
     return BLOB + target + (frag ? `#${frag}` : "");
   }
 
@@ -647,8 +662,12 @@ function check(full, outDir, label, problems, later = []) {
     if (/^(https?:|mailto:|data:)/.test(u) || later.includes(u)) continue;
     if (!fs.existsSync(path.join(outDir, u))) problems.push(`${label}: ${u} does not resolve`);
   }
-  for (const m of html.matchAll(/href="(https:\/\/github\.com\/scenario-labs\/photoshop-plugin\/blob\/[^/]+\/([^"#]+))/g)) {
-    if (!fs.existsSync(path.join(ROOT, m[2]))) problems.push(`${label}: GitHub link to a file not in the repository: ${m[2]}`);
+  // Links at the handbook's own ref are checked where resolve() checked them
+  // (HANDBOOK_TREE, the release, in Publish site); links a doc spells out at
+  // another ref, in the checkout.
+  for (const m of html.matchAll(/href="https:\/\/github\.com\/scenario-labs\/photoshop-plugin\/blob\/([^/]+)\/([^"#]+)/g)) {
+    const ok = m[1] === GITHUB_REF ? inRepo(m[2]) : fs.existsSync(path.join(ROOT, m[2]));
+    if (!ok) problems.push(`${label}: GitHub link to a file not in the repository${m[1] === GITHUB_REF && TREE ? ` at ${TREE}` : ""}: ${m[2]}`);
   }
   const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, " ");
   if (EM_DASH.test(text)) problems.push(`${label}: em dash`);

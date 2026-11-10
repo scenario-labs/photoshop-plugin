@@ -1,8 +1,11 @@
 # GitHub Pages publish for https://photoshop.scenario.com: the page in site/
 # at the root and the handbook generated from the docs under /handbook/, as one
 # site. Runs after each release, on every push to main that changes either, and
-# by hand. Pages serves it at https://scenario-labs.github.io/photoshop-plugin/;
-# the Vercel project on tools/site_proxy holds photoshop.scenario.com and
+# by hand. As for blender.scenario.com, the page, the docs and the version come
+# from the newest published release, so the site never names a version or
+# describes a feature people cannot download yet; the builders stay on main.
+# Pages serves it at https://scenario-labs.github.io/photoshop-plugin/; the
+# Vercel project on tools/site_proxy holds photoshop.scenario.com and
 # forwards every path there, as for blender.scenario.com. Set once:
 #   1. Repository Settings > Pages: Source "GitHub Actions" and no custom
 #      domain: one would make Pages redirect the proxy's requests back to it.
@@ -41,6 +44,7 @@ on:
       - "PRIVACY.md"
       - "SECURITY.md"
       - "CHANGELOG.md"
+      - "tools/release/stamp-site.js"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -73,15 +77,68 @@ jobs:
           node-version: "22"
       - run: npm ci
       - run: npm run lint
+      # The newest published release: its page and docs replace main's, files
+      # added on main since included (no --overlay), and its version and tag
+      # fill the page's {{version}} and {{ref}} (tools/release/stamp-site.js).
+      # A release from before the page took its version at publish time (0.8.0
+      # and earlier) spells it out in its page, so main's page and docs are
+      # published for it, with the release's version and links to main.
+      # Before the first release, main's own. The builders stay on main, as for
+      # Blender: a builder that no longer fits the release's docs fails the
+      # publish rather than publish them wrong.
+      - name: Take the page and the docs from the newest published release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # An empty answer means no release yet; an error from GitHub fails the
+          # step rather than publishing the site without its download.
+          tag="$(gh release list --repo "$GITHUB_REPOSITORY" --json tagName,isLatest --jq '[.[] | select(.isLatest)][0].tagName // ""')"
+          if [ -z "$tag" ]; then
+            echo "::notice::No release yet: main's page and docs, with no download"
+            version="$(node -p 'require("./plugin/manifest.json").version')"
+            { echo "tag="; echo "version=$version"; echo "ref=main"; echo "commit="; echo "tree="; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          version="${tag#photoshop-plugin-v}"
+          [[ "$tag" == "photoshop-plugin-v$version" && "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Unexpected release tag $tag"; exit 1; }
+          git fetch --no-tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+          commit="$(git rev-parse "refs/tags/$tag^{commit}")"
+          git restore --source="$commit" -- plugin/manifest.json
+          # git grep reads the blob itself: a pipe into grep -q would end
+          # git show with SIGPIPE, which pipefail reads as no match.
+          if git grep -qF '{{version}}' "$commit" -- site/index.html; then
+            git restore --source="$commit" -- site docs README.md PRIVACY.md SECURITY.md CHANGELOG.md
+            ref="$tag"
+            tree="$commit"
+            short="$(git rev-parse --short "$commit")"
+          else
+            echo "::warning::$tag spells its version in its page: publishing main's page and docs with version $version"
+            ref=main
+            tree=""
+            short=""
+          fi
+          [ "$(node -p 'require("./plugin/manifest.json").version')" = "$version" ] || { echo "::error::$tag's manifest is not $version"; exit 1; }
+          { echo "tag=$tag"; echo "version=$version"; echo "ref=$ref"; echo "commit=$short"; echo "tree=$tree"; } >> "$GITHUB_OUTPUT"
       - run: node test/run.js site-page
       # pdftotext numbers the PDF's contents; Chrome prints the PDF.
       - run: sudo apt-get update && sudo apt-get install -y poppler-utils
       - name: Put the site and the handbook together
         env:
           CHROME_PATH: /usr/bin/google-chrome
+          # The handbook's links to the repository point to the release, are
+          # checked in the release's tree, and it names the release's commit
+          # (the checkout's, main, when empty).
+          HANDBOOK_GITHUB_REF: ${{ steps.release.outputs.ref }}
+          HANDBOOK_TREE: ${{ steps.release.outputs.tree }}
+          HANDBOOK_COMMIT: ${{ steps.release.outputs.commit }}
+          VERSION: ${{ steps.release.outputs.version }}
+          REF: ${{ steps.release.outputs.ref }}
         run: |
           set -euo pipefail
           cp -R site "$RUNNER_TEMP/site"
+          node tools/release/stamp-site.js "$RUNNER_TEMP/site/index.html" "$VERSION" "$REF"
           # A PDF problem (Chrome, Poppler, page numbers) keeps the site and
           # the handbook web page; a problem in the docs themselves, which
           # npm test catches on every pull request, fails the retry too and
@@ -98,19 +155,13 @@ jobs:
       # against the release's SHA256SUMS and its build attestation first.
       # Before the first release there is nothing to add.
       - name: Add the latest release's package
+        if: steps.release.outputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          tag: ${{ steps.release.outputs.tag }}
+          version: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
-          # An empty answer means no release yet; an error from GitHub fails the
-          # step rather than publishing the site without its download.
-          tag="$(gh release list --repo "$GITHUB_REPOSITORY" --json tagName,isLatest --jq '[.[] | select(.isLatest)][0].tagName // ""')"
-          if [ -z "$tag" ]; then
-            echo "::notice::No release yet: the site has no download"
-            exit 0
-          fi
-          version="${tag#photoshop-plugin-v}"
-          [[ "$tag" == "photoshop-plugin-v$version" && "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::Unexpected release tag $tag"; exit 1; }
           file="scenario-photoshop-$version.ccx"
           dir="$RUNNER_TEMP/release"
           mkdir -p "$dir" "$RUNNER_TEMP/site/download"

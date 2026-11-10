@@ -48,3 +48,37 @@ test("the handbook builds from the docs with every link and picture resolved", (
   assert.ok(/class="claim claim-none">not tested/i.test(html));
   assert.ok(!EM_DASH.test(html));
 });
+
+test("the handbook links to the given ref and checks those links in the given tree", () => {
+  // HANDBOOK_GITHUB_REF names the ref the links open. .github/workflows/pages.yml
+  // builds a release's docs on main's checkout, so HANDBOOK_TREE names the
+  // release's commit, where each linked file must be, and HANDBOOK_COMMIT its
+  // short id. .github/workflows/release-please.yml sets only the ref: its tag
+  // does not exist while the release is a draft, and the checkout is the
+  // release commit.
+  const { spawnSync } = require("node:child_process");
+  const root = path.resolve(__dirname, "..", "..");
+  const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim();
+  const run = (ref, tree) => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), "handbook-ref-"));
+    const code = `const r = require(${JSON.stringify(path.join(root, "tools/handbook/build.js"))}).build({ out: ${JSON.stringify(out)}, pdf: false }); process.stdout.write(JSON.stringify(r));`;
+    const p = spawnSync(process.execPath, ["-e", code], { encoding: "utf8", env: { ...process.env, HANDBOOK_GITHUB_REF: ref, HANDBOOK_TREE: tree || "", HANDBOOK_COMMIT: "abc1234" } });
+    assert.equal(p.status, 0, p.stderr);
+    const r = JSON.parse(p.stdout);
+    const html = r.problems.length ? "" : fs.readFileSync(path.join(out, "index.html"), "utf8");
+    fs.rmSync(out, { recursive: true, force: true });
+    return { r, html };
+  };
+  const ok = run("photoshop-plugin-v9.9.9", head);
+  assert.deepEqual(ok.r.problems, []);
+  assert.ok(ok.html.includes("/blob/photoshop-plugin-v9.9.9/"), "links open the given ref");
+  assert.match(ok.html, /<code>abc1234<\/code>/);
+  // The release workflow: a tag that does not exist yet, no tree.
+  assert.deepEqual(run("photoshop-plugin-v9.9.9").r.problems, []);
+  // Git's empty tree holds none of the linked files.
+  const empty = run("photoshop-plugin-v9.9.9", "4b825dc642cb6eb9a060e54bf8d69288fbee4904");
+  assert.ok(empty.r.problems.some((p) => / in 4b825dc642cb6eb9a060e54bf8d69288fbee4904$/.test(p)), empty.r.problems.join("\n"));
+  // The page check reads the same tree, not main's checkout: a file the release
+  // holds and main has since removed must not stop the publish.
+  assert.ok(empty.r.problems.some((p) => /GitHub link to a file not in the repository at 4b825dc642cb6eb9a060e54bf8d69288fbee4904: /.test(p)), empty.r.problems.join("\n"));
+});
