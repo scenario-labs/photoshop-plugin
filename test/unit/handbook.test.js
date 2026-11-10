@@ -9,7 +9,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const md = require("../../tools/handbook/markdown.js");
-const { build, CHAPTERS, SITE_HOST } = require("../../tools/handbook/build.js");
+const { build, CHAPTERS } = require("../../tools/handbook/build.js");
 const EM_DASH = new RegExp(String.fromCharCode(0x2014));
 
 test("the Markdown reader handles the subset the docs use", () => {
@@ -32,7 +32,8 @@ test("the handbook builds from the docs with every link and picture resolved", (
   assert.deepEqual(r.problems, []);
   const html = fs.readFileSync(path.join(out, "index.html"), "utf8");
   for (const c of CHAPTERS) assert.ok(html.includes(`<h2 id="${c.id}">`), `chapter ${c.id}`);
-  assert.equal(fs.readFileSync(path.join(out, "CNAME"), "utf8").trim(), SITE_HOST);
+  // The site at the root holds the domain; the handbook is published under it.
+  assert.ok(!fs.existsSync(path.join(out, "CNAME")), "no CNAME");
   // Every picture the docs show is copied next to the page.
   for (const m of html.matchAll(/<img src="(media\/[^"]+)"/g)) assert.ok(fs.existsSync(path.join(out, m[1])), m[1]);
   assert.ok(/media\/before-after\//.test(html), "before and after pictures");

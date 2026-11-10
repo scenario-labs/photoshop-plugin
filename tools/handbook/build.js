@@ -31,8 +31,6 @@ const REPO_URL = "https://github.com/scenario-labs/photoshop-plugin";
 const GITHUB_REF = process.env.HANDBOOK_GITHUB_REF || "main";
 const BLOB = `${REPO_URL}/blob/${GITHUB_REF}/`;
 const APP_URL = "https://app.scenario.com/";
-// The public address of the site (GitHub Pages custom domain, served at the root).
-const SITE_HOST = "photoshop.scenario.com";
 
 // ---------------------------------------------------------------- options
 
@@ -743,8 +741,9 @@ function build(opts) {
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(abs, dest);
   }
+  // No CNAME: .github/workflows/pages.yml publishes this under /handbook/ of
+  // the site in site/, which holds the domain.
   fs.writeFileSync(path.join(opts.out, "index.html"), web);
-  fs.writeFileSync(path.join(opts.out, "CNAME"), `${SITE_HOST}\n`);
   const single = page(meta, chapters, docs, "single");
   fs.writeFileSync(path.join(opts.out, meta.htmlName), single);
 
@@ -801,4 +800,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { build, CHAPTERS, SITE_HOST };
+module.exports = { build, CHAPTERS };

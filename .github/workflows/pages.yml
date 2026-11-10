@@ -1,10 +1,10 @@
-# GitHub Pages publish for https://photoshop.scenario.com: the page in site/.
-# Runs after each release, on every push to main that changes the site, and by
-# hand. Before the first run:
+# GitHub Pages publish for https://photoshop.scenario.com: the page in site/
+# at the root and the handbook generated from the docs under /handbook/, as one
+# site. Runs after each release, on every push to main that changes either, and
+# by hand. Before the first run:
 #   1. Repository Settings > Pages: Source "GitHub Actions"; Custom domain
 #      photoshop.scenario.com; Enforce HTTPS once the certificate is issued.
 #   2. DNS for scenario.com: CNAME photoshop -> scenario-labs.github.io.
-# The generated handbook keeps its own workflow in tools/handbook/pages.yml.
 name: Publish site
 
 on:
@@ -16,6 +16,15 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      - "tools/handbook/**"
+      - "README.md"
+      - "docs/USER_GUIDE.md"
+      - "docs/MCP.md"
+      - "docs/KNOWN_LIMITATIONS.md"
+      - "docs/media/**"
+      - "PRIVACY.md"
+      - "SECURITY.md"
+      - "CHANGELOG.md"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -46,10 +55,19 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: node test/run.js site-page
+      # pdftotext numbers the PDF's contents; Chrome prints the PDF.
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - name: Put the site and the handbook together
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          set -euo pipefail
+          cp -R site "$RUNNER_TEMP/site"
+          npm run handbook -- --out "$RUNNER_TEMP/site/handbook"
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: site
+          path: ${{ runner.temp }}/site
 
   deploy:
     needs: build
