@@ -202,3 +202,28 @@ test("Retry on the sign-in view repeats the browser sign-in after it failed offl
   await waitFor(() => doc.shown("view-choose"), { label: "retried as a browser sign-in" });
   assert.equal(idp.state.requests.filter((r) => r.path === "/oauth/device_authorization").length, 2);
 });
+
+test("leaving the chooser by the panel menu ends the waiting sign-in; Choose another project then lists the saved one", async (t) => {
+  const { doc, app, idp, box } = await bootPanel(t);
+  doc.byId("signin-browser").click();
+  await waitFor(() => doc.shown("view-choose"), { label: "chooser" });
+  rowOf(doc, "project_film").click();
+  await waitFor(() => doc.shown("view-main"), { label: "signed in" });
+
+  // A second sign-in, of an account with other projects, left at its chooser.
+  box.teams = [{ id: "team_other", name: "Other", projects: [{ id: "project_a", name: "A" }, { id: "project_b", name: "B" }] }];
+  doc.byId("project").click();
+  doc.byId("projects-add").click();
+  doc.byId("signin-browser").click();
+  await waitFor(() => doc.shown("view-choose") && chooserRows(doc).includes("# Other"), { label: "second chooser" });
+  assert.equal(app.menu.invoke("settings"), true);
+  assert.equal(app.auth.waiting(), false);
+  await waitFor(() => idp.state.revoked.length === 1, { label: "the left sign-in revoked" });
+
+  box.teams = teamsFixture();
+  doc.byId("project").click();
+  doc.byId("projects-choose").click();
+  await waitFor(() => chooserRows(doc).length > 0, { label: "chooser listed" });
+  assert.ok(chooserRows(doc).includes("  Film *"), "the saved sign-in's projects, its own checked");
+  assert.ok(!chooserRows(doc).includes("# Other"));
+});
