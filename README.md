@@ -32,7 +32,7 @@ Before and after pictures for each action are in the [User Guide](docs/USER_GUID
 
 You need Photoshop 2026 (27.x; tested on 27.11 on macOS) and a Scenario account on a plan with API access (Starter or above).
 
-1. Download the package of the latest release, `scenario-photoshop-<version>.ccx`, from [photoshop.scenario.com/download/latest](https://photoshop.scenario.com/download/latest) or the [releases page](https://github.com/scenario-labs/photoshop-plugin/releases), which also lists its `SHA256SUMS` and a build attestation (`gh attestation verify scenario-photoshop-<version>.ccx -R scenario-labs/photoshop-plugin`).
+1. Download the package of the latest release, `scenario-photoshop-<version>.ccx`, from [photoshop.scenario.com/download/latest](https://photoshop.scenario.com/download/latest) or the [releases page](https://github.com/scenario-labs/photoshop-plugin/releases), which also lists its `SHA256SUMS` and a build attestation (`gh attestation verify "$HOME/Downloads/scenario-photoshop-<version>.ccx" -R scenario-labs/photoshop-plugin`).
 
 2. Install it with Creative Cloud's plugin installer, then restart Photoshop (the plugin loads at the next launch). Replace `<version>` with the one in the file name:
 

@@ -126,6 +126,8 @@ test("the docs the site publishes spell no build version, which would go stale",
     const text = fs.readFileSync(path.join(ROOT, f), "utf8");
     const m = /[Dd]evelopment build \(?\d+\.\d+\.\d+|scenario-photoshop-\d+\.\d+\.\d+/.exec(text);
     assert.equal(m, null, `${f} names ${m && m[0]}`);
+    // Releases ship the package: building it is the alternative, never the only way.
+    assert.doesNotMatch(text, /You (?:build|install it from) (?:the |a )?`?\.ccx`?(?: file)? (?:built )?from (?:this|the) repository/i, `${f}: the release's package is the way in`);
   }
 });
 
@@ -136,6 +138,8 @@ test("Install leads with the latest release's package, and building it stays the
   const download = install.indexOf('<a href="/download/latest">scenario-photoshop-{{version}}.ccx</a>');
   assert.ok(download > 0, "step 1 downloads the latest release's package");
   assert.match(install, /--install "\$HOME\/Downloads\/scenario-photoshop-\{\{version\}\}\.ccx"/);
+  // The attestation check reads the file where the download left it.
+  assert.match(install, /gh attestation verify "\$HOME\/Downloads\/scenario-photoshop-\{\{version\}\}\.ccx"/);
   assert.match(install, /releases\/tag\/photoshop-plugin-v\{\{version\}\}/);
   assert.ok(install.indexOf("npm run package") > download, "building from the repository comes after the download");
   // The middleware answers /download/latest with the latest package.
