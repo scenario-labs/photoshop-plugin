@@ -44,6 +44,23 @@ const WORKFLOWS = fs.readdirSync(path.join(ROOT, ".github", "workflows")).filter
 // and the docs it is built from, and the workflow itself.
 const SITE_PATHS = ["site/**", "tools/handbook/**", "README.md", "docs/USER_GUIDE.md", "docs/MCP.md", "docs/KNOWN_LIMITATIONS.md", "docs/media/**", "PRIVACY.md", "SECURITY.md", "CHANGELOG.md", ".github/workflows/pages.yml"];
 
+// The keys of a workflow's top-level `on:` block, comments and blank lines
+// skipped. Any other spelling (`on: [push]`, a flow mapping, another indent)
+// gives null or no keys, so a check on the list fails rather than passes.
+function triggers(text) {
+  const lines = text.split("\n");
+  const at = lines.findIndex((l) => /^on:\s*(#.*)?$/.test(l));
+  if (at < 0) return null;
+  const keys = [];
+  for (const l of lines.slice(at + 1)) {
+    if (/^\s*(#.*)?$/.test(l)) continue;
+    if (!/^\s/.test(l)) break;
+    const m = /^ {2}([A-Za-z_]+):/.exec(l);
+    if (m) keys.push(m[1]);
+  }
+  return keys;
+}
+
 test("every GitHub workflow pins its actions by full commit and declares its permissions", () => {
   assert.ok(WORKFLOWS.length >= 2);
   for (const f of WORKFLOWS) {
@@ -64,6 +81,7 @@ test("every GitHub workflow pins its actions by full commit and declares its per
     const name = (text.match(/^name:\s*(.+?)\s*$/m) || [])[1];
     if (pages) assert.equal(name, "Publish site", `${f}: the one Pages workflow is Publish site`);
     if (name === "Publish site") {
+      assert.deepEqual(triggers(text), ["workflow_run", "push", "workflow_dispatch"], `${f} runs after a release, on a push and by hand, nothing else`);
       assert.match(text, /^\s+workflow_run:\s*\n\s+workflows: \[release-please\]\s*\n\s+types: \[completed\]\s*\n\s+branches: \[main\]/m, `${f} runs after release-please on main`);
       const push = text.match(/^\s+push:\s*\n\s+branches: \[main\]\s*\n\s+paths:\s*\n((?:\s+- .+\n)+)/m);
       assert.ok(push, `${f} runs on pushes to main, filtered by path`);
