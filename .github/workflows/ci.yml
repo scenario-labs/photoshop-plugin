@@ -27,3 +27,23 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run package
+
+  # The one check the main rulesets require from this workflow, so jobs can be
+  # added or renamed without touching the rulesets. Do not rename it.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every CI job to succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then
+              echo "::error::A CI job did not succeed: $RESULTS"
+              exit 1
+            fi
+          done
