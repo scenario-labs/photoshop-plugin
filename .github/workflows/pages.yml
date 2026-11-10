@@ -63,7 +63,14 @@ jobs:
         run: |
           set -euo pipefail
           cp -R site "$RUNNER_TEMP/site"
-          npm run handbook -- --out "$RUNNER_TEMP/site/handbook"
+          # A PDF problem (Chrome, Poppler, page numbers) keeps the site and
+          # the handbook web page; a problem in the docs themselves, which
+          # npm test catches on every pull request, still stops the publish.
+          if ! npm run handbook -- --out "$RUNNER_TEMP/site/handbook"; then
+            echo "::warning::The handbook PDF did not build: publishing the handbook without it"
+            rm -rf "$RUNNER_TEMP/site/handbook"
+            npm run handbook -- --no-pdf --out "$RUNNER_TEMP/site/handbook"
+          fi
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

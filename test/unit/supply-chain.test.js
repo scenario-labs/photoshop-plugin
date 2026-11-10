@@ -87,6 +87,7 @@ test("every GitHub workflow pins its actions by full commit and declares its per
       assert.ok(push, `${f} runs on pushes to main, filtered by path`);
       assert.deepEqual([...push[1].matchAll(/- "([^"]+)"/g)].map((m) => m[1]), SITE_PATHS, `${f}: the push paths are the site, the handbook and its docs`);
       assert.match(text, /npm run handbook -- --out "\$RUNNER_TEMP\/site\/handbook"/, `${f} builds the handbook under /handbook/`);
+      assert.match(text, /npm run handbook -- --no-pdf --out "\$RUNNER_TEMP\/site\/handbook"/, `${f}: a PDF failure falls back to the handbook without it`);
       assert.match(text, /github\.repository == 'scenario-labs\/photoshop-plugin'/, `${f} publishes from this repository only`);
       assert.match(text, /github\.event\.workflow_run\.conclusion == 'success'/, `${f} publishes only after a release run that succeeded`);
       assert.match(text, /ref: main\n/, `${f} builds main`);
