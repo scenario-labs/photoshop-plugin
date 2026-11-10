@@ -10,7 +10,7 @@ const { spawnSync } = require("node:child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 const SKIP_DIRS = new Set(["node_modules", ".git", "build"]);
-const TEXT = new Set([".js", ".json", ".md", ".html", ".css", ".yml", ".yaml", ".toml", ".txt", ""]);
+const TEXT = new Set([".js", ".ts", ".json", ".md", ".html", ".css", ".yml", ".yaml", ".toml", ".txt", ""]);
 const problems = [];
 
 function walk(dir, out = []) {

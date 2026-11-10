@@ -40,9 +40,10 @@ test("the site publishes to photoshop.scenario.com through the Vercel proxy, as 
     { source: "/(.*)", destination: "https://scenario-labs.github.io/photoshop-plugin/$1" }
   ]);
   // Vercel serves any other file in that directory instead of forwarding its
-  // path, so it holds vercel.json only. .DS_Store is gitignored, so Finder's
-  // copy never reaches Vercel.
-  assert.deepEqual(fs.readdirSync(PROXY).filter((n) => n !== ".DS_Store"), ["vercel.json"]);
+  // path, so it holds the routing and the download-count middleware only
+  // (site-proxy.test.js tests the middleware). .DS_Store is gitignored, so
+  // Finder's copy never reaches Vercel.
+  assert.deepEqual(fs.readdirSync(PROXY).filter((n) => n !== ".DS_Store").sort(), ["middleware.ts", "vercel.json"]);
   // Pages answers a folder without its final slash with a redirect to its
   // own address; the proxy adds the slash first for every folder the page
   // links to, so the reader stays on photoshop.scenario.com.
