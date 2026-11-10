@@ -512,12 +512,14 @@ function createAuth(o) {
   async function checkBrowser(c, hooks) {
     hooks = hooks || {};
     var creds = accounts.credentials();
+    var refused = null;
     if (hooks.onStep) hooks.onStep(1, STEPS);
     try {
       await client.request("GET", API.sign_in.auth_check.path, { query: API.sign_in.auth_check.query, onWait: hooks.onWait });
     } catch (e) {
       // A 403 here can be a project that is gone: the list below tells.
       if (!e || e.type !== "Forbidden") return browserFail(e, "browser_check_failed");
+      refused = e;
     }
     if (hooks.onStep) hooks.onStep(2, STEPS);
     var teams;
@@ -533,6 +535,8 @@ function createAuth(o) {
     } catch (e) {
       // the name is display only
     }
+    // Still listed, yet its read was refused: Scenario's answer says why.
+    if (refused) return browserFail(refused, "browser_check_failed");
     return { ok: true };
   }
 

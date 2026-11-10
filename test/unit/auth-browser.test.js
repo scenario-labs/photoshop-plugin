@@ -508,3 +508,15 @@ test("a refresh refused for the application (invalid_client, unauthorized_client
   await s.client.request("GET", "/models");
   assert.match(s.api.requests.at(-1).authorization, /^Bearer /);
 });
+
+test("Test connection fails when Scenario refuses the chosen project's reads while it is still listed", async (t) => {
+  const s = await setup(t);
+  await s.accounts.load();
+  await s.auth.signInWithBrowser({});
+  await s.auth.chooseProject("project_film");
+  s.api.setHandler((r) => (r.path === "/v1/models" ? { status: 403, body: { reason: "This role cannot read models" } } : undefined));
+  const out = await s.auth.testConnection({});
+  assert.equal(out.ok, false);
+  assert.equal(out.state, "browser_check_failed");
+  assert.equal(out.scenario_message, "This role cannot read models");
+});
