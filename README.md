@@ -39,7 +39,7 @@ You need Photoshop 2026 (27.x; tested on 27.11 on macOS) and a Scenario account 
    npm run package   # prints the file it writes: build/scenario-photoshop-<version>.ccx
    ```
 
-2. Install it with Creative Cloud's plugin installer, then restart Photoshop (the plugin loads at the next launch), with the version from step 1:
+2. Install it with Creative Cloud's plugin installer, then restart Photoshop (the plugin loads at the next launch). Replace `<version>` with the one in the file name `npm run package` printed:
 
    ```sh
    "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/build/scenario-photoshop-<version>.ccx"

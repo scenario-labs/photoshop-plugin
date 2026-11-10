@@ -48,3 +48,30 @@ test("the handbook builds from the docs with every link and picture resolved", (
   assert.ok(/class="claim claim-none">not tested/i.test(html));
   assert.ok(!EM_DASH.test(html));
 });
+
+test("Publish site's handbook links to the release and checks those links in the release's tree", () => {
+  // .github/workflows/pages.yml builds a release's docs on main's checkout:
+  // HANDBOOK_GITHUB_REF names the tag the links open, so each linked file must
+  // be in that tree, not only in main's; HANDBOOK_COMMIT names the release's
+  // commit instead of main's.
+  const { spawnSync } = require("node:child_process");
+  const root = path.resolve(__dirname, "..", "..");
+  const head = spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim();
+  const run = (ref) => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), "handbook-ref-"));
+    const code = `const r = require(${JSON.stringify(path.join(root, "tools/handbook/build.js"))}).build({ out: ${JSON.stringify(out)}, pdf: false }); process.stdout.write(JSON.stringify(r));`;
+    const p = spawnSync(process.execPath, ["-e", code], { encoding: "utf8", env: { ...process.env, HANDBOOK_GITHUB_REF: ref, HANDBOOK_COMMIT: "abc1234" } });
+    assert.equal(p.status, 0, p.stderr);
+    const r = JSON.parse(p.stdout);
+    const html = r.problems.length ? "" : fs.readFileSync(path.join(out, "index.html"), "utf8");
+    fs.rmSync(out, { recursive: true, force: true });
+    return { r, html };
+  };
+  const ok = run(head);
+  assert.deepEqual(ok.r.problems, []);
+  assert.ok(ok.html.includes(`/blob/${head}/`), "links open the given ref");
+  assert.match(ok.html, /<code>abc1234<\/code>/);
+  // Git's empty tree holds none of the linked files.
+  const empty = run("4b825dc642cb6eb9a060e54bf8d69288fbee4904");
+  assert.ok(empty.r.problems.some((p) => / in 4b825dc642cb6eb9a060e54bf8d69288fbee4904$/.test(p)), empty.r.problems.join("\n"));
+});

@@ -119,9 +119,20 @@ function imageSize(file) {
 
 const MIME = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".svg": "image/svg+xml", ".mp4": "video/mp4" };
 
+// The commit the handbook names: HANDBOOK_COMMIT when Publish site builds a
+// release's docs on main's checkout, else the checkout's own.
 function gitInfo() {
+  if (process.env.HANDBOOK_COMMIT) return process.env.HANDBOOK_COMMIT;
   const r = spawnSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT, encoding: "utf8" });
   return r.status === 0 ? r.stdout.trim() : "";
+}
+
+// Whether a repository file exists where the handbook's links point: in the
+// checkout for main, else in the tree of HANDBOOK_GITHUB_REF (a release tag
+// Publish site fetched), since a file on main may not be in the release.
+function inRepo(target) {
+  if (GITHUB_REF === "main") return fs.existsSync(path.join(ROOT, target));
+  return spawnSync("git", ["cat-file", "-e", `${GITHUB_REF}:${target}`], { cwd: ROOT }).status === 0;
 }
 
 function formatDate(d) {
@@ -234,7 +245,7 @@ class Renderer {
       if (frag) return this.anchor(target, frag, href, file);
       if (this.ctx.fileHome[target]) return `#${this.ctx.fileHome[target]}`;
     }
-    if (!fs.existsSync(path.join(ROOT, target))) this.ctx.problems.push(`${file}: link to a missing file ${href}`);
+    if (!inRepo(target)) this.ctx.problems.push(`${file}: link to a missing file ${href}${GITHUB_REF === "main" ? "" : ` in ${GITHUB_REF}`}`);
     return BLOB + target + (frag ? `#${frag}` : "");
   }
 

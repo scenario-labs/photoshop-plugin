@@ -107,7 +107,9 @@ test("every GitHub workflow pins its actions by full commit and declares its per
       assert.match(text, /ref: main\n/, `${f} builds main`);
       // As for blender.scenario.com: the newest release's page and docs, its
       // version and tag stamped into the page, the builders from main.
-      assert.match(text, /git restore --overlay --source="\$commit" -- site docs README\.md PRIVACY\.md SECURITY\.md CHANGELOG\.md\n/, `${f} publishes the release's page and docs`);
+      assert.match(text, /git restore --source="\$commit" -- site docs README\.md PRIVACY\.md SECURITY\.md CHANGELOG\.md\n/, `${f} publishes the release's page and docs, without main's newer files`);
+      assert.match(text, /git grep -qF '\{\{version\}\}' "\$commit" -- site\/index\.html/, `${f}: no pipe into grep -q under pipefail`);
+      assert.doesNotMatch(text, /\| *grep -q/, `${f}: a pipe into grep -q fails under pipefail`);
       assert.match(text, /node tools\/release\/stamp-site\.js "\$RUNNER_TEMP\/site\/index\.html" "\$VERSION" "\$REF"/, `${f} stamps the release into the page`);
       assert.match(text, /HANDBOOK_GITHUB_REF: \$\{\{ steps\.release\.outputs\.ref \}\}/, `${f}: the handbook links to the release`);
     }
