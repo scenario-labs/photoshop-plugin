@@ -7,6 +7,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { build } = require("./build.js");
+const { parse: parseTarget, origins: targetOrigins } = require("../src/dev/oauth-target.js");
 
 const PLUGIN = path.resolve(__dirname, "..");
 const REPO = path.resolve(PLUGIN, "..");
@@ -85,14 +86,29 @@ function zip(entries) {
   return Buffer.concat([...locals, cd, end]);
 }
 
+// A development package for a development sign-in target (src/dev/
+// oauth-target.js) also allows that target's hosts. The target file is read
+// from DEV_OAUTH_TARGET (or devTarget in the tests) and never packaged; a
+// release package always carries the manifest as it is in the repository.
+function manifestFor(dev, devTarget) {
+  const text = fs.readFileSync(path.join(PLUGIN, "manifest.json"), "utf8");
+  if (!dev || !devTarget) return Buffer.from(text, "utf8");
+  const target = parseTarget(fs.readFileSync(devTarget, "utf8"));
+  if (!target) throw new Error(`${devTarget}: not a development sign-in target (issuer, client_id, api_base, https only)`);
+  const manifest = JSON.parse(text);
+  const domains = manifest.requiredPermissions.network.domains;
+  for (const origin of targetOrigins(target)) if (!domains.includes(origin)) domains.push(origin);
+  return Buffer.from(JSON.stringify(manifest, null, 2) + "\n", "utf8");
+}
+
 // distFile: where the bundle is written. A development package writes it
 // under build/ so plugin/dist/main.js stays a release bundle; the tests use a
 // temporary folder. The zip takes the bundle from memory.
-function packagePlugin({ dev = false, outDir = path.join(REPO, "build"), distFile } = {}) {
+function packagePlugin({ dev = false, outDir = path.join(REPO, "build"), distFile, devTarget = dev ? process.env.DEV_OAUTH_TARGET : undefined } = {}) {
   const built = build({ dev, outFile: distFile || (dev ? path.join(outDir, "dev-dist", "main.js") : undefined) });
   const entries = FILES.map((name) => ({
     name,
-    data: name === "dist/main.js" ? Buffer.from(built.code, "utf8") : fs.readFileSync(path.join(PLUGIN, name))
+    data: name === "dist/main.js" ? Buffer.from(built.code, "utf8") : name === "manifest.json" ? manifestFor(dev, devTarget) : fs.readFileSync(path.join(PLUGIN, name))
   }));
   entries.push({ name: "LICENSE", data: fs.readFileSync(path.join(REPO, "LICENSE")) });
   const file = path.join(outDir, `scenario-photoshop-${built.version}${dev ? "-dev" : ""}.ccx`);

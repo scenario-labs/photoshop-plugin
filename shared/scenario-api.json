@@ -2,9 +2,25 @@
   "$comment": "How the plugin talks to Scenario's REST API (docs/spec/SPEC.md sections 2.3, 3.13 and 4). Data, not code, so a change on Scenario's side needs no code change. The Authorization header goes to base_url only. Measured live on 2026-10-19 with an Editor Project key unless a comment says otherwise.",
   "base_url": "https://api.cloud.scenario.com/v1",
   "sign_in": {
-    "$comment": "Save and test and Test connection run two free reads. auth_check needs a valid key (private models). projects returns the key's project with its name, id and keys; the plugin finds its own key by apiKeyId and keeps only the project name, the project id and its own role and scope. The same answer lists members' emails and every key id: it is never logged, stored or sent to the helper.",
+    "$comment": "Save and test and Test connection run two free reads. auth_check needs a valid key (private models). projects returns the key's project with its name, id and keys; the plugin finds its own key by apiKeyId and keeps only the project name, the project id and its own role and scope. The same answer lists members' emails and every key id: it is never logged, stored or sent to the helper. A browser sign-in reads its teams and projects instead: teams lists every team of the account with the projects it may use, and every later request carries the chosen project as project_query.",
     "auth_check": { "path": "/models", "query": { "pageSize": "1" } },
-    "projects": { "path": "/projects", "page_size": 100, "max_pages": 5 }
+    "projects": { "path": "/projects", "page_size": 100, "max_pages": 5 },
+    "teams": { "path": "/teams" },
+    "project_query": "projectId"
+  },
+  "oauth": {
+    "$comment": "Sign in with Scenario (docs/spec/SPEC.md section 4.6): the OAuth 2.0 device authorization grant against Scenario's identity provider, as the registered public application of the Photoshop plugin (no secret). The issuer is in the manifest's network domains; tokens go to the issuer and to base_url only. Measured on the development instance on 2026-11-03: errors follow RFC 8628 (authorization_pending, slow_down, access_denied, expired_token) and a refused refresh token answers invalid_grant.",
+    "issuer": "https://clerk.scenario.com",
+    "client_id": "m95oVZEZuxu79u9q",
+    "scope": "openid email profile offline_access",
+    "device_authorization_path": "/oauth/device_authorization",
+    "token_path": "/oauth/token",
+    "revocation_path": "/oauth/token/revoke",
+    "timeout_ms": 30000,
+    "poll_default_interval_s": 5,
+    "slow_down_step_s": 5,
+    "device_default_life_s": 600,
+    "refresh_margin_s": 60
   },
   "reads": {
     "timeout_ms": 30000,

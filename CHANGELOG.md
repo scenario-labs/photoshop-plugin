@@ -7,11 +7,13 @@ All notable changes to this project are written here. The format follows [Keep a
 ### Added
 
 - The prompt box's height: drag the grip on the composer's top edge, as between two Photoshop panels, to make the prompt taller; double-click the grip to go back. The takes area above keeps at least 64 px, and the height is kept on this computer. *Tested automated*; the grip checked in place live on Photoshop 27.11, the drag not yet pressed live.
+- **Sign in with Scenario**: the panel signs in with your Scenario account in the browser (the OAuth device sign-in, no key to create), then lists your teams and projects to choose one. Requests carry the chosen project; Projects can choose another; Test connection says when the chosen project is gone; Sign out asks Scenario to end the sign-in. The refresh token stays in Photoshop's secure storage. API keys keep working next to it. *Tested automated*; *verified live* in Photoshop 27.11 against Scenario's development sign-in and staging API.
 
 ### Fixed
 
 Each fix is *tested automated* (Node suite, fake Photoshop, synthetic pictures). Re-tested live on 2026-10-21 (development build, one run each at the default model); the result ends each line.
 
+- Panel: the icon of **Add a key for another project** (Projects and Settings), **Choose another project** and the Agents **Details** toggle sat on a line of its own above the label. It is now the button's icon, on the label's line. *Tested live* (Photoshop 27.11, development build).
 - Agent tools: `job_status.error` named panel buttons an agent does not have ("Use Place unmasked or Open as document" after a canvas change, "Resume download", "Resolve it in Jobs"). It now names the landing purpose or the tool (`new_document`, `recover_local_job`). *Tested automated*.
 - Agent tools: with **Agents may modify the document** off, the proposal card did not say that a take would land unmasked (after a panel reload) or where an expand would grow the canvas, so the person approved without the facts the agent had. The card and the expand review now say both. *Tested automated*.
 - Agent tools: `inspect_result_previews` returned `seam_ok: false` for a take the model redrew around the edit, the same reading as a misaligned take, so an agent dropped good paid takes the panel shows as "Re-rendered around the edit". Each take now carries `shift_px` and `badges`, the checks in words. *Tested automated*.

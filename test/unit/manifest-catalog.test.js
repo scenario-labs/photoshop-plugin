@@ -33,6 +33,7 @@ function section(text, from, to) {
 const SPEC_DOMAINS = [
   "https://api.cloud.scenario.com",
   "https://cdn.cloud.scenario.com",
+  "https://clerk.scenario.com",
   "https://api.github.com",
   "ws://localhost:9890",
   "ws://127.0.0.1:9890"

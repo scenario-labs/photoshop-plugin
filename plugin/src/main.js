@@ -21,6 +21,9 @@ var devUiLoop = require("./dev/ui-loop.js");
 var redactMod = require("./util/redact.js");
 var accountsMod = require("./auth/accounts.js");
 var authMod = require("./auth/auth.js");
+var oauthMod = require("./auth/oauth.js");
+var devOAuthTarget = require("./dev/oauth-target.js");
+var errorsMod = require("./scenario/errors.js");
 var clientMod = require("./scenario/client.js");
 var diagnosticsMod = require("./diagnostics.js");
 var catalogMod = require("./catalog/catalog.js");
@@ -108,15 +111,75 @@ function sessionMarker(random, now) {
 
 // env: { hostRequire, global, document, console; tests also pass host,
 // clipboardClearMs, apiBaseUrl (a mock Scenario API), downloadOrigins (the
-// mock CDN), pollDelay, offlineMs, blockedTexts and testHooks (the
-// development test hooks, which development builds always have) }
+// mock CDN), oauthTarget and oauthSleep (a mock identity provider), pollDelay,
+// offlineMs, blockedTexts and testHooks (the development test hooks, which
+// development builds always have) }
 function boot(env) {
   var host = env.host || hostMod.createHost(env.hostRequire, env.global);
   var redactor = redactMod.createRedactor();
   var logger = createLogger(host, env.console, redactor);
   var settings = statusMod.createSettings({ host: host, log: logger.log });
   var errors = diagnosticsMod.createErrorLog();
-  var accounts = accountsMod.createAccounts(host, redactor);
+  // Sign in with Scenario (SPEC 4.6): the production application, or the
+  // target a development build reads at startup (dev/oauth-target.js),
+  // before any request.
+  function makeOAuth(target) {
+    return oauthMod.createOAuth({ fetch: host.fetch, AbortController: host.AbortController, timers: host.timers, redactor: redactor, target: target, sleep: env.oauthSleep });
+  }
+  var oauthNow = makeOAuth(env.oauthTarget);
+  var oauth = {
+    startDevice: function () {
+      return oauthNow.startDevice();
+    },
+    waitForApproval: function (device, hooks) {
+      return oauthNow.waitForApproval(device, hooks);
+    },
+    refresh: function (token) {
+      return oauthNow.refresh(token);
+    },
+    revoke: function (token) {
+      return oauthNow.revoke(token);
+    },
+    get issuer() {
+      return oauthNow.issuer;
+    },
+    get target() {
+      return oauthNow.target;
+    }
+  };
+  // The session of a saved browser sign-in. One made against another
+  // identity provider (a development target) cannot send requests here.
+  function openSession(stored, save, onEnd, initial) {
+    if (stored.issuer !== oauth.issuer || stored.client_id !== oauth.target.client_id) {
+      return {
+        token: async function () {
+          throw new errorsMod.ScenarioError("NotSignedIn", "This sign-in belongs to another Scenario environment. Sign in again in the panel.");
+        },
+        refreshToken: function () {
+          return stored.refresh_token;
+        },
+        ended: function () {
+          return true;
+        }
+      };
+    }
+    return oauthMod.createSession({
+      oauth: oauth,
+      refresh_token: stored.refresh_token,
+      access_token: initial ? initial.access_token : null,
+      expires_at: initial ? initial.expires_at : 0,
+      now: host.timers.now,
+      save: save,
+      onEnd: function () {
+        logger.log("browser sign-in ended by Scenario: signed out");
+        return onEnd();
+      },
+      onSaveFailed: function () {
+        logger.log("browser sign-in: the new refresh token could not be saved");
+      }
+    });
+  }
+  var accounts = accountsMod.createAccounts(host, redactor, { openSession: openSession });
   var client = clientMod.createClient({
     fetch: host.fetch,
     AbortController: host.AbortController,
@@ -125,7 +188,18 @@ function boot(env) {
     redactor: redactor,
     baseUrl: env.apiBaseUrl
   });
-  var auth = authMod.createAuth({ client: client, accounts: accounts, redactor: redactor, log: logger.log, recordError: errors.record });
+  var auth = authMod.createAuth({
+    client: client,
+    accounts: accounts,
+    redactor: redactor,
+    log: logger.log,
+    recordError: errors.record,
+    oauth: oauth,
+    openPage: function (url) {
+      return host.openExternal(url);
+    },
+    now: host.timers.now
+  });
   var catalog = catalogMod.createCatalog({ client: client, host: host, account: accounts.current, now: host.timers.now, log: logger.log });
   var standIns = assetsMod.createStandIns({ client: client, host: host, account: accounts.current, log: logger.log });
   var panel = null;
@@ -328,6 +402,18 @@ function boot(env) {
   var flow = flowMod.createFlow({ catalog: catalog, quotes: quotes, host: host, runner: runner, capture: capture, account: accounts.current, log: logger.log });
 
   var ready = (async function () {
+    if (flags.DEV && !env.oauthTarget) {
+      try {
+        var devTarget = await devOAuthTarget.read(host, logger.log);
+        if (devTarget) {
+          oauthNow = makeOAuth(devTarget);
+          if (!env.apiBaseUrl) client.setBaseUrl(devTarget.api_base);
+          if (downloader && devTarget.download_origins.length) downloader.allowOrigins(devTarget.download_origins);
+        }
+      } catch (e) {
+        logger.log("dev build: development sign-in target unavailable");
+      }
+    }
     if (pairing && flags.DEV) {
       try {
         await devImport.importToken(host, pairing, logger.log);
@@ -483,6 +569,12 @@ function boot(env) {
       openLink: function (name) {
         if (!Object.prototype.hasOwnProperty.call(API.links, name) || name.charAt(0) === "$") throw new Error("unknown link " + name);
         return host.openExternal(API.links[name]);
+      },
+      // The sign-in page of the code on screen (an https page the identity
+      // provider named).
+      openPage: function (url) {
+        if (!/^https:\/\//i.test(String(url))) throw new Error("not an https page");
+        return host.openExternal(url);
       },
       copyText: function (text) {
         return host.clipboardWrite(redactor.apply(text));

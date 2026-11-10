@@ -43,7 +43,11 @@ function createDiagnostics(o) {
       var sw = o.settings.switches();
       var spending = o.settings.spending();
       var account = o.auth.status();
-      var saved = o.auth.list().length;
+      var rows = o.auth.list();
+      var saved = rows.filter(function (a) {
+        return a.kind !== "browser";
+      }).length;
+      var browser = rows.length - saved;
       var linkState = o.link ? o.link.state() : null;
       var errors = o.errors.list();
       var lines = [
@@ -52,7 +56,7 @@ function createDiagnostics(o) {
         "switches: modify " + onOff(sw.agents_may_modify) + ", commands " + onOff(sw.agents_may_run_commands) + ", active document only " + onOff(sw.active_document_only),
         "agent spending: " + spending.mode + ", no-spend " + onOff(o.settings.noSpend()),
         "agent link: " + (linkState ? linkState.phase : "none") + ", clients " + (linkState ? linkState.clients.length : 0),
-        "account: " + (account.signed_in ? "signed in" : "not signed in") + ", keys saved " + saved,
+        "account: " + (account.signed_in ? "signed in" : "not signed in") + ", keys saved " + saved + (browser ? ", browser sign-in projects saved " + browser : ""),
         "jobs: " + jobsLine(o.jobs),
         "last errors: " + (errors.length ? errors.join(", ") : "none")
       ];

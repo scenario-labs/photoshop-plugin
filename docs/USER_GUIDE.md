@@ -24,10 +24,10 @@ From install to a first image in about two minutes, once the package is built: 1
 
 1. **Install** the `.ccx` and restart Photoshop, then open **Plugins > Scenario**. The panel opens on **Connect your Scenario account**.
 
-   <img src="media/screens/first-run-sign-in.png" width="320" alt="The sign-in screen: API key and secret fields, Save and test, and links to create a key">
+   <img src="media/screens/first-run-sign-in.png" width="320" alt="The sign-in screen: Sign in with Scenario, then the API key and secret fields, Save and test, and links to create a key">
 
-2. **Get a key.** On app.scenario.com, in the project you want to use, create a **Project key** with the **Editor** role. A CU limit on the key caps what this plugin and connected agents can spend. Only team admins and project owners can create keys; **Copy a request for your admin** prepares the message for them.
-3. **Sign in.** Paste the key and the secret (pasting `key:secret`, or the two on two lines, fills both fields) and click **Save and test**. The plugin checks the key with two free reads and keeps it in Photoshop's secure storage on this computer. *Verified live* with the release package: `key:secret` pasted into the key field, then **Save and test**, which answered in about a second.
+2. **Sign in with Scenario.** Click **Sign in with Scenario**. Photoshop may ask before it opens Scenario's sign-in page in your browser. Approve there; if the page asks for a code, enter the one the panel shows (**Copy code**). **Open the page again**, **Copy code** and **Cancel** stay under the code while the panel waits. If your account can use several projects, **Choose a project** lists them by team; one click uses it. The project shows in the header, and **Choose another project** in Projects switches. Your sign-in stays in Photoshop's secure storage on this computer; **Sign out** in Settings removes it and asks Scenario to end it.
+3. **Or sign in with an API key.** On app.scenario.com, in the project you want to use, create a **Project key** with the **Editor** role. A CU limit on the key caps what this plugin and connected agents can spend. Only team admins and project owners can create keys; **Copy a request for your admin** prepares the message for them. Paste the key and the secret (pasting `key:secret`, or the two on two lines, fills both fields) and click **Save and test**. The plugin checks the key with two free reads and keeps it in Photoshop's secure storage on this computer. *Verified live* with the release package: `key:secret` pasted into the key field, then **Save and test**, which answered in about a second.
 4. **Make a new document** with **File > New** (Photoshop hides docked panels on its Home screen, so the panel shows once a document is open). On a blank canvas the panel opens on **Create image**: type a prompt and click the button, which shows its price. The image is made at the canvas's size and lands as a layer above the Background. On an image or a layer, **New layer** does the same.
 5. The context card shows the progress (Queued, Generating, Downloading), then the image lands as a new layer in one History state. *Verified live*.
 
@@ -248,6 +248,10 @@ Results are also in your Scenario project, so you find them again in the Library
 |---|---|
 | The panel is empty on Photoshop's Home screen | Open or create a document. Photoshop hides docked panels on Home |
 | "Scenario did not accept this key and secret." | Check you copied both, from a Project key. **Enter key again** or **Create an API key** |
+| "The sign-in was declined in the browser." or "The code expired before the sign-in finished." | **Sign in again**, and approve in the browser |
+| "This account has no project it can use." | Create a project on app.scenario.com, or ask a team admin for a role in one, then **Sign in again** |
+| "The chosen project is no longer available. Choose another one." | The project was deleted, or your role in it removed. **Choose a project** |
+| "Your Scenario sign-in ended. Sign in again." | Scenario no longer accepts the saved sign-in (signed out elsewhere, or revoked). **Sign in again** |
 | "API keys need a Starter plan or above. This team's plan has no API access." | Use a team on a plan with API access, or **Open plans**. **Copy a request for your admin** prepares the message |
 | A Team (Organization) key or a Reader key | Use a Project key with the Editor role |
 | **Fill in the prompt to see the price** | The action needs a prompt |
