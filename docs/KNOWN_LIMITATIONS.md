@@ -1,6 +1,6 @@
 # Known limitations
 
-This page lists what the development build does not do yet, what it does imperfectly, and what was not tested. The evidence: the Node test suite (493 tests, with a mock of Scenario's API and a fake Photoshop: *tested automated*), and live passes in Photoshop 27.11 on macOS, one paid run per action at its default model, with the panel docked at 320 px (*verified live*). Everything the live passes did not reach is marked *not tested*. Each part of the plugin and how it was checked: [STATUS.md](STATUS.md).
+This page lists what the plugin does not do yet, what it does imperfectly, and what was not tested. The evidence: the Node test suite (493 tests, with a mock of Scenario's API and a fake Photoshop: *tested automated*), and live passes in Photoshop 27.11 on macOS, one paid run per action at its default model, with the panel docked at 320 px (*verified live*). Everything the live passes did not reach is marked *not tested*. Each part of the plugin and how it was checked: [STATUS.md](STATUS.md).
 
 ## Not in this build
 

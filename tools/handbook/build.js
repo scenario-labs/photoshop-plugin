@@ -506,7 +506,7 @@ function downloads(meta, mode) {
   const link = (file, text) => (mode === "web" ? `<a href="${file}">${text}</a>` : `<strong>${text}</strong> (<code>${file}</code>)`);
   return `<ul>
 <li>This handbook, ${meta.version}: ${meta.pdf ? `${link(meta.pdfName, "PDF for print, A4")} and ` : ""}${link(meta.htmlName, "one HTML file that works offline")}.</li>
-<li>The plugin is not on the Adobe Marketplace yet. Build the <code>.ccx</code> from the source and install it as described in <a href="#install">Install</a>.</li>
+<li>The plugin is not on the Adobe Marketplace yet. Download the <code>.ccx</code> package of the latest release from <a href="https://photoshop.scenario.com/download/latest" rel="noopener">photoshop.scenario.com/download/latest</a> and install it as described in <a href="#install">Install</a>.</li>
 <li>The agent helper is not on npm yet. Agent clients run it from a checkout; see <a href="#agents">Agents (Scenario MCP)</a>.</li>
 <li>Source code, issues and the changelog: <a href="${REPO_URL}" rel="noopener">github.com/scenario-labs/photoshop-plugin</a>, MIT license.</li>
 </ul>`;
@@ -573,7 +573,7 @@ ${html}
 <div class="cover-logo">${logo}</div>
 <div class="cover-main"><p class="eyebrow">Handbook</p><h1 class="cover-title">Scenario for Photoshop</h1><p class="cover-sub">${lede ? r.inline(lede.text, "README.md") : ""}</p></div>
 ${heroImg ? `<img class="cover-img" src="${esc(heroImg.src)}" alt="">` : ""}
-<dl class="cover-meta"><div><dt>Version</dt><dd>${meta.version}, development build</dd></div><div><dt>Date</dt><dd>${meta.date}</dd></div><div><dt>Photoshop</dt><dd>2026 (27.x), tested on 27.11 on macOS</dd></div></dl>
+<dl class="cover-meta"><div><dt>Version</dt><dd>${meta.version}</dd></div><div><dt>Date</dt><dd>${meta.date}</dd></div><div><dt>Photoshop</dt><dd>2026 (27.x), tested on 27.11 on macOS</dd></div></dl>
 </section>`;
 
   const notes = `<div class="notes">
@@ -613,7 +613,7 @@ ${printToc}
 <header class="topbar">
 <div class="bar">
 <a class="brand" href="#top" aria-label="Scenario for Photoshop, top of the handbook">${logo}<span class="product">for Photoshop</span></a>
-<span class="version" title="Development build">${meta.version}</span>
+<span class="version" title="Version">${meta.version}</span>
 <div class="search" role="search">
 <label class="visually-hidden" for="q">Search the handbook</label>
 <input id="q" type="search" placeholder="Search" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="q-results" aria-autocomplete="list">

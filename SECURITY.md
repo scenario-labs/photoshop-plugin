@@ -13,7 +13,7 @@ Include what an investigation needs: the affected part (the Photoshop plugin, th
 
 ## Supported versions
 
-Nothing is released yet. Every build in this repository is a development build; fixes go into the next one. Once a release ships, security fixes go into the latest release only.
+Security fixes go into the next release, published on the [releases page](https://github.com/scenario-labs/photoshop-plugin/releases). Only the latest release is supported. Development builds (`-dev.ccx`, built from a checkout) are not.
 
 ## Scope
 

@@ -10,7 +10,7 @@ Generate, edit, upscale and cut out with [Scenario](https://www.scenario.com) mo
 
 *Remove on a selection, recorded in Photoshop 27.11 (3x speed). [MP4](docs/media/video/selection-edit.mp4).*
 
-> **Development build.** Not yet on the Adobe Marketplace, and the agent helper is not on npm yet. You install it from a `.ccx` file built from this repository.
+> **Not yet on the Adobe Marketplace**, and the agent helper is not on npm yet. You install the plugin from the `.ccx` package of a [release](https://github.com/scenario-labs/photoshop-plugin/releases).
 
 ## What it does
 
@@ -32,21 +32,18 @@ Before and after pictures for each action are in the [User Guide](docs/USER_GUID
 
 You need Photoshop 2026 (27.x; tested on 27.11 on macOS) and a Scenario account on a plan with API access (Starter or above).
 
-1. Build the package from a checkout (Node.js 20 or later):
+1. Download the package of the latest release, `scenario-photoshop-<version>.ccx`, from [photoshop.scenario.com/download/latest](https://photoshop.scenario.com/download/latest) or the [releases page](https://github.com/scenario-labs/photoshop-plugin/releases), which also lists its `SHA256SUMS` and a build attestation (`gh attestation verify scenario-photoshop-<version>.ccx -R scenario-labs/photoshop-plugin`).
+
+2. Install it with Creative Cloud's plugin installer, then restart Photoshop (the plugin loads at the next launch). Replace `<version>` with the one in the file name:
 
    ```sh
-   npm ci
-   npm run package   # prints the file it writes: build/scenario-photoshop-<version>.ccx
-   ```
-
-2. Install it with Creative Cloud's plugin installer, then restart Photoshop (the plugin loads at the next launch). Replace `<version>` with the one in the file name `npm run package` printed:
-
-   ```sh
-   "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/build/scenario-photoshop-<version>.ccx"
+   "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$HOME/Downloads/scenario-photoshop-<version>.ccx"
    ```
 
    *Verified live* with the release package on macOS on 2026-10-23, with Photoshop's Developer Mode on (whether the installer needs it was not tested): install, restart, sign-in and a first image took 1 min 53 s. A script did the clicks and typing, so this time has no reading in it, and 59 s of it was the generation. Double-clicking the `.ccx` should do the same through Creative Cloud; *not tested*.
 3. In Photoshop, open **Plugins > Scenario**.
+
+To build the package yourself instead (Node.js 20 or later), run `npm ci`, then `npm run package`, which prints the file it writes, `build/scenario-photoshop-<version>.ccx`, and install that file.
 
 ## First generation
 
