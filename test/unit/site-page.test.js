@@ -9,6 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const SITE = path.resolve(__dirname, "..", "..", "site");
+const PROXY = path.resolve(__dirname, "..", "..", "tools", "site_proxy");
 const MAX_BYTES = 50 * 1024 * 1024;
 // Built into the site at publish time by .github/workflows/pages.yml
 // (npm run handbook), so not in site/; handbook.test.js checks the build.
@@ -23,10 +24,28 @@ function files(dir, out = []) {
   return out;
 }
 
-test("the site publishes to photoshop.scenario.com", () => {
-  assert.equal(fs.readFileSync(path.join(SITE, "CNAME"), "utf8"), "photoshop.scenario.com\n");
+test("the site publishes to photoshop.scenario.com through the Vercel proxy", () => {
+  // GitHub Pages keeps no custom domain: it serves the site at its own
+  // address, and the Vercel project on tools/site_proxy holds the domain and
+  // forwards every path there. A domain on Pages would make it redirect the
+  // proxy's requests back to the domain.
+  assert.ok(!fs.existsSync(path.join(SITE, "CNAME")), "no CNAME in site/");
+  const proxy = JSON.parse(fs.readFileSync(path.join(PROXY, "vercel.json"), "utf8"));
+  assert.deepEqual(proxy.rewrites, [{ source: "/(.*)", destination: "https://scenario-labs.github.io/photoshop-plugin/$1" }]);
+  // Vercel serves any other file in that directory instead of forwarding its
+  // path, so it holds vercel.json only.
+  assert.deepEqual(fs.readdirSync(PROXY), ["vercel.json"]);
+  // Pages answers a folder without its final slash with a redirect to its
+  // own address; the proxy adds the slash first for every folder the page
+  // links to, so the reader stays on photoshop.scenario.com.
   const html = fs.readFileSync(path.join(SITE, "index.html"), "utf8");
   assert.match(html, /<title>[^<]+<\/title>/);
+  const folders = [...html.matchAll(/\b(?:src|href|poster)="([^":#?]+\/)"/g)].map((m) => m[1]);
+  assert.ok(folders.includes("handbook/"));
+  for (const f of folders) {
+    const bare = `/${f.slice(0, -1)}`;
+    assert.ok(proxy.redirects.some((r) => r.source === bare && r.destination === `${bare}/` && r.permanent), `${bare} redirects to ${bare}/`);
+  }
 });
 
 test("every local file the page links to is in site/", () => {

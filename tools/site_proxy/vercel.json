@@ -1,0 +1,5 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [{ "source": "/handbook", "destination": "/handbook/", "permanent": true }],
+  "rewrites": [{ "source": "/(.*)", "destination": "https://scenario-labs.github.io/photoshop-plugin/$1" }]
+}
