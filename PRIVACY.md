@@ -112,6 +112,10 @@ Layer metadata travels with the PSD when you share it. It never contains your ke
 - Through the local server, agents can never read your key, secret or pairing token, save, close or export documents, resolve uncertain jobs, approve their own spending or uploads, cancel jobs they did not start, or upload files you did not choose and the plugin did not make.
 - Settings > Connect an AI agent > **Activity log** lists every agent preview read, upload, spend and document change.
 
+## The website
+
+photoshop.scenario.com counts downloads of the plugin's package. For each download of a `.ccx` from the site, it sends Scenario's analytics service (PostHog, US) one anonymous event: the version downloaded, the kind of client (browser, script, crawler or other) and the country the site's host reads from the connection. It keeps no IP address, sets no cookie and gives each event a new random identifier. The plugin itself sends no analytics.
+
 ## Terms and contact
 
 - Scenario's [Privacy Policy](https://www.scenario.com/privacy-policy) and Terms: linked from [scenario.com](https://www.scenario.com).
