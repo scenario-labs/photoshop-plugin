@@ -45,21 +45,34 @@ const WORKFLOWS = fs.readdirSync(path.join(ROOT, ".github", "workflows")).filter
 const SITE_PATHS = ["site/**", "tools/handbook/**", "README.md", "docs/USER_GUIDE.md", "docs/MCP.md", "docs/KNOWN_LIMITATIONS.md", "docs/media/**", "PRIVACY.md", "SECURITY.md", "CHANGELOG.md", ".github/workflows/pages.yml"];
 
 // The keys of a workflow's top-level `on:` block, comments and blank lines
-// skipped. Any other spelling (`on: [push]`, a flow mapping, another indent)
-// gives null or no keys, so a check on the list fails rather than passes.
+// skipped, quoted or not. Any other spelling (`on: [push]`, a flow mapping,
+// another indent, a key it cannot read) gives null, no keys or an extra entry,
+// so a check on the list fails rather than passes.
 function triggers(text) {
   const lines = text.split("\n");
-  const at = lines.findIndex((l) => /^on:\s*(#.*)?$/.test(l));
+  const at = lines.findIndex((l) => /^["']?on["']?:\s*(#.*)?$/.test(l));
   if (at < 0) return null;
   const keys = [];
   for (const l of lines.slice(at + 1)) {
     if (/^\s*(#.*)?$/.test(l)) continue;
     if (!/^\s/.test(l)) break;
-    const m = /^ {2}([A-Za-z_]+):/.exec(l);
-    if (m) keys.push(m[1]);
+    const m = /^ {2}(["']?)([A-Za-z_]+)\1\s*:/.exec(l);
+    if (m) keys.push(m[2]);
+    else if (/^ {2}\S/.test(l)) keys.push(l.trim());
   }
   return keys;
 }
+
+test("a workflow's triggers are read past blank lines, comments and quotes", () => {
+  const on = (block) => triggers(`name: Site\n\n${block}\npermissions:\n  contents: read\n`);
+  assert.deepEqual(on("on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n"), ["push", "workflow_dispatch"]);
+  assert.deepEqual(on("on:\n  workflow_dispatch:\n\n  pull_request:\n"), ["workflow_dispatch", "pull_request"]);
+  assert.deepEqual(on("on:\n  workflow_dispatch:\n# a comment\n  pull_request_target:\n"), ["workflow_dispatch", "pull_request_target"]);
+  assert.deepEqual(on('on:\n  workflow_dispatch:\n  "pull_request":\n'), ["workflow_dispatch", "pull_request"]);
+  assert.deepEqual(on("\"on\":\n  'pull_request':\n"), ["pull_request"]);
+  assert.equal(on("on: [workflow_dispatch, pull_request]\n"), null);
+  assert.equal(on("on: {workflow_dispatch: null, pull_request: null}\n"), null);
+});
 
 test("every GitHub workflow pins its actions by full commit and declares its permissions", () => {
   assert.ok(WORKFLOWS.length >= 2);

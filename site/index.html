@@ -9,6 +9,10 @@
 <link rel="icon" href="assets/scenario-logo.svg">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
 <title>Scenario for Photoshop</title>
+<script>
+window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
+<script defer src="/handbook/page.js"></script>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1245,7 +1249,7 @@ td:first-child { font-weight: 500; min-width: 140px; }
       <ul class="list">
         <li>Photoshop 2026 (27.x). Tested on 27.11 on macOS; Windows not tested.</li>
         <li>Node.js 20 or later, to build the package.</li>
-        <li>A Scenario plan with API access (Starter or above), and a Project key with the Editor role.</li>
+        <li>A Scenario account on a plan with API access (Starter or above).</li>
       </ul>
       <h4>Install</h4>
       <ol class="steps">
@@ -1262,16 +1266,17 @@ npm run package   # writes build/scenario-photoshop-0.7.1.ccx</code></pre></li>
       <h3 id="sign-in">Sign in</h3>
       <div class="how">
         <ol class="steps">
-          <li>On <a href="https://app.scenario.com">app.scenario.com</a>, in the project you want to use, create a <b>Project key</b> with the <b>Editor</b> role. Copy the key and its secret. Only team admins and project owners can create keys: <b>Copy a request for your admin</b> prepares the message.</li>
-          <li>Paste both in the panel and click <b>Save and test</b>. Pasting <code>key:secret</code> fills both fields. Two free reads check the key.</li>
+          <li>In the panel, click <b>Sign in with Scenario</b>. Photoshop may ask before it opens Scenario's sign-in page in your browser. Approve there; if the page asks for a code, enter the one the panel shows (<b>Copy code</b>).</li>
+          <li>If your account can use several projects, <b>Choose a project</b> lists them by team; one click uses it. The project shows in the header, and <b>Choose another project</b> in Projects switches.</li>
+          <li><b>Or use an API key</b>: on <a href="https://app.scenario.com">app.scenario.com</a>, in the project you want to use, create a <b>Project key</b> with the <b>Editor</b> role, paste the key and its secret in the panel and click <b>Save and test</b>. Pasting <code>key:secret</code> fills both fields. Only team admins and project owners can create keys: <b>Copy a request for your admin</b> prepares the message.</li>
         </ol>
         <figure class="pc"><img src="assets/img/settings-account.webp" alt="Settings, Account: the signed-in project blurred, Add a key for another project, Test connection, Sign out" loading="lazy" width="565" height="550"><figcaption>Settings › Account. Project and key blurred.</figcaption></figure>
       </div>
       <div class="tbl"><table><tbody>
-        <tr><td>Where the key is kept</td><td>Photoshop's secure storage for this plugin, one entry per project, under your operating system account. It goes only to Scenario's API over HTTPS, never to the helper or to agents.</td></tr>
-        <tr><td>Another project</td><td><b>Add a key for another project</b>, then click the project name in the panel header to switch.</td></tr>
-        <tr><td>A spending cap</td><td>A CU limit on the key, set on app.scenario.com, caps what the plugin and connected agents can spend.</td></tr>
-        <tr><td>Sign out</td><td>Removes the key from this computer only. Delete the key on app.scenario.com to revoke it.</td></tr>
+        <tr><td>Where your sign-in is kept</td><td>Photoshop's secure storage for this plugin, under your operating system account: one entry per signed-in person (the access token stays in memory), or one per project for a key. It goes only to Scenario over HTTPS, never to the helper or to agents.</td></tr>
+        <tr><td>Another project</td><td>Signed in with Scenario: <b>Choose another project</b> in Projects. With keys: <b>Add a key for another project</b>, then click the project name in the panel header to switch.</td></tr>
+        <tr><td>A spending cap</td><td>With an API key, a CU limit on the key, set on app.scenario.com, caps what the plugin and connected agents can spend.</td></tr>
+        <tr><td>Sign out</td><td>Signed in with Scenario: removes your sign-in from this computer and ends it. With a key: removes the key from this computer only; delete the key on app.scenario.com to revoke it.</td></tr>
       </tbody></table></div>
     </section>
 
@@ -1394,19 +1399,21 @@ npm run package   # writes build/scenario-photoshop-0.7.1.ccx</code></pre></li>
       <h2>Privacy and files</h2>
       <p class="what">What leaves your computer, when, and what stays on it.</p>
       <div class="cards3">
-        <div class="card"><b>To Scenario's API</b><p>Your key and secret with every request, over HTTPS. Prompt, model and settings for price checks and runs. Pixels only at your click: the selection's box plus a margin, a layer or the document, the mask and your references, each upload under 4,000,000 bytes.</p></div>
-        <div class="card"><b>Downloaded</b><p>Results from Scenario's CDN, the only download host this build accepts, through signed links kept in memory, without your key.</p></div>
-        <div class="card"><b>To an agent</b><p>What a connected agent reads, including previews of your documents, goes to that agent's model provider, under your agreement with that provider. The helper never receives your key.</p></div>
+        <div class="card"><b>To Scenario's API</b><p>Your key and secret, or your sign-in's access token and the chosen project's id, with every request, over HTTPS. Prompt, model and settings for price checks and runs. Pixels only at your click: the selection's box plus a margin, a layer or the document, the mask and your references, each upload under 4,000,000 bytes.</p></div>
+        <div class="card"><b>Downloaded</b><p>Results from Scenario's CDN, the only download host this build accepts, through signed links kept in memory, without your key or sign-in.</p></div>
+        <div class="card"><b>To an agent</b><p>What a connected agent reads, including previews of your documents, goes to that agent's model provider, under your agreement with that provider. The helper never receives your key or sign-in.</p></div>
       </div>
       <div class="tbl"><table><tbody>
         <tr><td>Results</td><td>Saved before they are placed, kept or not, in the plugin's output folder, and in your Scenario project.<pre><code>~/Library/Application Support/Adobe/UXP/PluginsStorage/PHSP/27/External/
   com.scenario.photoshop/PluginData/Scenario/&lt;kind&gt;/&lt;date&gt;/</code></pre></td></tr>
         <tr><td>Layer metadata</td><td>Each placed layer carries model, prompt, settings, job and prices in its XMP, which survives saving the PSD. Never your key, secret, token, team or project ids, or file paths.</td></tr>
-        <tr><td>Key and token</td><td>Photoshop's secure storage. The helper's token file is readable by your account only.</td></tr>
+        <tr><td>Sign in with Scenario</td><td>Scenario's identity provider (<code>clerk.scenario.com</code>) gets the plugin's public application id to start, refresh and end your sign-in, never a password or a secret. Its answer names your account's email, shown in the panel.</td></tr>
+        <tr><td>Key, sign-in and token</td><td>Photoshop's secure storage; a sign-in's access token stays in memory. The helper's token file is readable by your account only.</td></tr>
         <tr><td>Diagnostics</td><td>Versions, switch states, job counts and recent error types, with no prompts, names, ids, paths, keys or tokens. <b>Copy diagnostics</b> shows the text before copying it.</td></tr>
         <tr><td>Local link</td><td>Port 9890 of the loopback interface only, which other computers cannot reach. Web pages are refused. The plugin and each helper prove they hold the pairing token without sending it.</td></tr>
-        <tr><td>Deleting</td><td>On this computer: sign out, reset the pairing token, delete the plugin data folder. On Scenario: delete uploads and results in the web app, or write to support@scenario.com. Signing out does not revoke a key: delete it on app.scenario.com.</td></tr>
+        <tr><td>Deleting</td><td>On this computer: sign out, reset the pairing token, delete the plugin data folder. On Scenario: delete uploads and results in the web app, or write to support@scenario.com. Signing out ends a Scenario sign-in, but does not revoke a key: delete it on app.scenario.com.</td></tr>
       </tbody></table></div>
+      <p class="small">This page is served at photoshop.scenario.com by Vercel from the copy hosted by GitHub Pages. It counts visits with Vercel Web Analytics, without cookies: it records the page address, referrer, location, browser, operating system and device type, and tells visitors apart for 24 hours by a hash of the request.</p>
       <p class="small">The plugin sends nothing else: no update check, no analytics. Details: <a href="https://github.com/scenario-labs/photoshop-plugin/blob/main/PRIVACY.md">PRIVACY.md</a>. Security reports: privately to support@scenario.com, with "security" in the subject.</p>
     </section>
 
@@ -1420,6 +1427,10 @@ npm run package   # writes build/scenario-photoshop-0.7.1.ccx</code></pre></li>
           <tr><td>"Scenario did not accept this key and secret."</td><td>Copy both again, from a Project key. <b>Enter key again</b> or <b>Create an API key</b>.</td></tr>
           <tr><td>"API keys need a Starter plan or above."</td><td>Use a team on a plan with API access, or <b>Open plans</b>.</td></tr>
           <tr><td>A Team (Organization) key or a Reader key</td><td>Use a Project key with the Editor role.</td></tr>
+          <tr><td>"The sign-in was declined in the browser." or "The code expired before the sign-in finished."</td><td><b>Sign in again</b>, and approve in the browser.</td></tr>
+          <tr><td>"This account has no project it can use."</td><td>Create a project on app.scenario.com, or ask a team admin for a role in one, then <b>Sign in again</b>.</td></tr>
+          <tr><td>"The chosen project is no longer available. Choose another one."</td><td>The project was deleted, or your role in it removed. <b>Choose a project</b>.</td></tr>
+          <tr><td>"Your Scenario sign-in ended. Sign in again."</td><td>Scenario no longer accepts the saved sign-in (signed out elsewhere, or revoked). <b>Sign in again</b>.</td></tr>
           <tr><td>A card says the price changed</td><td>Nothing was spent. <b>Approve</b> at the new price, or <b>Cancel</b>.</td></tr>
           <tr><td>A job is Unknown</td><td>Open Jobs and let it look the job up, then <b>Link</b> or <b>Mark not sent</b>.</td></tr>
           <tr><td>A result did not land</td><td>Bring the document it started from to the front, then <b>Place</b> in Jobs, or <b>Open as document</b>.</td></tr>
@@ -1473,6 +1484,7 @@ npm run package   # writes build/scenario-photoshop-0.7.1.ccx</code></pre></li>
             <li>Windows, and Photoshop versions other than 27.11.</li>
             <li>Installing by double-clicking the <code>.ccx</code>.</li>
             <li>Typing the key and secret by hand; the refused-key and no-API-access screens live.</li>
+            <li>Sign in with Scenario against Scenario's production service (verified live on a development instance); <b>Block</b> in Photoshop's dialog and a code that expires.</li>
             <li>CMYK, Lab and other color profiles (one Upscale on an Adobe RGB 16-bit document kept its colors).</li>
             <li>Undo and Redo of a landed result, except Create image.</li>
             <li>Match an image live; the trained Z-Image route and a stacked style.</li>
