@@ -11,7 +11,7 @@ const path = require("node:path");
 const SITE = path.resolve(__dirname, "..", "..", "site");
 const MAX_BYTES = 50 * 1024 * 1024;
 // Built into the site at publish time by .github/workflows/pages.yml
-// (npm run handbook), so not in site/; handbook.test.js checks the build.
+// (pnpm run handbook), so not in site/; handbook.test.js checks the build.
 const BUILT = ["handbook/"];
 
 function files(dir, out = []) {

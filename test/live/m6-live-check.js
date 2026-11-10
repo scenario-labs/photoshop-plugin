@@ -2,7 +2,7 @@
 "use strict";
 // M6 live check (SPEC 12.2 item 11, SPEC 12.1 allow-list rows): against a
 // live Photoshop with a development build installed and signed in. Not part
-// of `npm test`. macOS only. It never starts, focuses, clicks or quits
+// of `pnpm test`. macOS only. It never starts, focuses, clicks or quits
 // Photoshop, and touches only the documents its requests make.
 //
 // Before anything, it takes the shared lock file (--lock) and refuses to

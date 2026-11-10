@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 // M1 live check: an agent client sees scenario_status from a live Photoshop.
-// Not part of `npm test`. Run it by hand, with a development build installed
-// (`npm run package:dev`, then install the .ccx; see AGENTS.md).
+// Not part of `pnpm test`. Run it by hand, with a development build installed
+// (`pnpm run package:dev`, then install the .ccx; see AGENTS.md).
 //
 // What it does:
 // 1. Makes a fresh pairing token and writes it as `dev-pairing-token` into the

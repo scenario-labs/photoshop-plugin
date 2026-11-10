@@ -28,37 +28,37 @@ Claims here are marked *verified live* (in Photoshop), *tested automated* (Node,
 | `plugin/src/diagnostics.js` | The Copy diagnostics text and the list of recent error types |
 | `helper/` | `scenario-photoshop`: stdio MCP server (`mcp.js`, `tools.js`), port owner and peer (`link/`), token file (`token-file.js`), setup command (`setup.js`, `toml-edit.js`). `npm-shrinkwrap.json` pins its dependency tree for npm users |
 | `shared/` | Tool catalog (`catalog.json`), catalog mapping, lane defaults and per-model price rules as data (`catalog-map.json`), error types (`errors.json`), link protocol (`protocol.json`), enums (`enums.json`), Scenario API settings, known error texts and links (`scenario-api.json`), a small JSON Schema checker used by both sides |
-| `test/unit`, `test/integration` | `npm test` runs every `*.test.js` there |
+| `test/unit`, `test/integration` | `pnpm test` runs every `*.test.js` there |
 | `test/helpers/` | Fake host and UXP-like WebSocket (`fakes.js`), a DOM built from the real `index.html` (`fake-dom.js`, with the macOS masked field), a fake of the UXP and Photoshop modules that `host.js` runs on unchanged (`fake-photoshop.js`: documents, layers, batchPlay, History, imaging, the data folder; with `scene: true` it composites real pixels from `fake-scene.js`, so captures, masks and checks run on numbers), a mock of Scenario's API with random keys (`mock-scenario.js`), the same mock answering from recorded API responses, with paid jobs, results and the CDN when asked (`fixture-scenario.js`), the plugin source booted on the fake Photoshop (`generate-sim.js`), the same with Photoshop quitting and starting again on one data folder (`restart-sim.js`), a UXP simulator that runs the built bundle (`uxp-sim.js`) |
 | `test/fixtures/m2.0/` | Catalog rows, model records, price-check answers and paid-job answers (`jobs.json`) recorded from the live API on 2026-10-19, with account ids and links removed (`test/unit/png-fixtures.test.js` checks this) |
 | `test/vectors/pairing.json` | Known-answer vectors for the proofs, the session key and two frames |
-| `test/live/` | Manual checks against a running Photoshop; not part of `npm test` |
+| `test/live/` | Manual checks against a running Photoshop; not part of `pnpm test` |
 | `site/` | The photoshop.scenario.com page, published by `.github/workflows/pages.yml` |
 | `tools/release/` | Release workflow helpers (`.github/workflows/release-please.yml`, [RELEASING.md](RELEASING.md)): the draft a rerun may finish (`find-draft.js`), the Contributors section (`contributors.js`), the package check (`check-package.js`). `release-please-config.json` lists every file that holds the version |
 
 ## Commands
 
 ```sh
-npm ci                 # installs ws, the helper's only run-time dependency
-npm test               # all unit and integration tests, about 15 s
+pnpm install           # installs ws, the helper's only run-time dependency (the tests use it too)
+pnpm test              # all unit and integration tests, about 15 s
 node test/run.js setup # only the test files whose path contains "setup"
-npm run lint           # node --check, JSON, no em dashes, no machine paths or addresses, UXP rules
-npm run build          # plugin/dist/main.js (release bundle)
-npm run build:dev      # development bundle (adds the dev token import, below)
-npm run package        # build/scenario-photoshop-0.7.1.ccx
-npm run package:dev    # build/scenario-photoshop-0.7.1-dev.ccx
-npm run handbook       # build/handbook/ from the docs (PDF through headless Chrome; --no-pdf skips it)
+pnpm run lint          # node --check, JSON, no em dashes, no machine paths or addresses, UXP rules
+pnpm run build         # plugin/dist/main.js (release bundle)
+pnpm run build:dev     # development bundle (adds the dev token import, below)
+pnpm run package       # build/scenario-photoshop-0.7.1.ccx
+pnpm run package:dev   # build/scenario-photoshop-0.7.1-dev.ccx
+pnpm run handbook      # build/handbook/ from the docs (PDF through headless Chrome; --no-pdf skips it)
 ```
 
 **The handbook** (`tools/handbook/`) is generated from README.md, docs/USER_GUIDE.md, docs/MCP.md, docs/KNOWN_LIMITATIONS.md, PRIVACY.md, SECURITY.md and CHANGELOG.md; the chapter list is at the top of `tools/handbook/build.js`. Edit the docs, never the output. The build fails on a link or picture it cannot resolve, an em dash, an address other than support@scenario.com, a machine path or a bare "MCP". `.github/workflows/pages.yml` publishes it at photoshop.scenario.com/handbook/ with the site below; it writes no `CNAME`, since the site at the root holds the domain.
 
-**The site** photoshop.scenario.com is the static page in `site/` (`index.html`, `CNAME`, `assets/`: pictures, the two example films, the PDF guide and its page images). `.github/workflows/pages.yml` (Publish site), the one Pages workflow, publishes it from main with the handbook under `/handbook/` (`npm run handbook -- --out`, PDF included) after each `release-please` run that succeeds, on every push to main that changes `site/`, the handbook's builder, the docs it is built from or the workflow, and by hand, after `npm run lint` and `node test/run.js site-page` (every file the page links to is in `site/`, except `handbook/`, built at publish time); the steps before the first run are at the top of that file.
+**The site** photoshop.scenario.com is the static page in `site/` (`index.html`, `CNAME`, `assets/`: pictures, the two example films, the PDF guide and its page images). `.github/workflows/pages.yml` (Publish site), the one Pages workflow, publishes it from main with the handbook under `/handbook/` (`pnpm run handbook --out`, PDF included) after each `release-please` run that succeeds, on every push to main that changes `site/`, the handbook's builder, the docs it is built from or the workflow, and by hand, after `pnpm run lint` and `node test/run.js site-page` (every file the page links to is in `site/`, except `handbook/`, built at publish time); the steps before the first run are at the top of that file.
 
-`npm test` and `npm run lint` pass on Node 20 and 22 on macOS (*tested automated*). CI runs them on Node 20 and 22, on Ubuntu and macOS.
+`pnpm test` and `pnpm run lint` pass on Node 20 and 22 on macOS (*tested automated*). CI runs them on Node 20 and 22, on Ubuntu and macOS.
 
 ## Rules for code
 
-- **Plugin code is plain JavaScript** with no dependency. The bundler wraps each file in its own function scope and resolves relative `require`s at build time; `uxp`, `photoshop`, `os` and `fs` go to UXP's own `require`. No `eval`, no `new Function`, no top-level declaration named like a UXP global (a top-level `const URL` breaks UXP's WebSocket, *verified live* on 27.11 with a probe plugin). `npm run lint` checks this.
+- **Plugin code is plain JavaScript** with no dependency. The bundler wraps each file in its own function scope and resolves relative `require`s at build time; `uxp`, `photoshop`, `os` and `fs` go to UXP's own `require`. No `eval`, no `new Function`, no top-level declaration named like a UXP global (a top-level `const URL` breaks UXP's WebSocket, *verified live* on 27.11 with a probe plugin). `pnpm run lint` checks this.
 - **Everything the plugin reads from UXP or Photoshop goes through `plugin/src/host.js`**, so the rest runs under Node with a fake host.
 - **The link protocol lives in `shared/protocol.json`** and is implemented twice, in `plugin/src/bridge/protocol.js` (pure JavaScript) and `helper/src/link/crypto.js` (`node:crypto`). Change both and `test/vectors/pairing.json` together; `test/unit/pairing-proofs.test.js` checks they agree byte for byte.
 - **The pairing token is never logged, printed, put on a command line or sent over the socket.** Tests generate tokens; none is stored in the repository.
@@ -74,15 +74,15 @@ npm run handbook       # build/handbook/ from the docs (PDF through headless Chr
 - **No Scenario call at launch**: the catalog and price checks start when the panel is shown (the `show` entrypoint), when the person uses the panel, or when an agent calls a tool. `test/unit/creation-panel.test.js` and `test/unit/bundle-m2.test.js` check this. The one exception is SPEC 6.4: jobs that were running or downloading when Photoshop closed resume at launch, so a paid result is not left waiting; with no such job, launch calls nothing.
 - **Scenario errors**: bodies carry `reason` or `message`, no code (measured live). Classify by HTTP status plus the known texts in `shared/scenario-api.json` (an unknown key answers 403 "Given APIKey does not exists"), and show Scenario's own text otherwise. Panel texts for each sign-in state are in `plugin/src/ui/account-view.js`, worded as SPEC 3.13.
 - **Client sessions** (SPEC 2.6): the owner gives each client a 16-byte session id when it connects and new ids to every client each time a plugin link opens; a name is set once, at the first `initialize`, cut to 64 characters. Calls carry only the session; the plugin takes names from the `clients` list and refuses a session it does not list. When a session leaves the list or the link drops, the plugin ends what was granted to it (in this build, the spending allowance). `test/unit/owner-checks.test.js` and `test/unit/plugin-link.test.js` cover this.
-- **Dependencies**: MIT-compatible only, pinned to exact versions, listed in `THIRD_PARTY_NOTICES.md`; change `package-lock.json` and `helper/npm-shrinkwrap.json` together. Workflows pin each action by full commit and declare least permissions. `test/unit/supply-chain.test.js` checks all of this.
+- **Dependencies**: MIT-compatible only, pinned to exact versions, listed in `THIRD_PARTY_NOTICES.md`; change `pnpm-lock.yaml` and `helper/npm-shrinkwrap.json` together. The shrinkwrap stays npm's format, since npm users of the helper install from it: refresh it with `npm install --package-lock-only --ignore-scripts --prefix helper`. pnpm is the version `packageManager` names in `package.json`. Workflows pin each action by full commit and declare least permissions. `test/unit/supply-chain.test.js` checks all of this.
 - The helper's tool list comes from `shared/catalog.json`. A test caps `tools/list` at 40,000 characters and each description at 2,500.
-- Public repository: no machine paths, personal or customer names, email addresses, internal decision numbers or secrets. No em dashes in docs or comments. `npm run lint` checks what it can; maintainers can add a private word list with `LINT_DENYLIST=<file>`.
+- Public repository: no machine paths, personal or customer names, email addresses, internal decision numbers or secrets. No em dashes in docs or comments. `pnpm run lint` checks what it can; maintainers can add a private word list with `LINT_DENYLIST=<file>`.
 
 ## Try the link in Photoshop (development)
 
 *Verified live* on Photoshop 27.11 (macOS) with this build: the dev token is adopted and its file removed, `scenario_status` comes back from the live Photoshop through the helper, and the random source is `getRandomValues`. The plugin's WebSocket sent `Host: localhost:9890`, `Origin: file://` and `User-Agent: WebSocket++/0.8.2`. The panel's look and 26.x were not checked.
 
-1. `npm run package:dev`.
+1. `pnpm run package:dev`.
 2. Install the package with Adobe's installer (macOS path shown; the plugin loads at the next Photoshop launch). The installer needs an absolute path: a relative one fails with status -160 (*verified live* on 27.11).
    ```sh
    "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$PWD/build/scenario-photoshop-0.7.1-dev.ccx"
@@ -136,7 +136,7 @@ The upload and proposal cards are `.agentcard` nodes inside `#agent-cards`, whil
 
 ## Try Sign in with Scenario in Photoshop (development)
 
-A development build can use a development identity provider and API instead of production: put `dev-oauth-target.json` in the plugin's data folder with `issuer`, `client_id`, `api_base` and optionally `download_origins` (https only; it holds no secret and stays in place), and package with `DEV_OAUTH_TARGET=<that file> npm run package:dev` so the manifest allows those hosts. Never commit such a file: the hosts of a development instance are not public. The log says only that a development target is in use. A sign-in saved against one issuer reads as signed out under another.
+A development build can use a development identity provider and API instead of production: put `dev-oauth-target.json` in the plugin's data folder with `issuer`, `client_id`, `api_base` and optionally `download_origins` (https only; it holds no secret and stays in place), and package with `DEV_OAUTH_TARGET=<that file> pnpm run package:dev` so the manifest allows those hosts. Never commit such a file: the hosts of a development instance are not public. The log says only that a development target is in use. A sign-in saved against one issuer reads as signed out under another.
 
 *Verified live* on 27.11 (2026-11-03) through the UI loop: `click '{"el":"signin-browser"}'` starts the sign-in (Photoshop's permission dialog for the page also comes up for a click from the loop, the first time only), `metrics` reads the code from `#signin-code`, the page is approved in a browser signed in to the development instance, `rects '{"sel":"[data-project]","full":true}'` lists the chooser's rows and `click '{"attr":"data-project","value":"<id>"}'` picks one. `view '{"name":"settings"}'` then `click '{"el":"settings-signout"}'` twice signs out. `demo` draws the code box (`{"what":"code"}`), the chooser (`{"what":"choose","args":{"teams":[...]}}`) and the Connected banner (`{"what":"connected","args":{...}}`) with sample names, for pictures without a real account.
 

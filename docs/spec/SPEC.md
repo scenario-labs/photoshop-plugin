@@ -823,7 +823,7 @@ A browser sign-in (section 4.6) has no key: the account chooses a project, and e
 6. **Choose another project** in Projects reads the list again with the same sign-in. Test connection reads the chosen project's models and the list; a project that is gone (deleted, or the role removed) reads "The chosen project is no longer available" with **Choose a project**; a project still listed whose read is refused fails with Scenario's message.
 7. **Sign out** on any of its projects asks the identity provider to revoke the refresh token and removes the sign-in and all its projects from this computer, even when that request fails. A key saved for the only project of a sign-in replaces it the same way. A new sign-in of the same person revokes the refresh token the saved one held. Every revocation is a request to the identity provider: one that fails is not retried, and that grant stays valid until it expires.
 
-Development builds can point Sign in with Scenario at a development identity provider and API: a `dev-oauth-target.json` file in the plugin's data folder names the issuer, client id and API base, and `DEV_OAUTH_TARGET=<file> npm run package:dev` allows those hosts in the development package's manifest. Release builds remove that code.
+Development builds can point Sign in with Scenario at a development identity provider and API: a `dev-oauth-target.json` file in the plugin's data folder names the issuer, client id and API base, and `DEV_OAUTH_TARGET=<file> pnpm run package:dev` allows those hosts in the development package's manifest. Release builds remove that code.
 ---
 
 ## 5. Capability matrix

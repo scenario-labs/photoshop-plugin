@@ -5,7 +5,7 @@ Releases are made by `.github/workflows/release-please.yml`, which follows blend
 ## How a release happens
 
 1. Pull requests are squash-merged with a Conventional Commit title (`tools/commitlint/commitlint.config.mjs`). That title is what the changelog says.
-2. On each push to `main`, release-please keeps one pull request open, **chore(release): release photoshop-plugin X.Y.Z**. It sets the next version in `plugin/manifest.json`, `helper/package.json`, `helper/npm-shrinkwrap.json` and the helper's entry in `package-lock.json`, and writes the changelog entry above "Hand-written history" in `CHANGELOG.md`. Before 1.0, a `feat` raises the minor version and anything else the patch; a `Release-As: X.Y.Z` footer in a commit sets the version.
+2. On each push to `main`, release-please keeps one pull request open, **chore(release): release photoshop-plugin X.Y.Z**. It sets the next version in `plugin/manifest.json`, `helper/package.json` and `helper/npm-shrinkwrap.json`, and writes the changelog entry above "Hand-written history" in `CHANGELOG.md`. Before 1.0, a `feat` raises the minor version and anything else the patch; a `Release-As: X.Y.Z` footer in a commit sets the version.
 3. Merging that pull request is the decision to release. The same workflow run then:
    - creates a draft release targeting the release commit;
    - builds `scenario-photoshop-X.Y.Z.ccx` and the standalone handbook `scenario-photoshop-handbook-X.Y.Z.html` from that commit;

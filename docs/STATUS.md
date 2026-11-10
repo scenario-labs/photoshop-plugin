@@ -60,10 +60,10 @@ pbpaste | node helper/bin/scenario-photoshop.js setup claude-code --local --toke
 Node 20 or later.
 
 ```sh
-npm ci
-npm test          # unit and integration tests (Node's built-in test runner)
-npm run lint      # syntax, typography and public-content checks
-npm run package   # build/scenario-photoshop-0.7.1.ccx
+pnpm install
+pnpm test          # unit and integration tests (Node's built-in test runner)
+pnpm run lint      # syntax, typography and public-content checks
+pnpm run package   # build/scenario-photoshop-0.7.1.ccx
 ```
 
 Details for contributors and coding agents: [AGENTS.md](../AGENTS.md). Design: [spec/SPEC.md](spec/SPEC.md) and the tool reference [spec/MCP.md](spec/MCP.md).

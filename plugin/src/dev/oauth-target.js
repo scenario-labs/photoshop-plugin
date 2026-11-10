@@ -7,7 +7,7 @@
 // file "dev-oauth-target.json" in the plugin's data folder holds
 //   { "issuer", "client_id", "api_base", "download_origins" (optional) }
 // with https URLs only. It holds no secret and stays in place. The package's
-// manifest must allow those hosts: `DEV_OAUTH_TARGET=<file> npm run
+// manifest must allow those hosts: `DEV_OAUTH_TARGET=<file> pnpm run
 // package:dev` adds the file's origins to the development package only
 // (plugin/scripts/package.js). The log names no host.
 

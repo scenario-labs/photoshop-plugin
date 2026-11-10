@@ -3,9 +3,9 @@
 // Builds the Scenario for Photoshop handbook from the repository's Markdown
 // docs, so the handbook never says something the docs do not.
 //
-//   npm run handbook                 web page, single-file HTML and PDF
-//   npm run handbook -- --no-pdf     skip the PDF (no Chrome needed)
-//   npm run handbook -- --out <dir>  write somewhere other than build/handbook
+//   pnpm run handbook               web page, single-file HTML and PDF
+//   pnpm run handbook --no-pdf      skip the PDF (no Chrome needed)
+//   pnpm run handbook --out <dir>   write somewhere other than build/handbook
 //
 // Outputs: <out>/index.html with its media under <out>/media/, a
 // single-file <out>/scenario-photoshop-handbook-<version>.html (pictures
@@ -499,7 +499,7 @@ function downloads(meta, mode) {
 
 function licenceExtra(meta) {
   return `<p>The Scenario logo is a trademark of Scenario and is not covered by the MIT license.</p>
-<p class="build-note">This handbook is generated from the Markdown docs in the repository (<code>npm run handbook</code>), version ${meta.version}${meta.commit ? `, commit <code>${meta.commit}</code>` : ""}, ${meta.date}.</p>`;
+<p class="build-note">This handbook is generated from the Markdown docs in the repository (<code>pnpm run handbook</code>), version ${meta.version}${meta.commit ? `, commit <code>${meta.commit}</code>` : ""}, ${meta.date}.</p>`;
 }
 
 // ---------------------------------------------------------------- page

@@ -1,10 +1,10 @@
 // Single source of truth for commit headers and pull request titles. CI
 // installs commitlint from the lockfile next to this file
 // (.github/workflows/pr-name.yml and commitlint.yml); it lives here, outside
-// the npm workspaces, so the root `npm ci` still installs only what the helper
-// runs on. The same check locally, with Node 22.12 or later:
+// the pnpm workspace, so the root `pnpm install` still installs only what the
+// helper runs on. The same check locally, with Node 22.12 or later:
 //
-//   npm ci --prefix tools/commitlint --ignore-scripts
+//   pnpm install --frozen-lockfile --ignore-scripts --dir tools/commitlint
 //   printf '%s\n' "fix(panel): keep the button in view" \
 //     | tools/commitlint/node_modules/.bin/commitlint --config tools/commitlint/commitlint.config.mjs
 

@@ -1,7 +1,7 @@
 "use strict";
 // The handbook builder (tools/handbook): it reads every doc section it names,
 // resolves every link and picture, and keeps the public-content rules.
-// The PDF step needs Chrome and is left to `npm run handbook`.
+// The PDF step needs Chrome and is left to `pnpm run handbook`.
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
