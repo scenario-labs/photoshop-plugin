@@ -78,4 +78,7 @@ test("the handbook links to the given ref and checks those links in the given tr
   // Git's empty tree holds none of the linked files.
   const empty = run("photoshop-plugin-v9.9.9", "4b825dc642cb6eb9a060e54bf8d69288fbee4904");
   assert.ok(empty.r.problems.some((p) => / in 4b825dc642cb6eb9a060e54bf8d69288fbee4904$/.test(p)), empty.r.problems.join("\n"));
+  // The page check reads the same tree, not main's checkout: a file the release
+  // holds and main has since removed must not stop the publish.
+  assert.ok(empty.r.problems.some((p) => /GitHub link to a file not in the repository at 4b825dc642cb6eb9a060e54bf8d69288fbee4904: /.test(p)), empty.r.problems.join("\n"));
 });

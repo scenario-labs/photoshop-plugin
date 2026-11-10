@@ -662,8 +662,12 @@ function check(full, outDir, label, problems, later = []) {
     if (/^(https?:|mailto:|data:)/.test(u) || later.includes(u)) continue;
     if (!fs.existsSync(path.join(outDir, u))) problems.push(`${label}: ${u} does not resolve`);
   }
-  for (const m of html.matchAll(/href="(https:\/\/github\.com\/scenario-labs\/photoshop-plugin\/blob\/[^/]+\/([^"#]+))/g)) {
-    if (!fs.existsSync(path.join(ROOT, m[2]))) problems.push(`${label}: GitHub link to a file not in the repository: ${m[2]}`);
+  // Links at the handbook's own ref are checked where resolve() checked them
+  // (HANDBOOK_TREE, the release, in Publish site); links a doc spells out at
+  // another ref, in the checkout.
+  for (const m of html.matchAll(/href="https:\/\/github\.com\/scenario-labs\/photoshop-plugin\/blob\/([^/]+)\/([^"#]+)/g)) {
+    const ok = m[1] === GITHUB_REF ? inRepo(m[2]) : fs.existsSync(path.join(ROOT, m[2]));
+    if (!ok) problems.push(`${label}: GitHub link to a file not in the repository${m[1] === GITHUB_REF && TREE ? ` at ${TREE}` : ""}: ${m[2]}`);
   }
   const text = html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g, " ");
   if (EM_DASH.test(text)) problems.push(`${label}: em dash`);
