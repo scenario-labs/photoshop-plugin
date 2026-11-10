@@ -172,6 +172,37 @@ test("Back from Add project's sign-in view stops a browser sign-in in progress",
   assert.equal(doc.text("project-label"), "Film");
 });
 
+test("leaving the sign-in view by the panel menu, Jobs or the header while the code waits stops the sign-in", async (t) => {
+  const { doc, app, idp } = await bootPanel(t, { sleep: () => new Promise((r) => setTimeout(r, 10)) });
+  doc.byId("signin-browser").click();
+  await waitFor(() => doc.shown("view-choose"), { label: "chooser" });
+  rowOf(doc, "project_film").click();
+  await waitFor(() => doc.shown("view-main"), { label: "signed in" });
+
+  const routes = [
+    ["the panel menu", () => app.menu.invoke("settings"), "view-settings"],
+    ["Jobs", () => app.menu.invoke("jobs"), "view-jobs"],
+    ["the header", () => doc.byId("project").click(), "view-projects"]
+  ];
+  for (const [route, leave, view] of routes) {
+    idp.state.approveAfter = Infinity; // the new sign-in waits in the browser
+    doc.byId("project").click();
+    doc.byId("projects-add").click();
+    doc.byId("signin-browser").click();
+    await waitFor(() => doc.shown("signin-code-box"), { label: `code shown (${route})` });
+    leave();
+    assert.ok(doc.shown(view), `${route} left the sign-in view`);
+
+    idp.state.approveAfter = 0; // approved in the browser after leaving
+    const polls = idp.state.polls;
+    await new Promise((r) => setTimeout(r, 150));
+    assert.ok(idp.state.polls - polls <= 1, `no more polling once left by ${route}`);
+    assert.ok(!doc.shown("view-choose"), `no chooser after leaving by ${route}`);
+    assert.equal(doc.text("project-label"), "Film");
+  }
+  assert.equal(app.auth.list().length, 1);
+});
+
 test("a chosen project that is gone: Test connection says so and Choose a project opens the chooser", async (t) => {
   const { doc, app, box } = await bootPanel(t);
   doc.byId("signin-browser").click();

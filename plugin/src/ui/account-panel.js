@@ -79,11 +79,19 @@ function createAccountPanel(doc, actions) {
 
   // ---- views ----
 
+  // A browser sign-in lives on two views: the sign-in view while the browser
+  // approval and the team read are awaited, then the chooser. Leaving them by
+  // any route (Back, the panel menu, Jobs, the header) ends it, so nothing
+  // completes off-screen; a chosen project being saved is left alone
+  // (auth.cancelBrowser).
+  function leavesSignIn(from, to) {
+    if (from === "choose") return to !== "choose";
+    return from === "signin" && to !== "signin" && to !== "choose";
+  }
+
   // Each view is a flex column: its own header row, then a part that scrolls.
-  // Leaving the chooser by any route (Back, the panel menu, Jobs) ends a
-  // sign-in still waiting for its project, so none is left behind.
   function showView(name) {
-    if (st.view === "choose" && name !== "choose" && auth.waiting()) auth.cancelBrowser();
+    if (leavesSignIn(st.view, name)) auth.cancelBrowser();
     for (var i = 0; i < VIEWS.length; i++) show("view-" + VIEWS[i], VIEWS[i] === name, "flex");
     st.view = name;
     if (name === "projects" || name === "settings") renderLists();
