@@ -51,7 +51,7 @@ npm run handbook       # build/handbook/ from the docs (PDF through headless Chr
 
 **The handbook** (`tools/handbook/`) is generated from README.md, docs/USER_GUIDE.md, docs/MCP.md, docs/KNOWN_LIMITATIONS.md, PRIVACY.md, SECURITY.md and CHANGELOG.md; the chapter list is at the top of `tools/handbook/build.js`. Edit the docs, never the output. The build fails on a link or picture it cannot resolve, an em dash, an address other than support@scenario.com, a machine path or a bare "MCP". Its own Pages workflow waits, disabled, in `tools/handbook/pages.yml`.
 
-**The site** photoshop.scenario.com is the static page in `site/` (`index.html`, `CNAME`, `assets/`: pictures, the two example films, the PDF guide and its page images). `.github/workflows/pages.yml` publishes it by hand from main, after `npm run lint` and `node test/run.js site-page` (every file the page links to is in `site/`); the steps before the first run are at the top of that file.
+**The site** photoshop.scenario.com is the static page in `site/` (`index.html`, `CNAME`, `assets/`: pictures, the two example films, the PDF guide and its page images). `.github/workflows/pages.yml` (Publish site) publishes it from main after each `release-please` run that succeeds, on every push to main that changes `site/` or the workflow, and by hand, after `npm run lint` and `node test/run.js site-page` (every file the page links to is in `site/`); the steps before the first run are at the top of that file.
 
 `npm test` and `npm run lint` pass on Node 20 and 22 on macOS (*tested automated*). CI runs them on Node 20 and 22, on Ubuntu and macOS.
 

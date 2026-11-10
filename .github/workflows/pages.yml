@@ -1,13 +1,22 @@
 # GitHub Pages publish for https://photoshop.scenario.com: the page in site/.
-# Runs by hand only, from main. Before the first run:
+# Runs after each release, on every push to main that changes the site, and by
+# hand. Before the first run:
 #   1. Repository Settings > Pages: Source "GitHub Actions"; Custom domain
 #      photoshop.scenario.com; Enforce HTTPS once the certificate is issued.
 #   2. DNS for scenario.com: CNAME photoshop -> scenario-labs.github.io.
-#   3. Actions > Site > Run workflow (from main).
 # The generated handbook keeps its own workflow in tools/handbook/pages.yml.
-name: Site
+name: Publish site
 
 on:
+  workflow_run:
+    workflows: [release-please]
+    types: [completed]
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -19,10 +28,17 @@ concurrency:
 
 jobs:
   build:
+    # Only this repository publishes, and only after a release run that
+    # succeeded on a push to main.
+    if: >-
+      github.repository == 'scenario-labs/photoshop-plugin' &&
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: main
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

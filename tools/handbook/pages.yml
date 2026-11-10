@@ -1,7 +1,9 @@
 # GitHub Pages publish for the handbook at https://photoshop.scenario.com.
 # Disabled: GitHub runs only files under .github/workflows/. To publish, once
 # the go is given:
-#   1. Copy this file to .github/workflows/pages.yml (npm test checks it there).
+#   1. Copy this file to .github/workflows/handbook.yml (npm test checks it
+#      there by its name). Not over pages.yml, which publishes the site.
+#      Both deploy the one Pages site, so the last run replaces the other.
 #   2. Repository Settings > Pages: Source "GitHub Actions"; Custom domain
 #      photoshop.scenario.com; Enforce HTTPS once the certificate is issued.
 #   3. DNS for scenario.com: CNAME photoshop -> scenario-labs.github.io.
