@@ -40,7 +40,8 @@ test("the helper ships an npm-shrinkwrap.json that pins every package by integri
 });
 
 // The handbook's Pages workflow waits in tools/handbook/ until it is turned
-// on by copying it into .github/workflows/; it is held to the same rules.
+// on by copying it into .github/workflows/handbook.yml; it is held to the
+// same rules there as here, by its name.
 const WORKFLOWS = [
   ...fs.readdirSync(path.join(ROOT, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f)).map((f) => path.join(".github", "workflows", f)),
   path.join("tools", "handbook", "pages.yml")
@@ -58,14 +59,17 @@ test("every GitHub workflow pins its actions by full commit and declares its per
       if (u.startsWith("./")) continue; // a local action is part of this repository
       assert.match(u, /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, `${f}: ${u} is pinned by full commit`);
     }
-    // Pages deploys need pages: write, only in a pages.yml. The site's runs
-    // after a release and on pushes to main, from this repository only; the
-    // waiting handbook copy runs by hand only.
-    const pages = path.basename(f) === "pages.yml";
-    if (pages && f.startsWith("tools")) assert.match(text, /^on:\s*\n\s+workflow_dispatch:\s*\n(?!\s+\w)/m, `${f} runs only by hand`);
-    if (pages && !f.startsWith("tools")) {
+    // Pages deploys need pages: write, only in a workflow that deploys Pages,
+    // named Publish site (the site) or Handbook, wherever its file is. The
+    // site's runs after a release and on pushes to main that change the site,
+    // from this repository only; the handbook's runs by hand only.
+    const pages = /actions\/deploy-pages@/.test(text);
+    const name = (text.match(/^name:\s*(.+?)\s*$/m) || [])[1];
+    if (pages) assert.ok(name === "Publish site" || name === "Handbook", `${f}: a Pages workflow is Publish site or Handbook`);
+    if (name === "Handbook") assert.match(text, /^on:\s*\n\s+workflow_dispatch:\s*\n(?!\s+\w)/m, `${f} runs only by hand`);
+    if (name === "Publish site") {
       assert.match(text, /^\s+workflow_run:\s*\n\s+workflows: \[release-please\]\s*\n\s+types: \[completed\]\s*\n\s+branches: \[main\]/m, `${f} runs after release-please on main`);
-      assert.match(text, /^\s+push:\s*\n\s+branches: \[main\]/m, `${f} runs on pushes to main`);
+      assert.match(text, /^\s+push:\s*\n\s+branches: \[main\]\s*\n\s+paths:\s*\n\s+- "site\/\*\*"\s*\n\s+- "\.github\/workflows\/pages\.yml"\s*\n(?!\s+-)/m, `${f} runs on pushes to main that change site/ or the workflow`);
       assert.match(text, /github\.repository == 'scenario-labs\/photoshop-plugin'/, `${f} publishes from this repository only`);
       assert.match(text, /github\.event\.workflow_run\.conclusion == 'success'/, `${f} publishes only after a release run that succeeded`);
       assert.match(text, /ref: main\n/, `${f} builds main`);
@@ -76,4 +80,6 @@ test("every GitHub workflow pins its actions by full commit and declares its per
     }
     if (/actions\/checkout@/.test(text)) assert.match(text, /persist-credentials:\s*false/, `${f}: checkout keeps no credentials`);
   }
+  const site = WORKFLOWS.filter((f) => f.startsWith(".github") && /^name: Publish site$/m.test(read(f)));
+  assert.deepEqual(site, [path.join(".github", "workflows", "pages.yml")], "the site publishes from .github/workflows/pages.yml");
 });
