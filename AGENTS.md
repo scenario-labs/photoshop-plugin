@@ -34,7 +34,7 @@ Claims here are marked *verified live* (in Photoshop), *tested automated* (Node,
 | `test/vectors/pairing.json` | Known-answer vectors for the proofs, the session key and two frames |
 | `test/live/` | Manual checks against a running Photoshop; not part of `npm test` |
 | `site/` | The photoshop.scenario.com page, published by `.github/workflows/pages.yml` |
-| `tools/site_proxy/` | The Vercel project behind photoshop.scenario.com: `vercel.json` forwards every path to the GitHub Pages address; `middleware.ts` counts package downloads in PostHog and answers `/download/latest` (`test/unit/site-proxy.test.js`) |
+| `tools/site_proxy/` | The Vercel project behind photoshop.scenario.com: `vercel.json` serves the Web Analytics script at `/handbook/page.js` and forwards every other path to the GitHub Pages address; `middleware.ts` counts package downloads in PostHog and answers `/download/latest` (`test/unit/site-proxy.test.js`) |
 | `tools/release/` | Release workflow helpers (`.github/workflows/release-please.yml`, [RELEASING.md](RELEASING.md)): the draft a rerun may finish (`find-draft.js`), the Contributors section (`contributors.js`), the package check (`check-package.js`). `release-please-config.json` lists every file that holds the version |
 
 ## Commands
