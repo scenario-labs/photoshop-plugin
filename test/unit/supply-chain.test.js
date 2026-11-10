@@ -47,6 +47,23 @@ const WORKFLOWS = [
   path.join("tools", "handbook", "pages.yml")
 ];
 
+// The keys of a workflow's top-level `on:` block, comments and blank lines
+// skipped. Any other spelling (`on: [push]`, a flow mapping, another indent)
+// gives null or no keys, so a check on the list fails rather than passes.
+function triggers(text) {
+  const lines = text.split("\n");
+  const at = lines.findIndex((l) => /^on:\s*(#.*)?$/.test(l));
+  if (at < 0) return null;
+  const keys = [];
+  for (const l of lines.slice(at + 1)) {
+    if (/^\s*(#.*)?$/.test(l)) continue;
+    if (!/^\s/.test(l)) break;
+    const m = /^ {2}([A-Za-z_]+):/.exec(l);
+    if (m) keys.push(m[1]);
+  }
+  return keys;
+}
+
 test("every GitHub workflow pins its actions by full commit and declares its permissions", () => {
   assert.ok(WORKFLOWS.length >= 2);
   for (const f of WORKFLOWS) {
@@ -66,8 +83,9 @@ test("every GitHub workflow pins its actions by full commit and declares its per
     const pages = /actions\/deploy-pages@/.test(text);
     const name = (text.match(/^name:\s*(.+?)\s*$/m) || [])[1];
     if (pages) assert.ok(name === "Publish site" || name === "Handbook", `${f}: a Pages workflow is Publish site or Handbook`);
-    if (name === "Handbook") assert.match(text, /^on:\s*\n\s+workflow_dispatch:\s*\n(?!\s+\w)/m, `${f} runs only by hand`);
+    if (name === "Handbook") assert.deepEqual(triggers(text), ["workflow_dispatch"], `${f} runs only by hand`);
     if (name === "Publish site") {
+      assert.deepEqual(triggers(text), ["workflow_run", "push", "workflow_dispatch"], `${f} runs after a release, on a push and by hand, nothing else`);
       assert.match(text, /^\s+workflow_run:\s*\n\s+workflows: \[release-please\]\s*\n\s+types: \[completed\]\s*\n\s+branches: \[main\]/m, `${f} runs after release-please on main`);
       assert.match(text, /^\s+push:\s*\n\s+branches: \[main\]\s*\n\s+paths:\s*\n\s+- "site\/\*\*"\s*\n\s+- "\.github\/workflows\/pages\.yml"\s*\n(?!\s+-)/m, `${f} runs on pushes to main that change site/ or the workflow`);
       assert.match(text, /github\.repository == 'scenario-labs\/photoshop-plugin'/, `${f} publishes from this repository only`);
