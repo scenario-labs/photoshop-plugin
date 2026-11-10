@@ -8,8 +8,10 @@
 // counts as "unknown".
 //
 // /download/latest answers itself with a redirect to the latest package, so a
-// page can link one address that never changes. The redirect is not counted:
-// the download it leads to is.
+// page can link one address that never changes. It reads latest.json on every
+// request: each publish keeps only the newest package, so a remembered version
+// could point at a file that is gone. The redirect is not counted: the
+// download it leads to is.
 
 export const config = { matcher: "/download/:path*", runtime: "nodejs" };
 // The GitHub Pages copy of the site: vercel.json forwards every request there.
@@ -65,14 +67,18 @@ function describe(request: Request): { version: string; properties: Properties }
   return { version: found[1], properties };
 }
 
-/** The version download/latest.json names, read at most every five minutes, or once a minute for an unseen one. */
-async function latestVersion(wanted?: string): Promise<string> {
+/**
+ * The version download/latest.json names, read at most every `ttl` (five
+ * minutes by default), or once a minute for an unseen one. A failed read
+ * keeps the last version read.
+ */
+async function latestVersion(wanted?: string, ttl = LATEST_TTL_MS): Promise<string> {
   // Read latest.json from Pages directly: through this site it would pass this middleware again.
   const origin = env("SITE_ORIGIN") || ORIGIN;
   const now = Date.now();
   const cached = published.get(origin);
   const age = cached ? now - cached.at : Infinity;
-  if (cached && age < LATEST_TTL_MS && (wanted === undefined || cached.version === wanted || age < LATEST_RETRY_MS)) {
+  if (cached && age < ttl && (wanted === undefined || cached.version === wanted || age < LATEST_RETRY_MS)) {
     return cached.version;
   }
   let latest = cached?.version ?? "";
@@ -107,7 +113,7 @@ async function send(token: string, version: string, properties: Properties): Pro
 
 /** /download/latest: a redirect to the latest package on this site, or to the releases page before the first release. */
 async function redirectToLatest(): Promise<Response> {
-  const version = await latestVersion();
+  const version = await latestVersion(undefined, 0);
   const location = version
     ? `/download/scenario-photoshop-${version}.ccx`
     : "https://github.com/scenario-labs/photoshop-plugin/releases";

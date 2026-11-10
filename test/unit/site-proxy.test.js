@@ -198,3 +198,14 @@ test("/download/latest redirects to the latest package without counting it", { s
   assert.equal(response.headers.get("location"), "https://github.com/scenario-labs/photoshop-plugin/releases");
   assert.equal(received.length, 0);
 });
+
+test("/download/latest reads latest.json on every request, and keeps the last version when a read fails", { skip }, async () => {
+  const prefix = publish("0.8.0");
+  await visit("/download/scenario-photoshop-0.8.0.ccx");
+  // A release lands within the five minutes the download count remembers 0.8.0.
+  latest.set(prefix, { status: 200, version: "0.9.0" });
+  assert.equal((await visit("/download/latest")).response.headers.get("location"), "/download/scenario-photoshop-0.9.0.ccx");
+  latest.set(prefix, { status: 500, version: "" });
+  assert.equal((await visit("/download/latest")).response.headers.get("location"), "/download/scenario-photoshop-0.9.0.ccx");
+  assert.equal(latestReads.get(prefix), 3);
+});
