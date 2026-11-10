@@ -18,7 +18,20 @@ var TEXT = {
   paste: "Paste the key and its secret.",
   // The sign-in view shows the fields first; how to get a key follows.
   no_key_title: "No key yet?",
-  storage_note: "Keys stay in Photoshop's secure storage on this computer.",
+  storage_note: "Keys and your sign-in stay in Photoshop's secure storage on this computer.",
+  // SPEC 4.6: Sign in with Scenario.
+  browser_text: "Sign in with your Scenario account in the browser. Photoshop may ask before it opens the page.",
+  key_title: "Or use an API key",
+  code_label: "If the page asks for a code, enter this one:",
+  code_wait: "Waiting for you to approve in the browser.",
+  code_copied: "Code copied.",
+  reading_teams: "Reading your teams and projects.",
+  choose_note: "Results, trained models and the Library follow the project. You can switch later in Projects.",
+  choose_none: "No project you can use in this team.",
+  saving_choice: "Saving.",
+  signed_in: "Signed in with your Scenario account",
+  sign_out_browser_note: "Sign out removes your Scenario sign-in from this computer and ends it.",
+  sign_out_browser_confirm: "Click again to sign out of Scenario on this computer.",
   add_title: "Add a key for another project",
   // SPEC 4.2 step 2: what Copy a request for your admin copies.
   admin_request: "Could you create a Scenario API key for me? Type: Project key, role: Editor, project: <the one I should use>, with a CU limit if you set one for third-party tools. It is for the Scenario plugin for Photoshop.",
@@ -50,7 +63,15 @@ var STATES = {
   storage_failed: { text: "Photoshop's secure storage did not keep the key. Nothing was saved.", actions: ["retry", "copy_error"] },
   missing: { text: "Paste the API key and its secret.", actions: [] },
   not_signed_in: { text: "No key is saved. Add a key first.", actions: [] },
-  in_progress: { text: "A test is already running.", actions: [] }
+  in_progress: { text: "A test is already running.", actions: [] },
+  // SPEC 4.6: Sign in with Scenario.
+  browser_denied: { text: "The sign-in was declined in the browser.", actions: ["sign_in_again"] },
+  browser_expired: { text: "The code expired before the sign-in finished.", actions: ["sign_in_again"] },
+  browser_failed: { text: "Scenario's sign-in did not answer as expected.", actions: ["sign_in_again", "copy_error"], scenario: true },
+  browser_check_failed: { text: "Scenario could not check your sign-in.", actions: ["retry", "copy_error"], scenario: true },
+  session_ended: { text: "Your Scenario sign-in ended. Sign in again.", actions: ["sign_in_again"] },
+  no_project: { text: "This account has no project it can use. Create one on Scenario, or ask a team admin for a role in one.", actions: ["sign_in_again"] },
+  project_gone: { text: "The chosen project is no longer available. Choose another one.", actions: ["choose_project"] }
 };
 
 var ACTION_LABELS = {
@@ -59,7 +80,9 @@ var ACTION_LABELS = {
   open_plans: "Open plans",
   copy_admin_request: "Copy a request for your admin",
   copy_error: "Copy error",
-  retry: "Retry"
+  retry: "Retry",
+  sign_in_again: "Sign in again",
+  choose_project: "Choose a project"
 };
 
 var ROLE_NAMES = { reader: "Reader", editor: "Editor", admin: "Admin" };
@@ -71,11 +94,26 @@ function keyEnding(last4) {
 // The header's project label: SPEC 3.13, "No project name from the API".
 function projectLabel(account) {
   if (!account) return NOT_SIGNED_IN;
+  if (account.kind === "browser") return account.project_name || "Scenario project";
   return account.project_name || "Scenario project " + keyEnding(account.key_last4);
+}
+
+// "Team / Project" for a project chosen with a browser sign-in.
+function teamProject(account) {
+  var project = projectLabel(account);
+  return account && account.kind === "browser" && account.team_name ? account.team_name + " / " + project : project;
+}
+
+// What a list row says after the project's name: the key's ending, or the
+// team of a browser sign-in (its projects share one email).
+function rowDetail(account) {
+  if (account.kind === "browser") return account.team_name || account.email || "Signed in";
+  return keyEnding(account.key_last4);
 }
 
 // Lines of the "Connected to Scenario" block (wireframe 1).
 function connectedLines(account) {
+  if (account.kind === "browser") return [TEXT.connected, "Project: " + teamProject(account), account.email ? "Signed in as " + account.email : TEXT.signed_in];
   if (account.project_name) return [TEXT.connected, "Project: " + account.project_name, "Key " + keyEnding(account.key_last4)];
   return [TEXT.connected, "Project: " + projectLabel(account), TEXT.no_name_note];
 }
@@ -113,6 +151,8 @@ module.exports = {
   STATES: STATES,
   ACTION_LABELS: ACTION_LABELS,
   projectLabel: projectLabel,
+  teamProject: teamProject,
+  rowDetail: rowDetail,
   connectedLines: connectedLines,
   testing: testing,
   retrying: retrying,

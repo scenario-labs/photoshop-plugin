@@ -219,7 +219,7 @@ function createCatalog(o) {
       try {
         res = await o.client.request("GET", "/models/" + id);
       } catch (e) {
-        if (e.status === 404) throw new errorsMod.ScenarioError("ModelUnavailable", "This model is no longer available to this key.");
+        if (e.status === 404) throw new errorsMod.ScenarioError("ModelUnavailable", "This model is no longer available in this project.");
         throw e;
       }
       var rec = res.body && res.body.model;

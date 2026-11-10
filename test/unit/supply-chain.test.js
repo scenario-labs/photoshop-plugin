@@ -12,56 +12,6 @@ const ROOT = path.resolve(__dirname, "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const MIT_COMPATIBLE = new Set(["MIT", "ISC", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "0BSD"]);
 
-// A workflow's triggers: the keys of its top-level `on:` block, at the block's
-// first indentation, past blank and comment lines, quoted or not; with the
-// block's text for checks on a trigger's settings. An inline `on:` value is
-// split as a list; a flow mapping (`on: {...}`) yields null, so it fails.
-function workflowTriggers(text) {
-  const lines = text.split("\n");
-  const at = lines.findIndex((l) => /^["']?on["']?\s*:/.test(l));
-  if (at < 0) return null;
-  const inline = lines[at].replace(/^["']?on["']?\s*:/, "").replace(/\s#.*$/, "").trim();
-  if (inline) {
-    if (inline.includes("{")) return null;
-    const names = inline.replace(/^\[|\]$/g, "").split(",").map((s) => s.trim().replace(/^["']|["']$/g, ""));
-    return { names: names.filter(Boolean), body: "" };
-  }
-  const body = [];
-  for (const l of lines.slice(at + 1)) {
-    if (/^\S/.test(l) && !/^#/.test(l)) break;
-    body.push(l);
-  }
-  const keyed = body.filter((l) => !/^\s*(#.*)?$/.test(l));
-  if (!keyed.length) return null;
-  const indent = Math.min(...keyed.map((l) => l.match(/^\s*/)[0].length));
-  const names = keyed
-    .filter((l) => l.match(/^\s*/)[0].length === indent)
-    .map((l) => (l.trim().match(/^["']?([^"':\s]+)["']?/) || [])[1]);
-  return { names, body: body.join("\n") };
-}
-
-// Pages deploys need pages: write, so a Pages workflow runs by hand or on a
-// push to main, never on a pull request.
-function pagesTriggersAllowed(text) {
-  const on = workflowTriggers(text);
-  if (!on || !on.names.length) return false;
-  if (!on.names.every((n) => n === "workflow_dispatch" || n === "push")) return false;
-  return !on.names.includes("push") || /^\s+branches:\s*\[main\]\s*$/m.test(on.body);
-}
-
-test("a Pages workflow trigger other than a hand run or a push to main is refused, however it is written", () => {
-  const ok = (on) => pagesTriggersAllowed(`name: Site\n\n${on}\npermissions:\n  contents: read\n`);
-  assert.ok(ok("on:\n  workflow_dispatch:\n"));
-  assert.ok(ok('on:\n  push:\n    branches: [main]\n    paths:\n      - "site/**"\n  workflow_dispatch:\n'));
-  assert.ok(!ok("on:\n  workflow_dispatch:\n\n  pull_request:\n"), "after a blank line");
-  assert.ok(!ok("on:\n  workflow_dispatch:\n# a comment\n  pull_request_target:\n"), "after a column-0 comment");
-  assert.ok(!ok('on:\n  workflow_dispatch:\n  "pull_request":\n'), "quoted");
-  assert.ok(!ok("on: [workflow_dispatch, pull_request]\n"), "inline list");
-  assert.ok(!ok("on: {workflow_dispatch: null, pull_request: null}\n"), "flow mapping");
-  assert.ok(!ok("on:\n  push:\n    branches: [feature]\n"), "a push to another branch");
-  assert.ok(!ok("on:\n  push:\n"), "a push to any branch");
-});
-
 test("the helper ships an npm-shrinkwrap.json that pins every package by integrity, in step with the workspace lock", () => {
   const pkg = JSON.parse(read("helper/package.json"));
   const shrink = JSON.parse(read("helper/npm-shrinkwrap.json"));
@@ -89,12 +39,40 @@ test("the helper ships an npm-shrinkwrap.json that pins every package by integri
   }
 });
 
-// The handbook's Pages workflow waits in tools/handbook/ until it is turned
-// on by copying it into .github/workflows/; it is held to the same rules.
-const WORKFLOWS = [
-  ...fs.readdirSync(path.join(ROOT, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f)).map((f) => path.join(".github", "workflows", f)),
-  path.join("tools", "handbook", "pages.yml")
-];
+const WORKFLOWS = fs.readdirSync(path.join(ROOT, ".github", "workflows")).filter((f) => /\.ya?ml$/.test(f)).map((f) => path.join(".github", "workflows", f));
+// Every push path the site's workflow lists: the page, the handbook's builder
+// and the docs it is built from, and the workflow itself.
+const SITE_PATHS = ["site/**", "tools/handbook/**", "README.md", "docs/USER_GUIDE.md", "docs/MCP.md", "docs/KNOWN_LIMITATIONS.md", "docs/media/**", "PRIVACY.md", "SECURITY.md", "CHANGELOG.md", ".github/workflows/pages.yml"];
+
+// The keys of a workflow's top-level `on:` block, comments and blank lines
+// skipped, quoted or not. Any other spelling (`on: [push]`, a flow mapping,
+// another indent, a key it cannot read) gives null, no keys or an extra entry,
+// so a check on the list fails rather than passes.
+function triggers(text) {
+  const lines = text.split("\n");
+  const at = lines.findIndex((l) => /^["']?on["']?:\s*(#.*)?$/.test(l));
+  if (at < 0) return null;
+  const keys = [];
+  for (const l of lines.slice(at + 1)) {
+    if (/^\s*(#.*)?$/.test(l)) continue;
+    if (!/^\s/.test(l)) break;
+    const m = /^ {2}(["']?)([A-Za-z_]+)\1\s*:/.exec(l);
+    if (m) keys.push(m[2]);
+    else if (/^ {2}\S/.test(l)) keys.push(l.trim());
+  }
+  return keys;
+}
+
+test("a workflow's triggers are read past blank lines, comments and quotes", () => {
+  const on = (block) => triggers(`name: Site\n\n${block}\npermissions:\n  contents: read\n`);
+  assert.deepEqual(on("on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n"), ["push", "workflow_dispatch"]);
+  assert.deepEqual(on("on:\n  workflow_dispatch:\n\n  pull_request:\n"), ["workflow_dispatch", "pull_request"]);
+  assert.deepEqual(on("on:\n  workflow_dispatch:\n# a comment\n  pull_request_target:\n"), ["workflow_dispatch", "pull_request_target"]);
+  assert.deepEqual(on('on:\n  workflow_dispatch:\n  "pull_request":\n'), ["workflow_dispatch", "pull_request"]);
+  assert.deepEqual(on("\"on\":\n  'pull_request':\n"), ["pull_request"]);
+  assert.equal(on("on: [workflow_dispatch, pull_request]\n"), null);
+  assert.equal(on("on: {workflow_dispatch: null, pull_request: null}\n"), null);
+});
 
 test("every GitHub workflow pins its actions by full commit and declares its permissions", () => {
   assert.ok(WORKFLOWS.length >= 2);
@@ -108,14 +86,31 @@ test("every GitHub workflow pins its actions by full commit and declares its per
       if (u.startsWith("./")) continue; // a local action is part of this repository
       assert.match(u, /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, `${f}: ${u} is pinned by full commit`);
     }
-    // Pages deploys need pages: write, only in the Pages workflows, which run
-    // by hand or on a push to main, never on a pull request.
-    const pages = path.basename(f) === "pages.yml";
-    if (pages) assert.ok(pagesTriggersAllowed(text), `${f} runs by hand or on a push to main only`);
+    // Pages deploys need pages: write, only in the one workflow that deploys
+    // Pages, Publish site: the page in site/ and the handbook under /handbook/.
+    // It runs after a release and on pushes to main that change either, from
+    // this repository only.
+    const pages = /actions\/deploy-pages@/.test(text);
+    const name = (text.match(/^name:\s*(.+?)\s*$/m) || [])[1];
+    if (pages) assert.equal(name, "Publish site", `${f}: the one Pages workflow is Publish site`);
+    if (name === "Publish site") {
+      assert.deepEqual(triggers(text), ["workflow_run", "push", "workflow_dispatch"], `${f} runs after a release, on a push and by hand, nothing else`);
+      assert.match(text, /^\s+workflow_run:\s*\n\s+workflows: \[release-please\]\s*\n\s+types: \[completed\]\s*\n\s+branches: \[main\]/m, `${f} runs after release-please on main`);
+      const push = text.match(/^\s+push:\s*\n\s+branches: \[main\]\s*\n\s+paths:\s*\n((?:\s+- .+\n)+)/m);
+      assert.ok(push, `${f} runs on pushes to main, filtered by path`);
+      assert.deepEqual([...push[1].matchAll(/- "([^"]+)"/g)].map((m) => m[1]), SITE_PATHS, `${f}: the push paths are the site, the handbook and its docs`);
+      assert.match(text, /npm run handbook -- --out "\$RUNNER_TEMP\/site\/handbook"/, `${f} builds the handbook under /handbook/`);
+      assert.match(text, /npm run handbook -- --no-pdf --out "\$RUNNER_TEMP\/site\/handbook"/, `${f}: a PDF failure falls back to the handbook without it`);
+      assert.match(text, /github\.repository == 'scenario-labs\/photoshop-plugin'/, `${f} publishes from this repository only`);
+      assert.match(text, /github\.event\.workflow_run\.conclusion == 'success'/, `${f} publishes only after a release run that succeeded`);
+      assert.match(text, /ref: main\n/, `${f} builds main`);
+    }
     for (const m of text.matchAll(/^\s+([a-z-]+):\s*write\s*$/gm)) {
       const allowed = ["id-token", "contents", "attestations", ...(pages ? ["pages"] : [])];
       assert.ok(allowed.includes(m[1]), `${f}: ${m[1]}: write is not expected`);
     }
     if (/actions\/checkout@/.test(text)) assert.match(text, /persist-credentials:\s*false/, `${f}: checkout keeps no credentials`);
   }
+  const site = WORKFLOWS.filter((f) => f.startsWith(".github") && /^name: Publish site$/m.test(read(f)));
+  assert.deepEqual(site, [path.join(".github", "workflows", "pages.yml")], "the site publishes from .github/workflows/pages.yml");
 });

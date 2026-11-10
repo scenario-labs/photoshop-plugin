@@ -249,7 +249,16 @@ function createDownloader(o) {
     if (typeof token.onStop === "function") token.onStop();
   }
 
-  return { download: download, stop: stop, allowed: allowed };
+  // Development builds pointed at a development target (dev/oauth-target.js)
+  // also download from that target's origins.
+  function allowOrigins(list) {
+    for (var k = 0; k < list.length; k++) {
+      var x = String(list[k]).toLowerCase();
+      if (origins.indexOf(x) < 0) origins.push(x);
+    }
+  }
+
+  return { download: download, stop: stop, allowed: allowed, allowOrigins: allowOrigins };
 }
 
 module.exports = { createDownloader: createDownloader, sniff: sniff, mp4Size: mp4Size, originOf: originOf, ATTEMPTS: ATTEMPTS, BACKOFF_MS: BACKOFF_MS };

@@ -1,28 +1,42 @@
-# Publishes the page in site/ to GitHub Pages, as blender-plugin does: Pages has
-# build type "workflow" and no custom domain, so it serves
-# https://scenario-labs.github.io/photoshop-plugin/. https://photoshop.scenario.com
-# is a Vercel project in front of it, deployed from tools/site_proxy/ on main.
-# Runs on every push to main that changes the page, and by hand.
-# One-time setup:
-#   1. Repository Settings > Pages: Source "GitHub Actions", no custom domain.
-#   2. Vercel: a project from this repository with Root Directory tools/site_proxy,
-#      framework preset Other, no build or install command, production branch
-#      main, Ignored Build Step `git diff --quiet HEAD^ HEAD -- .`, and Web
-#      Analytics on. Add the domain photoshop.scenario.com to it.
-#   3. DNS for scenario.com (Route 53): CNAME photoshop -> the target Vercel
+# GitHub Pages publish for https://photoshop.scenario.com: the page in site/
+# at the root and the handbook generated from the docs under /handbook/, as one
+# site. Runs after each release, on every push to main that changes either, and
+# by hand. Pages serves it at https://scenario-labs.github.io/photoshop-plugin/;
+# the Vercel project on tools/site_proxy holds photoshop.scenario.com and
+# forwards every path there, as for blender.scenario.com. Set once:
+#   1. Repository Settings > Pages: Source "GitHub Actions" and no custom
+#      domain: one would make Pages redirect the proxy's requests back to it.
+#   2. Vercel (scenario-labs): project photoshop-plugin-site, Root Directory
+#      tools/site_proxy, framework Other, no build or install command,
+#      production branch main, Ignored Build Step
+#      `git diff --quiet HEAD^ HEAD -- .`, Web Analytics on, and the domain
+#      photoshop.scenario.com. tools/site_proxy holds only vercel.json: Vercel
+#      would serve any other file there instead of forwarding its path.
+#   3. DNS for scenario.com (Route 53): CNAME photoshop to the target Vercel
 #      shows for that domain.
-#   4. Run this workflow once, or push a change to site/.
-# tools/site_proxy/ holds only vercel.json: Vercel would serve any other file
-# there instead of forwarding its path.
-# The generated handbook keeps its own workflow in tools/handbook/pages.yml.
-name: Site
+name: Publish site
 
 on:
+  # workflow_run is safe here: the build checks out main, never the
+  # triggering run's head_sha, uses none of its artifacts, keeps no
+  # credentials, and runs only after a successful push run on main.
+  workflow_run:
+    workflows: [release-please]
+    types: [completed]
+    branches: [main]
   push:
     branches: [main]
     paths:
       - "site/**"
-      - "test/unit/site-page.test.js"
+      - "tools/handbook/**"
+      - "README.md"
+      - "docs/USER_GUIDE.md"
+      - "docs/MCP.md"
+      - "docs/KNOWN_LIMITATIONS.md"
+      - "docs/media/**"
+      - "PRIVACY.md"
+      - "SECURITY.md"
+      - "CHANGELOG.md"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -35,10 +49,17 @@ concurrency:
 
 jobs:
   build:
+    # Only this repository publishes, and only after a release run that
+    # succeeded on a push to main.
+    if: >-
+      github.repository == 'scenario-labs/photoshop-plugin' &&
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: main
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -46,10 +67,27 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: node test/run.js site-page
+      # pdftotext numbers the PDF's contents; Chrome prints the PDF.
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      - name: Put the site and the handbook together
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          set -euo pipefail
+          cp -R site "$RUNNER_TEMP/site"
+          # A PDF problem (Chrome, Poppler, page numbers) keeps the site and
+          # the handbook web page; a problem in the docs themselves, which
+          # npm test catches on every pull request, fails the retry too and
+          # stops the publish. The first run's output names the cause.
+          if ! npm run handbook -- --out "$RUNNER_TEMP/site/handbook"; then
+            echo "::warning::The handbook build failed (cause above): retrying without the PDF"
+            rm -rf "$RUNNER_TEMP/site/handbook"
+            npm run handbook -- --no-pdf --out "$RUNNER_TEMP/site/handbook"
+          fi
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: site
+          path: ${{ runner.temp }}/site
 
   deploy:
     needs: build

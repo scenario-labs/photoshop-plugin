@@ -22,6 +22,24 @@
         </div>
         <div class="scroll" id="signin-scroll">
           <div class="note" id="signin-disclosure"></div>
+          <!-- Sign in with Scenario (SPEC 4.6): the browser page, then the code to check. -->
+          <div class="text" id="signin-browser-text"></div>
+          <div class="row">
+            <sp-button variant="cta" size="s" id="signin-browser">Sign in with Scenario</sp-button>
+            <span class="note progress" id="signin-browser-progress"></span>
+          </div>
+          <div class="banner" id="signin-code-box">
+            <div class="note" id="signin-code-label"></div>
+            <div class="code" id="signin-code"></div>
+            <div class="note" id="signin-code-wait"></div>
+            <div class="actions">
+              <sp-action-button size="s" id="signin-code-open">Open the page again</sp-action-button>
+              <sp-action-button size="s" id="signin-code-copy">Copy code</sp-action-button>
+              <sp-action-button quiet size="s" id="signin-code-cancel">Cancel</sp-action-button>
+            </div>
+            <div class="note" id="signin-code-note"></div>
+          </div>
+          <div class="section-title" id="signin-key-title"></div>
           <div class="text" id="signin-step2"></div>
           <div class="field-label">API key</div>
           <sp-textfield size="s" class="field" id="signin-key" placeholder="Paste key, or key:secret"></sp-textfield>
@@ -43,6 +61,8 @@
               <sp-action-button size="s" id="signin-act-copy_admin_request"></sp-action-button>
               <sp-action-button size="s" id="signin-act-copy_error"></sp-action-button>
               <sp-action-button size="s" id="signin-act-retry"></sp-action-button>
+              <sp-action-button size="s" id="signin-act-sign_in_again"></sp-action-button>
+              <sp-action-button size="s" id="signin-act-choose_project"></sp-action-button>
             </div>
             <div class="actions" id="signin-links">
               <sp-action-button quiet size="s" id="signin-report">Report a problem</sp-action-button>
@@ -239,10 +259,27 @@
         <div class="scroll" id="projects-scroll">
           <div class="list" id="projects-list"></div>
           <div class="actions">
-            <sp-action-button quiet size="s" id="projects-add"><span class="ico" data-icon="plus"></span><span>Add a key for another project</span></sp-action-button>
+            <sp-action-button quiet size="s" id="projects-choose"><span slot="icon" class="ico" data-icon="chevron-right"></span><span>Choose another project</span></sp-action-button>
+          </div>
+          <div class="actions">
+            <sp-action-button quiet size="s" id="projects-add"><span slot="icon" class="ico" data-icon="plus"></span><span>Add a key for another project</span></sp-action-button>
           </div>
           <div class="note" id="projects-note"></div>
           <div class="note warn" id="projects-error"></div>
+        </div>
+      </section>
+
+      <!-- The projects of a browser sign-in, by team (SPEC 4.6). -->
+      <section class="view" id="view-choose">
+        <div class="subhead">
+          <sp-action-button quiet size="s" class="back" id="choose-back" title="Back"><span class="ico" data-icon="chevron-left"></span></sp-action-button>
+          <span class="title">Choose a project</span>
+        </div>
+        <div class="scroll" id="choose-scroll">
+          <div class="note" id="choose-note"></div>
+          <div class="list" id="choose-list"></div>
+          <div class="note progress" id="choose-progress"></div>
+          <div class="note warn" id="choose-error"></div>
         </div>
       </section>
 
@@ -257,7 +294,7 @@
             <div class="list" id="settings-accounts"></div>
             <div class="note" id="settings-none"></div>
             <div class="actions">
-              <sp-action-button quiet size="s" id="settings-add"><span class="ico" data-icon="plus"></span><span>Add a key for another project</span></sp-action-button>
+              <sp-action-button quiet size="s" id="settings-add"><span slot="icon" class="ico" data-icon="plus"></span><span>Add a key for another project</span></sp-action-button>
             </div>
             <div class="actions">
               <sp-action-button size="s" id="settings-test">Test connection</sp-action-button>
@@ -276,6 +313,8 @@
                 <sp-action-button size="s" id="settings-act-copy_admin_request"></sp-action-button>
                 <sp-action-button size="s" id="settings-act-copy_error"></sp-action-button>
                 <sp-action-button size="s" id="settings-act-retry"></sp-action-button>
+                <sp-action-button size="s" id="settings-act-sign_in_again"></sp-action-button>
+                <sp-action-button size="s" id="settings-act-choose_project"></sp-action-button>
               </div>
               <div class="actions" id="settings-links">
                 <sp-action-button quiet size="s" id="settings-report">Report a problem</sp-action-button>
@@ -300,7 +339,7 @@
             <!-- M6: Connect a client (ui/connect-client.js) and the agent switches, spending and activity log (ui/agents-settings.js). -->
             <div class="connect" id="connect-client"></div>
             <div class="agents-controls" id="agents-controls"></div>
-            <sp-action-button quiet size="s" class="disclosure" id="agents-details-toggle"><span class="ico" id="agents-details-icon" data-icon="chevron-right"></span><span>Details</span></sp-action-button>
+            <sp-action-button quiet size="s" class="disclosure" id="agents-details-toggle"><span slot="icon" class="ico" id="agents-details-icon" data-icon="chevron-right"></span><span>Details</span></sp-action-button>
             <div class="details" id="agents-details">
               <div class="note" id="link-detail"></div>
               <div class="note" id="agents-tech"></div>

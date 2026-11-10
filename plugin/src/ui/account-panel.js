@@ -1,8 +1,9 @@
 "use strict";
 // The account part of the panel: the sign-in view (first run, and Add a key
-// for another project), the project name in the header, the Projects view,
-// Settings (Account, Connect an AI agent, Diagnostics, About) and the panel
-// menu items that lead there. Binds the elements of index.html; texts come
+// for another project) with Sign in with Scenario on top, the project
+// chooser of a browser sign-in, the project name in the header, the Projects
+// view, Settings (Account, Connect an AI agent, Diagnostics, About) and the
+// panel menu items that lead there. Binds the elements of index.html; texts come
 // from account-view.js. Text from Scenario (project names, messages) is set
 // with textContent only. No overlays, no animation.
 
@@ -11,8 +12,8 @@ var split = require("../auth/split.js");
 var icons = require("./icons.js");
 var uiDemo = require("../dev/ui-demo.js");
 
-var VIEWS = ["signin", "main", "projects", "settings", "jobs"];
-var STATUS_ACTIONS = ["enter_again", "create_key", "open_plans", "copy_admin_request", "copy_error", "retry"];
+var VIEWS = ["signin", "main", "projects", "choose", "settings", "jobs"];
+var STATUS_ACTIONS = ["enter_again", "create_key", "open_plans", "copy_admin_request", "copy_error", "retry", "sign_in_again", "choose_project"];
 var CONFIRM_MS = 5000;
 
 // SPEC 4.2 step 4: on macOS a password field's value cannot be read. The
@@ -28,8 +29,8 @@ function readMasked(el) {
   return value || "";
 }
 
-// doc: the panel's document. actions: { auth, openLink(name), copyText(text),
-// diagnostics() -> string, version }
+// doc: the panel's document. actions: { auth, openLink(name), openPage(url)
+// (the sign-in page), copyText(text), diagnostics() -> string, version }
 function createAccountPanel(doc, actions) {
   if (!doc || typeof doc.getElementById !== "function") return null;
   var auth = actions.auth;
@@ -40,7 +41,10 @@ function createAccountPanel(doc, actions) {
     running: false,
     failure: { signin: null, settings: null },
     signOutArmed: false,
-    signOutTimer: null
+    signOutTimer: null,
+    code: null, // the browser sign-in's code while it waits
+    choosing: false,
+    lastTry: "key" // what Retry on the sign-in view repeats: "key" or "browser"
   };
 
   function byId(id) {
@@ -75,8 +79,19 @@ function createAccountPanel(doc, actions) {
 
   // ---- views ----
 
+  // A browser sign-in lives on two views: the sign-in view while the browser
+  // approval and the team read are awaited, then the chooser. Leaving them by
+  // any route (Back, the panel menu, Jobs, the header) ends it, so nothing
+  // completes off-screen; a chosen project being saved is left alone
+  // (auth.cancelBrowser).
+  function leavesSignIn(from, to) {
+    if (from === "choose") return to !== "choose";
+    return from === "signin" && to !== "signin" && to !== "choose";
+  }
+
   // Each view is a flex column: its own header row, then a part that scrolls.
   function showView(name) {
+    if (leavesSignIn(st.view, name)) auth.cancelBrowser();
     for (var i = 0; i < VIEWS.length; i++) show("view-" + VIEWS[i], VIEWS[i] === name, "flex");
     st.view = name;
     if (name === "projects" || name === "settings") renderLists();
@@ -108,7 +123,9 @@ function createAccountPanel(doc, actions) {
     var label = view.projectLabel(auth.current());
     setText("project-label", label);
     var el = byId("project");
-    if (el && el.setAttribute) el.setAttribute("title", auth.current() ? "Project: " + label + ". Click to switch project." : "Sign in to Scenario");
+    // A browser sign-in's tooltip names the team too.
+    var full = auth.current() && auth.current().kind === "browser" ? view.teamProject(auth.current()) : label;
+    if (el && el.setAttribute) el.setAttribute("title", auth.current() ? "Project: " + full + ". Click to switch project." : "Sign in to Scenario");
   }
 
   function renderSignInMode() {
@@ -125,7 +142,8 @@ function createAccountPanel(doc, actions) {
     for (var i = 0; i < list.length; i++) {
       (function (a) {
         // A row like Photoshop's lists: a check on the current project, the
-        // name (cut with an ellipsis) and the key's last characters.
+        // name (cut with an ellipsis) and the key's last characters or the
+        // team.
         var row = doc.createElement("div");
         row.className = a.current ? "list-row current" : "list-row";
         row.setAttribute("data-account", a.id);
@@ -138,7 +156,7 @@ function createAccountPanel(doc, actions) {
         row.appendChild(name);
         var key = doc.createElement("span");
         key.className = "key";
-        key.textContent = view.keyEnding(a.key_last4);
+        key.textContent = view.rowDetail(a);
         row.appendChild(key);
         row.addEventListener("click", function () {
           pick(a, errorId);
@@ -152,9 +170,12 @@ function createAccountPanel(doc, actions) {
     renderList("projects-list", "projects-error");
     renderList("settings-accounts", "settings-note");
     var signedIn = !!auth.current();
+    var browser = signedIn && auth.current().kind === "browser";
     setText("settings-none", auth.list().length ? (signedIn ? "" : view.NOT_SIGNED_IN + ".") : view.NOT_SIGNED_IN + ".");
     show("settings-test", signedIn);
     show("settings-signout", signedIn);
+    setText("settings-signout-note", browser ? view.TEXT.sign_out_browser_note : view.TEXT.sign_out_note);
+    show("projects-choose", browser);
   }
 
   function refresh() {
@@ -252,6 +273,7 @@ function createAccountPanel(doc, actions) {
   async function save() {
     if (st.running) return;
     st.running = true;
+    st.lastTry = "key";
     enable("signin-save", false);
     renderFailure("signin", null);
     setText("signin-note", "");
@@ -281,6 +303,153 @@ function createAccountPanel(doc, actions) {
       showView("main");
     } else {
       renderFailure("signin", out);
+    }
+  }
+
+  // ---- Sign in with Scenario (SPEC 4.6) ----
+
+  function showCode(on) {
+    show("signin-code-box", on, "block");
+    if (!on) {
+      st.code = null;
+      setText("signin-code", "");
+      setText("signin-code-note", "");
+    }
+  }
+
+  function signedIn(account) {
+    clearFields();
+    st.adding = false;
+    renderHeader();
+    showBanner(account);
+    showView("main");
+  }
+
+  async function browserSignIn() {
+    if (st.running) return;
+    st.running = true;
+    st.lastTry = "browser";
+    enable("signin-browser", false);
+    enable("signin-save", false);
+    renderFailure("signin", null);
+    renderFailure("settings", null);
+    setText("signin-note", "");
+    if (st.view !== "signin") showView("signin");
+    var out;
+    try {
+      out = await auth.signInWithBrowser({
+        onCode: function (c) {
+          st.code = c;
+          setText("signin-code", c.user_code);
+          showCode(true);
+        },
+        onStep: function () {
+          showCode(false);
+          setText("signin-browser-progress", view.TEXT.reading_teams);
+        },
+        onWait: function (seconds) {
+          setText("signin-browser-progress", view.retrying(seconds));
+        }
+      });
+    } catch (e) {
+      out = fail(e);
+    } finally {
+      st.running = false;
+      enable("signin-browser", true);
+      enable("signin-save", true);
+      setText("signin-browser-progress", "");
+      showCode(false);
+    }
+    if (out.ok && out.account) signedIn(out.account);
+    else if (out.ok && out.choose) openChooser(out.teams);
+    else if (out.state !== "cancelled") renderFailure("signin", out);
+  }
+
+  // The chooser lists each team's projects; a click uses the project. With a
+  // sign-in waiting for its project, Back cancels that sign-in.
+  function renderChooser(teams) {
+    var box = byId("choose-list");
+    if (!box || typeof doc.createElement !== "function") return;
+    clear(box);
+    var c = auth.current();
+    var currentId = c && c.kind === "browser" && !auth.waiting() ? c.project_id : null;
+    for (var i = 0; i < teams.length; i++) {
+      var head = doc.createElement("div");
+      head.className = "list-team";
+      head.textContent = teams[i].name;
+      box.appendChild(head);
+      if (!teams[i].projects.length) {
+        var none = doc.createElement("div");
+        none.className = "note list-none";
+        none.textContent = view.TEXT.choose_none;
+        box.appendChild(none);
+      }
+      for (var j = 0; j < teams[i].projects.length; j++) {
+        (function (p) {
+          var mine = p.id === currentId;
+          var row = doc.createElement("div");
+          row.className = mine ? "list-row current" : "list-row";
+          row.setAttribute("data-project", p.id);
+          row.setAttribute("title", mine ? "Current project" : "Use this project");
+          if (mine) row.setAttribute("selected", "");
+          row.appendChild(icons.icon(doc, mine ? "check" : "blank"));
+          var name = doc.createElement("span");
+          name.className = "name";
+          name.textContent = p.name;
+          row.appendChild(name);
+          row.addEventListener("click", function () {
+            if (!mine) choose(p.id);
+          });
+          box.appendChild(row);
+        })(teams[i].projects[j]);
+      }
+    }
+  }
+
+  function openChooser(teams) {
+    setText("choose-error", "");
+    setText("choose-progress", "");
+    renderChooser(teams);
+    showView("choose");
+  }
+
+  // Choose another project of the current browser sign-in (Projects, or a
+  // project that is no longer available).
+  async function loadChooser() {
+    setText("choose-error", "");
+    setText("choose-progress", view.TEXT.reading_teams);
+    clear(byId("choose-list"));
+    showView("choose");
+    var out;
+    try {
+      out = await auth.listChoices();
+    } catch (e) {
+      out = fail(e);
+    }
+    setText("choose-progress", "");
+    if (out.ok) renderChooser(out.teams);
+    else setText("choose-error", view.describeFailure(out).text);
+  }
+
+  async function choose(projectId) {
+    if (st.choosing) return;
+    st.choosing = true;
+    setText("choose-error", "");
+    setText("choose-progress", view.TEXT.saving_choice);
+    var out;
+    try {
+      out = await auth.chooseProject(projectId);
+    } catch (e) {
+      out = fail(e);
+    } finally {
+      st.choosing = false;
+      setText("choose-progress", "");
+    }
+    if (out.ok) signedIn(out.account);
+    else {
+      setText("choose-error", view.describeFailure(out).text);
+      // Left while the choice was saved, and it failed: nothing waits for it now.
+      if (st.view !== "choose") auth.cancelBrowser();
     }
   }
 
@@ -325,12 +494,14 @@ function createAccountPanel(doc, actions) {
     if (!st.signOutArmed) {
       st.signOutArmed = true;
       setText("settings-signout", "Confirm sign out");
-      setText("settings-note", view.TEXT.sign_out_confirm);
+      var c0 = auth.current();
+      setText("settings-note", c0 && c0.kind === "browser" ? view.TEXT.sign_out_browser_confirm : view.TEXT.sign_out_confirm);
       st.signOutTimer = setTimeout(disarmSignOut, CONFIRM_MS);
       return;
     }
     disarmSignOut();
     renderFailure("settings", null);
+    var was = auth.current();
     Promise.resolve()
       .then(function () {
         return auth.signOut();
@@ -338,7 +509,8 @@ function createAccountPanel(doc, actions) {
       .then(
         function () {
           var now = auth.current();
-          setText("settings-note", now ? "Signed out. Now using " + view.projectLabel(now) + "." : "Signed out. The key is removed from this computer.");
+          var gone = was && was.kind === "browser" ? "Signed out. Your Scenario sign-in is removed from this computer." : "Signed out. The key is removed from this computer.";
+          setText("settings-note", now ? "Signed out. Now using " + view.teamProject(now) + "." : gone);
           show("account-banner", false);
           refresh();
         },
@@ -390,8 +562,10 @@ function createAccountPanel(doc, actions) {
     else if (name === "copy_error") copy(st.failure[prefix] ? st.failure[prefix].copy : "", noteId, view.TEXT.copied);
     else if (name === "retry") {
       if (prefix === "settings") testConnection();
+      else if (st.lastTry === "browser") browserSignIn();
       else save();
-    }
+    } else if (name === "sign_in_again") browserSignIn();
+    else if (name === "choose_project") loadChooser();
   }
 
   // ---- wiring ----
@@ -405,6 +579,11 @@ function createAccountPanel(doc, actions) {
     setText("signin-admins", T.admins_only);
     setText("signin-no-account", T.no_account);
     setText("signin-step2", T.paste);
+    setText("signin-browser-text", T.browser_text);
+    setText("signin-key-title", T.key_title);
+    setText("signin-code-label", T.code_label);
+    setText("signin-code-wait", T.code_wait);
+    setText("choose-note", T.choose_note);
     setText("signin-storage", T.storage_note);
     setText("projects-note", T.projects_note);
     setText("settings-signout-note", T.sign_out_note);
@@ -426,6 +605,8 @@ function createAccountPanel(doc, actions) {
     showView(homeView());
   });
   bind("signin-back", "click", function () {
+    // Leaving ends a browser sign-in in progress, as its Cancel does.
+    auth.cancelBrowser();
     st.adding = false;
     clearFields();
     renderFailure("signin", null);
@@ -434,6 +615,33 @@ function createAccountPanel(doc, actions) {
   bind("projects-add", "click", startAdding);
   bind("settings-add", "click", startAdding);
   bind("signin-save", "click", save);
+  bind("signin-browser", "click", browserSignIn);
+  bind("signin-code-open", "click", function () {
+    var c = st.code;
+    if (!c || !actions.openPage) return;
+    Promise.resolve()
+      .then(function () {
+        return actions.openPage(c.page);
+      })
+      .catch(function () {
+        // Photoshop asked and the person said no
+      });
+  });
+  bind("signin-code-copy", "click", function () {
+    if (st.code) copy(st.code.user_code, "signin-code-note", view.TEXT.code_copied);
+  });
+  bind("signin-code-cancel", "click", function () {
+    auth.cancelBrowser();
+  });
+  bind("projects-choose", "click", loadChooser);
+  bind("choose-back", "click", function () {
+    if (auth.waiting()) {
+      auth.cancelBrowser();
+      showView(homeView());
+      return;
+    }
+    showView(auth.current() ? "projects" : "signin");
+  });
   bind("settings-test", "click", testConnection);
   bind("settings-signout", "click", signOut);
   bind("account-banner-close", "click", function () {
@@ -545,7 +753,7 @@ function createAccountPanel(doc, actions) {
 
   return {
     // Development builds only (a stub in release): sample states.
-    dev: uiDemo.hook("account", { renderFailure: renderFailure, renderConnected: renderConnected, showBanner: showBanner, startAdding: startAdding }),
+    dev: uiDemo.hook("account", { renderFailure: renderFailure, renderConnected: renderConnected, showBanner: showBanner, startAdding: startAdding, renderChooser: renderChooser, showCode: showCode, showView: showView }),
     refresh: refresh,
     showView: showView,
     showSection: showSection,

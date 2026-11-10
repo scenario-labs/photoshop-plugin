@@ -39,6 +39,7 @@ test("the release bundle holds no development code and no run-time code generati
   assert.ok(!release.code.includes("location.reload"), "a release build never reloads its panel");
   assert.ok(!release.code.includes("dev-demo"), "the panel's sample states are stubbed out");
   assert.ok(!release.code.includes("dev-live-run.json"), "the live-check request reader is stubbed out");
+  assert.ok(!release.code.includes("dev-oauth-target.json"), "a release build always signs in with the production application");
   assert.ok(!release.code.includes("Scenario dev: set up"), "nothing in a release build makes documents for the live check");
   const devModules = require("node:fs").readdirSync(require("node:path").join(__dirname, "..", "..", "plugin", "src", "dev")).filter((f) => f.endsWith(".js")).length;
   assert.equal(release.code.split("Release build: development-only module removed.").length - 1, devModules, "every development-only module is a stub");
@@ -48,6 +49,7 @@ test("the release bundle holds no development code and no run-time code generati
   assert.ok(dev.code.includes("dev-ui-command.json"));
   assert.ok(dev.code.includes("dev-demo"));
   assert.ok(dev.code.includes("dev-live-run.json"));
+  assert.ok(dev.code.includes("dev-oauth-target.json"));
   for (const code of [release.code, dev.code]) {
     assert.ok(!/\beval\s*\(/.test(code), "no eval");
     assert.ok(!/\bnew\s+Function\s*\(/.test(code), "no new Function");
@@ -273,4 +275,34 @@ test(".ccx package: a valid stored zip with the five plugin files, same bytes on
 
   const d = packagePlugin({ dev: true, outDir: path.join(dir, "d"), distFile: path.join(dir, "d", "main.js") });
   assert.equal(path.basename(d.file), `scenario-photoshop-${manifest.version}-dev.ccx`);
+});
+
+// The manifest.json entry of a stored .ccx.
+function packagedManifest(file) {
+  const buf = fs.readFileSync(file);
+  let off = 0;
+  while (buf.readUInt32LE(off) === 0x04034b50) {
+    const size = buf.readUInt32LE(off + 18);
+    const nameLen = buf.readUInt16LE(off + 26);
+    const extra = buf.readUInt16LE(off + 28);
+    const name = buf.toString("utf8", off + 30, off + 30 + nameLen);
+    const start = off + 30 + nameLen + extra;
+    if (name === "manifest.json") return JSON.parse(buf.toString("utf8", start, start + size));
+    off = start + size;
+  }
+  return null;
+}
+
+test("a development sign-in target adds its hosts to a development package only", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "scenario-ps-target-"));
+  const target = path.join(dir, "target.json");
+  fs.writeFileSync(target, JSON.stringify({ issuer: "https://id.example.invalid/", client_id: "dev_client_1", api_base: "https://api.example.invalid/v1", download_origins: ["https://cdn.example.invalid"] }));
+  const d = packagePlugin({ dev: true, outDir: path.join(dir, "d"), distFile: path.join(dir, "d", "main.js"), devTarget: target });
+  const domains = packagedManifest(d.file).requiredPermissions.network.domains;
+  assert.deepEqual(domains.slice(-3), ["https://id.example.invalid", "https://api.example.invalid", "https://cdn.example.invalid"]);
+  for (const kept of manifest.requiredPermissions.network.domains) assert.ok(domains.includes(kept), kept);
+  const r = packagePlugin({ dev: false, outDir: path.join(dir, "r"), distFile: path.join(dir, "r", "main.js"), devTarget: target });
+  assert.deepEqual(packagedManifest(r.file), manifest, "a release package carries the repository's manifest");
+  fs.writeFileSync(target, JSON.stringify({ issuer: "http://id.example.invalid", client_id: "dev_client_1", api_base: "https://api.example.invalid" }));
+  assert.throws(() => packagePlugin({ dev: true, outDir: path.join(dir, "e"), distFile: path.join(dir, "e", "main.js"), devTarget: target }), /not a development sign-in target/);
 });
