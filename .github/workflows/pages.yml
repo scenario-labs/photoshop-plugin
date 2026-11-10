@@ -1,10 +1,17 @@
 # GitHub Pages publish for https://photoshop.scenario.com: the page in site/
 # at the root and the handbook generated from the docs under /handbook/, as one
 # site. Runs after each release, on every push to main that changes either, and
-# by hand. Before the first run:
-#   1. Repository Settings > Pages: Source "GitHub Actions"; Custom domain
-#      photoshop.scenario.com; Enforce HTTPS once the certificate is issued.
-#   2. DNS for scenario.com: CNAME photoshop -> scenario-labs.github.io.
+# by hand. Pages serves it at https://scenario-labs.github.io/photoshop-plugin/;
+# the Vercel project on tools/site_proxy holds photoshop.scenario.com and
+# forwards every path there, as for blender.scenario.com. Set once:
+#   1. Repository Settings > Pages: Source "GitHub Actions" and no custom
+#      domain: one would make Pages redirect the proxy's requests back to it.
+#   2. Vercel (scenario-labs): project photoshop-plugin-site, Root Directory
+#      tools/site_proxy, framework Other, no build or install command,
+#      production branch main, Ignored Build Step
+#      `git diff --quiet HEAD^ HEAD -- .`, and the domain photoshop.scenario.com.
+#   3. DNS for scenario.com (Route 53): CNAME photoshop to the target Vercel
+#      shows for that domain.
 name: Publish site
 
 on:

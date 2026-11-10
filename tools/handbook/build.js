@@ -745,7 +745,7 @@ function build(opts) {
     fs.copyFileSync(abs, dest);
   }
   // No CNAME: .github/workflows/pages.yml publishes this under /handbook/ of
-  // the site in site/, which holds the domain.
+  // the site, whose domain the Vercel proxy in tools/site_proxy/ holds.
   fs.writeFileSync(path.join(opts.out, "index.html"), web);
   const single = page(meta, chapters, docs, "single");
   fs.writeFileSync(path.join(opts.out, meta.htmlName), single);
