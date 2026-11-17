@@ -1250,7 +1250,7 @@ td:first-child { font-weight: 500; min-width: 140px; }
 
     <section id="install" data-toc="Install and sign in">
       <h2>Install and sign in</h2>
-      <p class="what">The plugin is not on the Adobe Marketplace yet. Download the <code>.ccx</code> package of the latest release and install it with Creative Cloud's installer.</p>
+      <p class="what">The plugin is not on the Adobe Marketplace yet. Download the <code>.ccx</code> package of the latest release and double-click it: Creative Cloud installs it.</p>
       <h4>You need</h4>
       <ul class="list">
         <li>Photoshop 2026 (27.x). Tested on 27.11 on macOS; Windows not tested.</li>
@@ -1259,14 +1259,20 @@ td:first-child { font-weight: 500; min-width: 140px; }
       <h4>Install</h4>
       <ol class="steps">
         <li><b>Download</b> <a href="/download/latest">scenario-photoshop-{{version}}.ccx</a>, the package of the latest release.</li>
-        <li><b>Install it</b>: open the <b>Terminal</b> app (in Applications › Utilities, or search "Terminal" with Spotlight), click <b>Copy</b>, paste the command in Terminal and press <kbd>Return</kbd>. It runs Creative Cloud's plugin installer on the file you downloaded. Then restart Photoshop.
-          <div class="cmd"><div class="cmd-bar">Terminal<button class="cmd-copy" type="button">Copy</button></div><pre><code>"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" \
-  --install "$HOME/Downloads/scenario-photoshop-{{version}}.ccx"</code></pre></div></li>
+        <li><b>Double-click the downloaded file</b> in your Downloads folder. Creative Cloud opens <b>Install 'Scenario' plugin</b>, which warns that the plugin comes from a third-party developer: click <b>OK</b>, and enter your Mac password if macOS asks for it. Then quit and reopen Photoshop.
+          <details class="more">
+            <summary>Creative Cloud did not install it? Use Terminal instead</summary>
+            <div class="in">
+              <p>Open the <b>Terminal</b> app (in Applications › Utilities, or search "Terminal" with Spotlight), click <b>Copy</b>, paste the command in Terminal and press <kbd>Return</kbd>. It runs the same installer as Creative Cloud. Then restart Photoshop.</p>
+              <div class="cmd"><div class="cmd-bar">Terminal<button class="cmd-copy" type="button">Copy</button></div><pre><code>"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" \
+  --install "$HOME/Downloads/scenario-photoshop-{{version}}.ccx"</code></pre></div>
+            </div>
+          </details></li>
         <li><b>Open the panel</b> from <b>Plugins › Scenario</b>. Photoshop hides docked panels on its Home screen, so open or make a document first.</li>
       </ol>
       <p class="small">The <a href="https://github.com/scenario-labs/photoshop-plugin/releases/tag/photoshop-plugin-v{{version}}">release page</a> has the same package with its <code>SHA256SUMS</code> and a build attestation: <code>gh attestation verify "$HOME/Downloads/scenario-photoshop-{{version}}.ccx" -R scenario-labs/photoshop-plugin</code>.</p>
       <p class="small"><b>Or build it</b> from a checkout of <a href="https://github.com/scenario-labs/photoshop-plugin">scenario-labs/photoshop-plugin</a> with Node.js 20 or later: <code>npm ci</code>, then <code>npm run package</code> writes <code>build/scenario-photoshop-{{version}}.ccx</code>. Install that file instead.</p>
-      <p class="small">Checked live with the release package on macOS: install, restart, sign-in and a first image took 1 min 53 s, with a script doing the clicks. Installing by double-clicking the <code>.ccx</code> was not tested.</p>
+      <p class="small">Checked live with the release package on macOS: install, restart, sign-in and a first image took 1 min 53 s, with a script doing the clicks. Installing by double-clicking the <code>.ccx</code> was checked live on Photoshop 28.0: Creative Cloud installed it after <b>OK</b>, and <b>Plugins › Scenario</b> appeared once Photoshop restarted.</p>
 
       <h3 id="sign-in">Sign in</h3>
       <div class="how">
@@ -1487,7 +1493,6 @@ td:first-child { font-weight: 500; min-width: 140px; }
           <h4>Not tested</h4>
           <ul class="list small">
             <li>Windows, and Photoshop versions other than 27.11.</li>
-            <li>Installing by double-clicking the <code>.ccx</code>.</li>
             <li>Typing the key and secret by hand; the refused-key and no-API-access screens live.</li>
             <li>Sign in with Scenario against Scenario's production service (verified live on a development instance); <b>Block</b> in Photoshop's dialog and a code that expires.</li>
             <li>CMYK, Lab and other color profiles (one Upscale on an Adobe RGB 16-bit document kept its colors).</li>

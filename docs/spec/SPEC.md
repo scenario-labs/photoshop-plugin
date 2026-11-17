@@ -658,7 +658,7 @@ This build offers **Approve**, **Decline**, **Place**, **Open as document**, **R
 | Step | What the person does | Target |
 |---|---|---|
 | 1 | Double-clicks the downloaded `.ccx`; Creative Cloud installs it | 20 s |
-| 2 | Starts Photoshop, or restarts it if it was open (the command-line installer's install took effect at the next launch on 27.11, verified live; double-click install not tested) | 25 s |
+| 2 | Starts Photoshop, or restarts it if it was open (the install took effect at the next launch, verified live: the command-line installer on 27.11, double-click on 28.0) | 25 s |
 | 3 | Opens Plugins > Scenario | 5 s |
 | 4 | Clicks **Create an API key**; the browser opens Scenario's "API keys and scopes" article, which leads to Settings > Organization > API Keys; they create a Project key with the Editor role, optionally with a CU limit (section 4.2), and copy the key and secret | 40 s |
 | 5 | Pastes them and clicks **Save and test** (two free calls, section 4.2) | 10 s |
@@ -1320,7 +1320,7 @@ One schema, shared with the skills: namespace `https://scenario.com/ns/photoshop
 
 ### 10.2 Install
 
-- Double-click the `.ccx`: Creative Cloud desktop installs it after a "not verified" warning (documented; not tested). Whether Photoshop then needs a restart is measured in M3.
+- Double-click the `.ccx`: Creative Cloud desktop shows "Install 'Scenario' plugin", a third-party developer warning that says the operating system may ask for an administrator password, and installs it on **OK**; Photoshop shows the plugin after a restart (verified live on 28.0, 2026-11-17).
 - Command line: the Unified Plugin Installer Agent installs and removes a `.ccx` with no admin or "not verified" prompt, effective at the next Photoshop launch (verified live (27.11) on a machine with Developer Mode on; without Developer Mode, assumed, M8). The guide gives the exact commands for macOS and Windows.
 
 ### 10.3 Versioning
