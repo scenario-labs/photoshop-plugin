@@ -1778,7 +1778,7 @@ td:first-child { font-weight: 500; min-width: 140px; }
   document.querySelectorAll(".cmd").forEach(function (box) {
     var b = box.querySelector(".cmd-copy"), code = box.querySelector("code"), t = null;
     function said(s) { b.textContent = s; clearTimeout(t); t = setTimeout(function () { b.textContent = "Copy"; }, 2000); }
-    function pick() { var r = document.createRange(); r.selectNodeContents(code); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); said("Press ⌘C"); }
+    function pick() { var r = document.createRange(); r.selectNodeContents(code); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); said(/Mac|iPhone|iPad/.test(navigator.platform) ? "Press ⌘C" : "Press Ctrl+C"); }
     b.addEventListener("click", function () {
       if (!navigator.clipboard || !navigator.clipboard.writeText) return pick();
       navigator.clipboard.writeText(code.textContent).then(function () { said("Copied"); }, pick);
