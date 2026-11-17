@@ -59,6 +59,12 @@ pre { background: var(--surface); border: 1px solid var(--border); border-radius
 pre code { background: none; padding: 0; font-size: .82rem; white-space: pre; overflow-wrap: normal; }
 td pre { padding: .7rem .8rem; }
 td pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A command to paste in a terminal: a bar with a Copy button above it. */
+.cmd { margin: .8rem 0 1.1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.cmd-bar { display: flex; align-items: center; justify-content: space-between; padding: .35rem .45rem .35rem 1.1rem; border-bottom: 1px solid var(--border); font: 500 .66rem/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.cmd-copy { font: 600 .8rem/1 var(--sans); letter-spacing: 0; text-transform: none; color: var(--primary-fg); background: var(--primary); border: 0; border-radius: var(--radius); padding: .5rem .9rem; min-height: 32px; cursor: pointer; }
+.cmd-copy:hover { background: var(--primary-hover); }
+.cmd pre { margin: 0; border: 0; border-radius: 0 0 var(--radius) var(--radius); }
 mark { background: var(--primary-soft); color: var(--fg); border-radius: 2px; padding: 0 .1em; }
 strong, b { font-weight: 600; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -1149,7 +1155,7 @@ td:first-child { font-weight: 500; min-width: 140px; }
       </div>
       <div class="note look"><span class="nk">Until the server is on npm</span>
         <p>The server is not on npm yet, so the copied <code>npx</code> commands work once it is published. From a checkout of the repository, after <b>Copy pairing token</b>:</p>
-        <pre><code>pbpaste | node helper/bin/scenario-photoshop.js setup claude-code --local --token-stdin</code></pre>
+        <div class="cmd"><div class="cmd-bar">Terminal<button class="cmd-copy" type="button">Copy</button></div><pre><code>pbpaste | node helper/bin/scenario-photoshop.js setup claude-code --local --token-stdin</code></pre></div>
         <p>Buttons that copy the pairing token clear the clipboard after 60 seconds.</p>
       </div>
       <div class="tbl"><table>
@@ -1253,9 +1259,9 @@ td:first-child { font-weight: 500; min-width: 140px; }
       <h4>Install</h4>
       <ol class="steps">
         <li><b>Download</b> <a href="/download/latest">scenario-photoshop-{{version}}.ccx</a>, the package of the latest release.</li>
-        <li><b>Install it</b> with Creative Cloud's plugin installer, then restart Photoshop:
-          <pre><code>"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" \
-  --install "$HOME/Downloads/scenario-photoshop-{{version}}.ccx"</code></pre></li>
+        <li><b>Install it</b>: open the <b>Terminal</b> app (in Applications › Utilities, or search "Terminal" with Spotlight), click <b>Copy</b>, paste the command in Terminal and press <kbd>Return</kbd>. It runs Creative Cloud's plugin installer on the file you downloaded. Then restart Photoshop.
+          <div class="cmd"><div class="cmd-bar">Terminal<button class="cmd-copy" type="button">Copy</button></div><pre><code>"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" \
+  --install "$HOME/Downloads/scenario-photoshop-{{version}}.ccx"</code></pre></div></li>
         <li><b>Open the panel</b> from <b>Plugins › Scenario</b>. Photoshop hides docked panels on its Home screen, so open or make a document first.</li>
       </ol>
       <p class="small">The <a href="https://github.com/scenario-labs/photoshop-plugin/releases/tag/photoshop-plugin-v{{version}}">release page</a> has the same package with its <code>SHA256SUMS</code> and a build attestation: <code>gh attestation verify "$HOME/Downloads/scenario-photoshop-{{version}}.ccx" -R scenario-labs/photoshop-plugin</code>.</p>
@@ -1759,6 +1765,17 @@ td:first-child { font-weight: 500; min-width: 140px; }
   });
   hv.addEventListener("play", function () { if (!v.paused) v.pause(); });
   v.addEventListener("play", function () { if (!hv.paused) hv.pause(); });
+
+  // Copy buttons on terminal commands; without the clipboard API, the command is selected instead.
+  document.querySelectorAll(".cmd").forEach(function (box) {
+    var b = box.querySelector(".cmd-copy"), code = box.querySelector("code"), t = null;
+    function said(s) { b.textContent = s; clearTimeout(t); t = setTimeout(function () { b.textContent = "Copy"; }, 2000); }
+    function pick() { var r = document.createRange(); r.selectNodeContents(code); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); said("Press ⌘C"); }
+    b.addEventListener("click", function () {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) return pick();
+      navigator.clipboard.writeText(code.textContent).then(function () { said("Copied"); }, pick);
+    });
+  });
 
   // The guide, page by page, for viewers whose browser does not open the PDF.
   var N = 30, page = 1, rd = document.getElementById("reader"), img = document.getElementById("reader-img"), num = document.getElementById("reader-n"), back = null;

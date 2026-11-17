@@ -34,7 +34,7 @@ You need Photoshop 2026 (27.x; tested on 27.11 on macOS) and a Scenario account 
 
 1. Download the package of the latest release, `scenario-photoshop-<version>.ccx`, from [photoshop.scenario.com/download/latest](https://photoshop.scenario.com/download/latest) or the [releases page](https://github.com/scenario-labs/photoshop-plugin/releases), which also lists its `SHA256SUMS` and a build attestation (`gh attestation verify "$HOME/Downloads/scenario-photoshop-<version>.ccx" -R scenario-labs/photoshop-plugin`).
 
-2. Install it with Creative Cloud's plugin installer, then restart Photoshop (the plugin loads at the next launch). Replace `<version>` with the one in the file name:
+2. Install it with Creative Cloud's plugin installer: open the **Terminal** app (in Applications > Utilities), copy and paste this command, replacing `<version>` with the one in the file name, and press Return. Then restart Photoshop (the plugin loads at the next launch).
 
    ```sh
    "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$HOME/Downloads/scenario-photoshop-<version>.ccx"
