@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 #
 # Scenario: CodeRabbit configuration for scenario-labs/photoshop-plugin
-# Prepared by Chris Hester, CodeRabbit, Thursday November 19th 2026, after the November 18th call.
+# Prepared by CodeRabbit, Thursday November 19th 2026, after the November 18th call.
 #
 # Commit this file as .coderabbit.yaml at the root of the default branch of photoshop-plugin. It starts with
 # "inheritance: true", so everything in the organization baseline (the .coderabbit.yaml in the
