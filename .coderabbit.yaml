@@ -22,7 +22,10 @@ reviews:
         Photoshop plugin. Beyond the editor plugin rules in the baseline: an invalid_client or
         similar identity provider error is a configuration failure, not a sign out, and must not
         delete stored sign ins; an abandoned browser sign in must not stay pending and be saved
-        later under another project or account; install and release documentation must match the
-        package files (a removed lock file changes the install command); the release changelog link
-        check must pass on release pull requests. Findings on the sibling pull request a change
+        later under another project or account. Findings on the sibling pull request a change
         depends on belong there, not here.
+    - path: "{README.md,CHANGELOG.md,docs/**,package.json,package-lock.json,plugin/package.json,plugin/manifest.json,release-please-config.json,.release-please-manifest.json}"
+      instructions: >-
+        Install, release and packaging files. Flag install or release documentation that no
+        longer matches the package files (a removed lock file changes the install command), and a
+        release pull request whose changelog link check would fail.
