@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit configuration for photoshop-plugin. It adds to the organization's central CodeRabbit
+# configuration: with inheritance on, lists are combined and a value set here wins over the
+# central one. Keep here only what is specific to this repository.
+#
+# Which copy of this file a review reads: for a pull request from a branch of this repository,
+# opened by an organization member or a collaborator with write access, the one on the pull
+# request branch; for any other pull request, forks included, the one on its base commit. A
+# branch created before a change picks it up once it includes that change.
+#
+# To see the settings in force and where each comes from, comment
+# "@coderabbitai configuration" on any pull request.
+
+inheritance: true
+
+reviews:
+  profile: assertive
+  path_instructions:
+    - path: "**/*.{ts,tsx,js,jsx}"
+      instructions: >-
+        Photoshop plugin. Beyond the editor plugin rules in the baseline: an invalid_client or
+        similar identity provider error is a configuration failure, not a sign out, and must not
+        delete stored sign ins; an abandoned browser sign in must not stay pending and be saved
+        later under another project or account. Findings on the sibling pull request a change
+        depends on belong there, not here.
+    - path: "{README.md,CHANGELOG.md,docs/**,package.json,package-lock.json,plugin/package.json,plugin/manifest.json,release-please-config.json,.release-please-manifest.json}"
+      instructions: >-
+        Install, release and packaging files. Flag install or release documentation that no
+        longer matches the package files (a removed lock file changes the install command), and a
+        release pull request whose changelog link check would fail.
