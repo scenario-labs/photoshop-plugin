@@ -8,7 +8,7 @@ The helper (`helper/`, published as `@scenario-labs/photoshop-mcp`) depends on o
 
 <!-- coderabbit-ai-generated-section:v1:1e9f8956576079ef677657695004791030e504618013349f83bd7ae2c4597c97 -->
 
-## ws 8.22.1
+## ws 8.22.2
 
 <!-- /coderabbit-ai-generated:v1 -->
 
