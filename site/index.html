@@ -59,6 +59,12 @@ pre { background: var(--surface); border: 1px solid var(--border); border-radius
 pre code { background: none; padding: 0; font-size: .82rem; white-space: pre; overflow-wrap: normal; }
 td pre { padding: .7rem .8rem; }
 td pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A command to paste in a terminal: a bar with a Copy button above it. */
+.cmd { margin: .8rem 0 1.1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.cmd-bar { display: flex; align-items: center; justify-content: space-between; padding: .35rem .45rem .35rem 1.1rem; border-bottom: 1px solid var(--border); font: 500 .66rem/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.cmd-copy { font: 600 .8rem/1 var(--sans); letter-spacing: 0; text-transform: none; color: var(--primary-fg); background: var(--primary); border: 0; border-radius: var(--radius); padding: .5rem .9rem; min-height: 32px; cursor: pointer; }
+.cmd-copy:hover { background: var(--primary-hover); }
+.cmd pre { margin: 0; border: 0; border-radius: 0 0 var(--radius) var(--radius); }
 mark { background: var(--primary-soft); color: var(--fg); border-radius: 2px; padding: 0 .1em; }
 strong, b { font-weight: 600; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -1244,23 +1250,38 @@ td:first-child { font-weight: 500; min-width: 140px; }
 
     <section id="install" data-toc="Install and sign in">
       <h2>Install and sign in</h2>
-      <p class="what">The plugin is not on the Adobe Marketplace yet. Download the <code>.ccx</code> package of the latest release and install it with Creative Cloud's installer.</p>
+      <p class="what">The plugin is not on the Adobe Marketplace yet. Download it, double-click the file, and Creative Cloud installs it in Photoshop.</p>
       <h4>You need</h4>
       <ul class="list">
-        <li>Photoshop 2026 (27.x). Tested on 27.11 on macOS; Windows not tested.</li>
-        <li>A Scenario account on a plan with API access (Starter or above).</li>
+        <li>Photoshop 2026 or later, on a Mac or a Windows PC.</li>
+        <li>A Scenario account on the Starter plan or above.</li>
       </ul>
       <h4>Install</h4>
       <ol class="steps">
-        <li><b>Download</b> <a href="/download/latest">scenario-photoshop-{{version}}.ccx</a>, the package of the latest release.</li>
-        <li><b>Install it</b> with Creative Cloud's plugin installer, then restart Photoshop:
-          <pre><code>"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" \
-  --install "$HOME/Downloads/scenario-photoshop-{{version}}.ccx"</code></pre></li>
-        <li><b>Open the panel</b> from <b>Plugins › Scenario</b>. Photoshop hides docked panels on its Home screen, so open or make a document first.</li>
+        <li><b>Download the plugin</b>: <a href="/download/latest">scenario-photoshop-{{version}}.ccx</a>. Your browser saves it in your Downloads folder.</li>
+        <li><b>Double-click the downloaded file</b> in your Downloads folder. Creative Cloud opens <b>Install 'Scenario' plugin</b>, which warns that the plugin comes from a third-party developer: click <b>OK</b>, and enter your computer's password if it asks for it. If <b>Plugins › Scenario</b> is not in Photoshop yet, quit and reopen Photoshop.
+          <details class="more">
+            <summary>Creative Cloud did not install it? Run its installer by hand</summary>
+            <div class="in">
+              <p>The command installs the file from your Downloads folder, with the same installer as Creative Cloud. Then, if <b>Plugins › Scenario</b> is not there yet, restart Photoshop.</p>
+              <p><b>macOS</b>: open the <b>Terminal</b> app (in Applications › Utilities, or search "Terminal" with Spotlight), click <b>Copy</b>, paste the command in Terminal and press <kbd>Return</kbd>.</p>
+              <div class="cmd"><div class="cmd-bar">Terminal · macOS<button class="cmd-copy" type="button">Copy</button></div><pre><code>"/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" \
+  --install "$HOME/Downloads/scenario-photoshop-{{version}}.ccx"</code></pre></div>
+              <p><b>Windows</b>: open <b>Command Prompt</b> from the Start menu, click <b>Copy</b>, paste the command and press <kbd>Enter</kbd>.</p>
+              <div class="cmd"><div class="cmd-bar">Command Prompt · Windows<button class="cmd-copy" type="button">Copy</button></div><pre><code>"C:\Program Files\Common Files\Adobe\Adobe Desktop Common\RemoteComponents\UPI\UnifiedPluginInstallerAgent\UnifiedPluginInstallerAgent.exe" /install "%USERPROFILE%\Downloads\scenario-photoshop-{{version}}.ccx"</code></pre></div>
+            </div>
+          </details></li>
+        <li><b>Open the panel</b> from <b>Plugins › Scenario</b>. If it does not show, open or create a document first: Photoshop hides panels on its start screen.</li>
       </ol>
-      <p class="small">The <a href="https://github.com/scenario-labs/photoshop-plugin/releases/tag/photoshop-plugin-v{{version}}">release page</a> has the same package with its <code>SHA256SUMS</code> and a build attestation: <code>gh attestation verify "$HOME/Downloads/scenario-photoshop-{{version}}.ccx" -R scenario-labs/photoshop-plugin</code>.</p>
-      <p class="small"><b>Or build it</b> from a checkout of <a href="https://github.com/scenario-labs/photoshop-plugin">scenario-labs/photoshop-plugin</a> with Node.js 20 or later: <code>npm ci</code>, then <code>npm run package</code> writes <code>build/scenario-photoshop-{{version}}.ccx</code>. Install that file instead.</p>
-      <p class="small">Checked live with the release package on macOS: install, restart, sign-in and a first image took 1 min 53 s, with a script doing the clicks. Installing by double-clicking the <code>.ccx</code> was not tested.</p>
+      <details class="more">
+        <summary>For developers: checksums, building from source, what was tested</summary>
+        <div class="in">
+          <p class="small">The <a href="https://github.com/scenario-labs/photoshop-plugin/releases/tag/photoshop-plugin-v{{version}}">release page</a> has the same package with its <code>SHA256SUMS</code> and a build attestation: <code>gh attestation verify "$HOME/Downloads/scenario-photoshop-{{version}}.ccx" -R scenario-labs/photoshop-plugin</code>.</p>
+          <p class="small"><b>Or build it</b> from a checkout of <a href="https://github.com/scenario-labs/photoshop-plugin">scenario-labs/photoshop-plugin</a> with Node.js 20 or later: <code>npm ci</code>, then <code>npm run package</code> writes <code>build/scenario-photoshop-{{version}}.ccx</code>. Install that file instead.</p>
+          <p class="small">Checked live with the release package on macOS: install, restart, sign-in and a first image took 1 min 53 s, with a script doing the clicks. Installing by double-clicking the <code>.ccx</code> was checked live on Photoshop 28.0 on macOS and Windows 11: Creative Cloud installed it after <b>OK</b>; <b>Plugins › Scenario</b> appeared once Photoshop restarted on macOS, and at once on Windows. The Windows command was checked on the same machine.</p>
+          <p class="small">Tested on Photoshop 27.11 on macOS. Installing was also checked on Photoshop 28.0 on Windows 11; using the plugin on Windows was not tested.</p>
+        </div>
+      </details>
 
       <h3 id="sign-in">Sign in</h3>
       <div class="how">
@@ -1480,8 +1501,7 @@ td:first-child { font-weight: 500; min-width: 140px; }
         <div>
           <h4>Not tested</h4>
           <ul class="list small">
-            <li>Windows, and Photoshop versions other than 27.11.</li>
-            <li>Installing by double-clicking the <code>.ccx</code>.</li>
+            <li>Using the plugin on Windows (installing it was checked), and Photoshop versions other than 27.11.</li>
             <li>Typing the key and secret by hand; the refused-key and no-API-access screens live.</li>
             <li>Sign in with Scenario against Scenario's production service (verified live on a development instance); <b>Block</b> in Photoshop's dialog and a code that expires.</li>
             <li>CMYK, Lab and other color profiles (one Upscale on an Adobe RGB 16-bit document kept its colors).</li>
@@ -1759,6 +1779,17 @@ td:first-child { font-weight: 500; min-width: 140px; }
   });
   hv.addEventListener("play", function () { if (!v.paused) v.pause(); });
   v.addEventListener("play", function () { if (!hv.paused) hv.pause(); });
+
+  // Copy buttons on terminal commands; without the clipboard API, the command is selected instead.
+  document.querySelectorAll(".cmd").forEach(function (box) {
+    var b = box.querySelector(".cmd-copy"), code = box.querySelector("code"), t = null;
+    function said(s) { b.textContent = s; clearTimeout(t); t = setTimeout(function () { b.textContent = "Copy"; }, 2000); }
+    function pick() { var r = document.createRange(); r.selectNodeContents(code); var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); said(/Mac|iPhone|iPad/.test(navigator.platform) ? "Press ⌘C" : "Press Ctrl+C"); }
+    b.addEventListener("click", function () {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) return pick();
+      navigator.clipboard.writeText(code.textContent).then(function () { said("Copied"); }, pick);
+    });
+  });
 
   // The guide, page by page, for viewers whose browser does not open the PDF.
   var N = 30, page = 1, rd = document.getElementById("reader"), img = document.getElementById("reader-img"), num = document.getElementById("reader-n"), back = null;
