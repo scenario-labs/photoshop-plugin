@@ -14,7 +14,7 @@ This page lists what the plugin does not do yet, what it does imperfectly, and w
 
 ## Runtime and authentication
 
-- **Windows**: built for it, *not tested*.
+- **Windows**: built for it, *not tested*. Agent clients can fail to connect there with `NotConnected`: the helper checks the headers of Photoshop's link against values recorded on macOS only, and its log repeats `refused a connection (Origin)` or `refused a connection (User-Agent)`. That line names the values received; send it to support@scenario.com with your Photoshop and plugin versions, so they can be allowed (see [Troubleshooting](MCP.md#troubleshooting) in the agents guide).
 - **Photoshop versions** other than 27.11: *not tested*.
 - **The panel is hidden on Photoshop's Home screen.** Photoshop hides docked panels there, so the panel shows once a document is open. The panel's own "no document" screen was never seen live.
 - **Document events while Photoshop is in the background.** With Photoshop in the background, its document events did not reach the panel, so the context card can show the previous document or selection until the panel reads the document again. Documents and changes made by a script (AppleScript or ExtendScript) send no event either: the panel catches up at the person's next click on a document tab, a menu item or a layer (*verified live*). The agent tools read Photoshop at call time: `scenario_status` listed a document made by ExtendScript at once (*verified live*, 2026-10-23).

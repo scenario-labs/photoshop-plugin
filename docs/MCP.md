@@ -12,7 +12,7 @@ The full tool reference is [spec/MCP.md](spec/MCP.md). Claims carry how they wer
 | Codex | *Tested headless*: the setup command through the real `codex` CLI with a temporary `CODEX_HOME`. No Codex session against Photoshop was run |
 | Cursor | Config file writing *tested automated*. Cursor itself *not tested* (not installed) |
 | Claude Desktop | Config file writing *tested automated*. The `.mcpb` extension *not tested* |
-| Windows | *Not tested* |
+| Windows | *Not tested*. If agents cannot connect, see [Troubleshooting](#troubleshooting) |
 
 > **Not on npm yet.** The helper is not published to npm, so the commands that read `npx -y @scenario-labs/photoshop-mcp@X.Y.Z` do not work until it is published. From a checkout of this repository, use `node helper/bin/scenario-photoshop.js` in their place and add `--local`, which registers this checkout's helper with your Node:
 >
@@ -148,6 +148,7 @@ A typical edit: `document_summary`, `set_selection`, `capture_reference`, `uploa
 | What you see | What to do |
 |---|---|
 | `NotConnected` | Open the Scenario panel in Photoshop. The helper reaches the panel only while it is open |
+| `NotConnected` with the panel open, and the helper's log (your agent client's log for the `scenario-photoshop` server) repeats `refused a connection (Origin)` or `refused a connection (User-Agent)` | Photoshop's link sent headers this build does not accept yet. This has been reported on Windows, which is *not tested*. Send the whole line, with the values after `received`, to support@scenario.com, with your operating system, your Photoshop version and the plugin version. The line holds no token and no key |
 | `PairingFailed` | The token changed (for example after **Reset** under Details). Run the setup command again from Connect a client |
 | `VersionMismatch` | The plugin and the helper versions differ. Connect a client shows the command for the new version |
 | `SwitchOff`, or a proposal card instead of a change | Turn on **Agents may modify the document**, or use **Apply** on the card |

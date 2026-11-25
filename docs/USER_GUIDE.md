@@ -260,6 +260,7 @@ Results are also in your Scenario project, so you find them again in the Library
 | A result did not land | Bring the document it started from to the front, then **Place** in Jobs, or **Open as document** |
 | "No connection to Scenario. Check your network." | Check the network, then **Retry**. A job that was being sent when the connection dropped shows as **Unknown** in Jobs until it is looked up |
 | An agent says `NotConnected` | Open the Scenario panel; the helper reaches it only while it is open |
+| An agent says `NotConnected` with the panel open, and the agent client's log repeats `refused a connection (Origin)` or `(User-Agent)` | Send that whole line, with the values it received, to support@scenario.com, with your operating system and Photoshop version. Reported on Windows, which is *not tested* |
 
 <img src="media/screens/error-key-refused.png" width="300" alt="Sign-in error: Scenario did not accept this key and secret, with Enter key again and Create an API key"> <img src="media/screens/error-no-api-access.png" width="300" alt="Sign-in error: API keys need a Starter plan or above, with Open plans and Copy a request for your admin">
 

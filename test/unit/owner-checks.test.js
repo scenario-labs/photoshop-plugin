@@ -4,8 +4,9 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const net = require("node:net");
 const WS = require("ws");
-const { Owner } = require("../../helper/src/link/owner.js");
+const { Owner, headerForLog } = require("../../helper/src/link/owner.js");
 const hp = require("../../helper/src/link/crypto.js");
 const { freePort, newToken, waitFor, UXP_ORIGIN, UXP_AGENT } = require("../helpers/fakes.js");
 
@@ -67,6 +68,14 @@ function connect(port, { as = "plugin", origin, agent, host, path = "/" } = {}) 
       });
     });
   return ws;
+}
+
+// The start of a WebSocket upgrade request for a raw socket, with `extra` header lines.
+function upgradeRequest(port, extra) {
+  return Buffer.from(
+    `GET / HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n` +
+      `Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n${extra}`
+  );
 }
 
 // Full handshake as `role`. Returns { ws, channel, challenge, proofMsg, hello }.
@@ -144,6 +153,75 @@ test("refused before any protocol byte: wrong Host, Origin, User-Agent or path",
     assert.equal(first.t, "challenge", `Host ${host} is accepted`);
     ws.close();
   }
+});
+
+test("a refusal on the headers names the header that failed and logs what was received", async (t) => {
+  const { owner, port, logs } = await startOwner();
+  t.after(() => owner.close());
+  const cases = [
+    [{ as: "plugin", origin: "null" }, `refused a connection (Origin): received Origin "null", User-Agent "${UXP_AGENT}"`],
+    [{ as: "plugin", origin: "http://localhost:3000", agent: "Mozilla/5.0" }, `refused a connection (Origin): received Origin "http://localhost:3000", User-Agent "Mozilla/5.0"`],
+    [{ as: "plugin", agent: "Mozilla/5.0" }, `refused a connection (User-Agent): received Origin "file://", User-Agent "Mozilla/5.0"`],
+    [{ as: "plugin", agent: "" }, `refused a connection (User-Agent): received Origin "file://", User-Agent ""`],
+    [{ as: "peer", host: "attacker.example:" + port }, `refused a connection (Host header): received Host "attacker.example:${port}"`]
+  ];
+  for (const [opts, line] of cases) {
+    const before = logs.length;
+    assert.equal(await connect(port, opts).refused, 403);
+    await waitFor(() => logs.length > before, { label: line });
+    assert.deepEqual(logs.slice(before), [line]);
+  }
+  // No User-Agent header at all reads "none", unlike an empty one.
+  const before = logs.length;
+  const raw = net.connect(port, "127.0.0.1", () => raw.write(upgradeRequest(port, "Origin: file://\r\n\r\n")));
+  raw.on("error", () => {});
+  await waitFor(() => logs.length > before, { label: "no User-Agent" });
+  assert.deepEqual(logs.slice(before), ['refused a connection (User-Agent): received Origin "file://", User-Agent none']);
+  raw.destroy();
+});
+
+test("refused header values cannot add log lines or fill the log", async (t) => {
+  const { owner, port, logs } = await startOwner();
+  t.after(() => owner.close());
+  // Raw bytes, as a hostile local program would send them. Node's HTTP parser
+  // drops CR, LF, ESC and DEL itself; what it lets through (C1 controls such as
+  // NEL 0x85 and CSI 0x9b, quotes, backslashes) must reach the log escaped.
+  const hostile = Buffer.concat([Buffer.from('x" injected\\'), Buffer.from([0x85, 0x9b]), Buffer.from("[31m")]);
+  const long = "o".repeat(5000);
+  const sent = [
+    Buffer.concat([Buffer.from("Origin: file://\r\nUser-Agent: "), hostile, Buffer.from("\r\n")]),
+    Buffer.from(`Origin: ${long}\r\nUser-Agent: ${UXP_AGENT}\r\n`),
+    Buffer.from("Origin: a\u001bb\r\n"),
+    Buffer.from("Origin: a\u007fb\r\n")
+  ];
+  for (const extra of sent) {
+    const before = logs.length;
+    const raw = net.connect(port, "127.0.0.1", () => raw.write(Buffer.concat([upgradeRequest(port, ""), extra, Buffer.from("\r\n")])));
+    raw.on("error", () => {});
+    raw.resume(); // read the answer, so the server's close is seen
+    await new Promise((resolve) => raw.on("close", resolve));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    if (logs.length > before) assert.equal(logs.length, before + 1, "one line per refusal");
+  }
+  assert.ok(logs.includes('refused a connection (User-Agent): received Origin "file://", User-Agent "x\\" injected\\\\\\u0085\\u009b[31m"'), logs.join("\n"));
+  assert.ok(
+    logs.includes(`refused a connection (Origin): received Origin "${"o".repeat(200)}" (first 200 of 5000 characters), User-Agent "${UXP_AGENT}"`),
+    "a long value is cut and says so"
+  );
+  for (const line of logs) {
+    assert.ok(line.length < 600, "every line stays short");
+    assert.doesNotMatch(line, /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/, "no control character reaches the log");
+  }
+});
+
+test("headerForLog escapes every control character and quotes the value", () => {
+  assert.equal(headerForLog(undefined), "none");
+  assert.equal(headerForLog(""), '""');
+  assert.equal(headerForLog("WebSocket++/0.8.2"), '"WebSocket++/0.8.2"');
+  assert.equal(headerForLog("a\r\nrefused a connection (Origin)"), '"a\\u000d\\u000arefused a connection (Origin)"');
+  assert.equal(headerForLog("\u0000\u001b[2J\u007f\u0085\u2028\u2029\t"), '"\\u0000\\u001b[2J\\u007f\\u0085\\u2028\\u2029\\u0009"');
+  assert.equal(headerForLog('say "hi" \\'), '"say \\"hi\\" \\\\"');
+  assert.equal(headerForLog("é".repeat(201)), `"${"é".repeat(200)}" (first 200 of 201 characters)`);
 });
 
 test("wrong token: the owner says pairing_failed, closes with 4001, and its client hears PairingFailed", async (t) => {

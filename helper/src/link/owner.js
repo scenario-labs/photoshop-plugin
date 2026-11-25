@@ -55,6 +55,25 @@ function newSessionId(used) {
   }
 }
 
+// A request header as it goes into the log. Headers come from any program on
+// this computer, so the value is cut to a bounded length and every control
+// character (C0, DEL, C1, U+2028, U+2029) is written as \uXXXX: a header can
+// neither start a new log line nor fill the log. Backslashes and quotes are
+// escaped too, so a quoted value stays one token.
+const HEADER_LOG_MAX = 200;
+const LOG_UNSAFE = /[\u0000-\u001f\u007f-\u009f\u2028\u2029"\\]/g;
+
+function escapeForLog(text) {
+  return text.replace(LOG_UNSAFE, (c) => (c === '"' || c === "\\" ? `\\${c}` : `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`));
+}
+
+function headerForLog(value) {
+  if (value === undefined) return "none";
+  const text = String(value);
+  const cut = text.length > HEADER_LOG_MAX ? ` (first ${HEADER_LOG_MAX} of ${text.length} characters)` : "";
+  return `"${escapeForLog(text.slice(0, HEADER_LOG_MAX))}"${cut}`;
+}
+
 // The name a client gave at its first initialize, cut to 64 UTF-16 units
 // without splitting a character.
 function clientName(name) {
@@ -128,8 +147,8 @@ class Owner extends EventEmitter {
   }
 
   _onUpgrade(req, socket, head) {
-    const refuse = (status, why) => {
-      this.log(`refused a connection (${why})`);
+    const refuse = (status, why, detail) => {
+      this.log(`refused a connection (${why})${detail ? `: ${detail}` : ""}`);
       try {
         socket.write(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
       } catch {
@@ -140,15 +159,20 @@ class Owner extends EventEmitter {
     if (!this.ready || this.closed) return refuse("503 Service Unavailable", "not ready");
     if (req.url !== "/") return refuse("404 Not Found", "path");
     const host = typeof req.headers.host === "string" ? req.headers.host.toLowerCase() : "";
-    if (!this.allowedHosts.has(host)) return refuse("403 Forbidden", "Host header");
+    if (!this.allowedHosts.has(host)) return refuse("403 Forbidden", "Host header", `received Host ${headerForLog(req.headers.host)}`);
     const origin = req.headers.origin;
     const agent = req.headers["user-agent"] || "";
+    // SPEC 2.6: a refusal says which header failed and what was received, so
+    // a Photoshop whose WebSocket sends other values (Windows is not tested)
+    // shows them in the log. Neither header is a secret.
+    const received = () => `received Origin ${headerForLog(origin)}, User-Agent ${headerForLog(req.headers["user-agent"])}`;
     let kind;
     if (origin === undefined) kind = P.labels.peer;
-    else if (origin === P.plugin_origin && agent.startsWith(P.plugin_user_agent_prefix)) kind = P.labels.plugin;
-    else return refuse("403 Forbidden", "Origin");
+    else if (origin !== P.plugin_origin) return refuse("403 Forbidden", "Origin", received());
+    else if (!agent.startsWith(P.plugin_user_agent_prefix)) return refuse("403 Forbidden", "User-Agent", received());
+    else kind = P.labels.plugin;
     // SPEC 12.3, M1: record what the UXP WebSocket sends (never secrets: these are request headers).
-    if (kind === P.labels.plugin) this.log(`plugin connection: Host ${host}, Origin ${origin}, User-Agent ${agent.slice(0, 80)}`);
+    if (kind === P.labels.plugin) this.log(`plugin connection: Host ${host}, Origin ${origin}, User-Agent ${escapeForLog(agent.slice(0, 80))}`);
     if (this.pendingHandshakes >= this.limits.max_pending_handshakes) return refuse("503 Service Unavailable", "too many pending handshakes");
     this.wss.handleUpgrade(req, socket, head, (ws) => this._onConnection(ws, kind));
   }
@@ -464,4 +488,4 @@ class Owner extends EventEmitter {
   }
 }
 
-module.exports = { Owner, PAIRING_FAILED_TEXT };
+module.exports = { Owner, PAIRING_FAILED_TEXT, headerForLog };
