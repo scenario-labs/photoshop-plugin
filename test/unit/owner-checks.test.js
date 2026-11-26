@@ -138,7 +138,7 @@ test("refused before any protocol byte: wrong Host, Origin, User-Agent or path",
     [{ as: "plugin", origin: "http://localhost:3000" }, 403, "web page origin"],
     [{ as: "plugin", origin: "https://example.com" }, 403, "remote web page"],
     [{ as: "plugin", agent: "Mozilla/5.0" }, 403, "file:// origin with a browser User-Agent"],
-    [{ as: "plugin", agent: "" }, 403, "file:// origin without a User-Agent"],
+    [{ as: "plugin", agent: "" }, 403, "file:// origin with an empty User-Agent"],
     [{ as: "peer", host: "attacker.example:" + port }, 403, "DNS rebinding Host"],
     [{ as: "peer", host: "localhost:1" }, 403, "Host with another port"],
     [{ as: "peer", path: "/plugin" }, 404, "another path"]
@@ -171,13 +171,61 @@ test("a refusal on the headers names the header that failed and logs what was re
     await waitFor(() => logs.length > before, { label: line });
     assert.deepEqual(logs.slice(before), [line]);
   }
-  // No User-Agent header at all reads "none", unlike an empty one.
-  const before = logs.length;
-  const raw = net.connect(port, "127.0.0.1", () => raw.write(upgradeRequest(port, "Origin: file://\r\n\r\n")));
+  // No User-Agent header at all reads "none", unlike an empty one. It passes
+  // only with Origin file:// (the next test); with another Origin it is refused.
+  for (const [origin, line] of [
+    ["null", 'refused a connection (Origin): received Origin "null", User-Agent none'],
+    ["http://localhost:3000", 'refused a connection (Origin): received Origin "http://localhost:3000", User-Agent none'],
+    ["file:///", 'refused a connection (Origin): received Origin "file:///", User-Agent none']
+  ]) {
+    const before = logs.length;
+    const raw = net.connect(port, "127.0.0.1", () => raw.write(upgradeRequest(port, `Origin: ${origin}\r\n\r\n`)));
+    raw.on("error", () => {});
+    await waitFor(() => logs.length > before, { label: `no User-Agent, Origin ${origin}` });
+    assert.deepEqual(logs.slice(before), [line]);
+    raw.destroy();
+  }
+});
+
+test("the Windows handshake (Origin file://, no User-Agent) links as the plugin; an empty User-Agent does not", async (t) => {
+  const { owner, port, token, logs } = await startOwner();
+  t.after(() => owner.close());
+  // The header list Photoshop 28.0 on Windows sent, recorded live: Origin,
+  // Sec-WebSocket-Key, Connection, Upgrade, Sec-WebSocket-Version, Host,
+  // Cache-Control, and no User-Agent.
+  const windows =
+    `GET / HTTP/1.1\r\nOrigin: file://\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nConnection: Upgrade\r\n` +
+    `Upgrade: websocket\r\nSec-WebSocket-Version: 13\r\nHost: localhost:${port}\r\nCache-Control: no-cache\r\n\r\n`;
+  const raw = net.connect(port, "127.0.0.1", () => raw.write(windows));
   raw.on("error", () => {});
-  await waitFor(() => logs.length > before, { label: "no User-Agent" });
-  assert.deepEqual(logs.slice(before), ['refused a connection (User-Agent): received Origin "file://", User-Agent none']);
+  const answer = await new Promise((resolve) => raw.once("data", (d) => resolve(d.toString("latin1"))));
+  assert.match(answer, /^HTTP\/1\.1 101 /, "the upgrade is accepted");
   raw.destroy();
+  await waitFor(() => logs.some((l) => l.startsWith("plugin connection:")), { label: "plugin connection logged" });
+  assert.ok(logs.includes(`plugin connection: Host localhost:${port}, Origin file://, User-Agent none`), logs.join("\n"));
+  assert.ok(!logs.some((l) => l.startsWith("refused a connection")), "nothing was refused");
+
+  // Through the whole pairing: a client with Origin file:// and no User-Agent
+  // (the ws client sends none) proves the token, links as the plugin and serves a call.
+  const h = await handshake(port, token, "plugin", { as: "peer", origin: "file://", host: `localhost:${port}` });
+  h.ws.send(h.channel.seal({ t: "welcome", plugin_version: "0.1.0", photoshop_version: "28.0.0", os: "test", catalog_hash: "x", switches: {} }));
+  await waitFor(() => owner.pluginInfo(), { label: "welcome" });
+  assert.equal(owner.pluginInfo().photoshop_version, "28.0.0");
+  const call = owner.callOwn("scenario_status", {});
+  const msg = await nextOfType(h, "call");
+  h.ws.send(h.channel.seal({ t: "result", id: msg.id, ok: true, result: { fine: true } }));
+  assert.deepEqual(await call, { fine: true });
+  h.ws.close();
+  await waitFor(() => logs.includes("plugin link closed"), { label: "plugin link closed" });
+
+  // The same handshake with a User-Agent present but empty is refused: only
+  // an absent header counts as absent.
+  const before = logs.length;
+  const empty = net.connect(port, "127.0.0.1", () => empty.write(windows.replace("Cache-Control", "User-Agent: \r\nCache-Control")));
+  empty.on("error", () => {});
+  await waitFor(() => logs.length > before, { label: "empty User-Agent" });
+  assert.deepEqual(logs.slice(before), ['refused a connection (User-Agent): received Origin "file://", User-Agent ""']);
+  empty.destroy();
 });
 
 test("refused header values cannot add log lines or fill the log", async (t) => {

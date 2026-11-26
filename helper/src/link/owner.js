@@ -161,18 +161,27 @@ class Owner extends EventEmitter {
     const host = typeof req.headers.host === "string" ? req.headers.host.toLowerCase() : "";
     if (!this.allowedHosts.has(host)) return refuse("403 Forbidden", "Host header", `received Host ${headerForLog(req.headers.host)}`);
     const origin = req.headers.origin;
-    const agent = req.headers["user-agent"] || "";
+    // Node gives undefined for a header that was not sent and "" for one sent
+    // empty. SPEC 2.6: the UXP WebSocket sends a User-Agent starting with
+    // WebSocket++ on macOS and none at all on Windows (Photoshop 28.0), so an
+    // absent User-Agent passes with Origin file://; an empty one is present
+    // and fails the prefix, like any other value. Browsers always send a
+    // User-Agent and a page cannot remove it; the proof is the real gate.
+    const agent = req.headers["user-agent"];
     // SPEC 2.6: a refusal says which header failed and what was received, so
-    // a Photoshop whose WebSocket sends other values (Windows is not tested)
-    // shows them in the log. Neither header is a secret.
-    const received = () => `received Origin ${headerForLog(origin)}, User-Agent ${headerForLog(req.headers["user-agent"])}`;
+    // a Photoshop whose WebSocket sends other values shows them in the log.
+    // Neither header is a secret.
+    const received = () => `received Origin ${headerForLog(origin)}, User-Agent ${headerForLog(agent)}`;
     let kind;
     if (origin === undefined) kind = P.labels.peer;
     else if (origin !== P.plugin_origin) return refuse("403 Forbidden", "Origin", received());
-    else if (!agent.startsWith(P.plugin_user_agent_prefix)) return refuse("403 Forbidden", "User-Agent", received());
+    else if (agent !== undefined && !agent.startsWith(P.plugin_user_agent_prefix)) return refuse("403 Forbidden", "User-Agent", received());
     else kind = P.labels.plugin;
     // SPEC 12.3, M1: record what the UXP WebSocket sends (never secrets: these are request headers).
-    if (kind === P.labels.plugin) this.log(`plugin connection: Host ${host}, Origin ${origin}, User-Agent ${escapeForLog(agent.slice(0, 80))}`);
+    if (kind === P.labels.plugin) {
+      const shown = agent === undefined ? "none" : escapeForLog(agent.slice(0, 80));
+      this.log(`plugin connection: Host ${host}, Origin ${origin}, User-Agent ${shown}`);
+    }
     if (this.pendingHandshakes >= this.limits.max_pending_handshakes) return refuse("503 Service Unavailable", "too many pending handshakes");
     this.wss.handleUpgrade(req, socket, head, (ws) => this._onConnection(ws, kind));
   }
