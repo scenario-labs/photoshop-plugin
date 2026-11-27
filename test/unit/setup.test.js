@@ -10,7 +10,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { Readable, PassThrough } = require("node:stream");
-const { runSetup, configPath } = require("../../helper/src/setup.js");
+const { runSetup, configPath, winArg } = require("../../helper/src/setup.js");
 const toml = require("../../helper/src/toml-edit.js");
 const tf = require("../../helper/src/token-file.js");
 const { newToken } = require("../helpers/fakes.js");
@@ -321,4 +321,14 @@ test("codex: forms the line editor cannot change safely are refused", () => {
   assert.deepEqual(toml.parseHeader("[a.\"b c\".d] # note"), { array: false, keys: ["a", "b c", "d"] });
   assert.equal(toml.parseHeader('  "[x]",'), null);
   assert.equal(toml.bracketDelta('args = ["[", "]]", \'[\'] # [[['), 0);
+});
+
+test("Windows arguments: quotes and backslashes read back as written", () => {
+  assert.equal(winArg("mcp"), "mcp");
+  assert.equal(winArg("C:\\nodejs\\node.exe"), "C:\\nodejs\\node.exe");
+  assert.equal(winArg("C:\\Program Files\\nodejs\\node.exe"), '"C:\\Program Files\\nodejs\\node.exe"');
+  assert.equal(winArg("C:\\My Dir\\"), '"C:\\My Dir\\\\"', "a trailing backslash does not escape the closing quote");
+  assert.equal(winArg('say "hi"'), '"say \\"hi\\""');
+  assert.equal(winArg('a\\"b'), '"a\\\\\\"b"', "a backslash before a quote is doubled");
+  assert.equal(winArg(""), '""');
 });

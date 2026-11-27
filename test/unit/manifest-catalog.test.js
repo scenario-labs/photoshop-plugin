@@ -83,7 +83,7 @@ test("manifest: the local link URL is declared, nothing broader than the specifi
 
 test("panel page: local resources only, one script at the end of the body", () => {
   const html = fs.readFileSync(path.join(ROOT, "plugin", "index.html"), "utf8");
-  const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
+  const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script[^>]*>/gi)];
   assert.equal(scripts.length, 1);
   assert.match(scripts[0][1], /src="dist\/main\.js"/);
   assert.equal(scripts[0][2].trim(), "", "no inline script");
