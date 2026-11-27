@@ -272,7 +272,7 @@ Results are also in your Scenario project, so you find them again in the Library
 
 - Start a set, Same action on each, and Run a workflow.
 - Drag and drop onto the panel or from the Library grid.
-- Windows: built for it, *not tested* end to end (agent clients included).
+- Windows: built for it. Installing is *verified live* on Windows 11 with Photoshop 28.0; using the plugin there, agent clients included, is *not tested* end to end.
 - Photoshop versions before 27.11: *not tested*.
 
 The full list: [Known limitations](KNOWN_LIMITATIONS.md).

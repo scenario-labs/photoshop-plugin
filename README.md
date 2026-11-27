@@ -34,13 +34,23 @@ You need Photoshop 2026 (27.x; tested on 27.11 on macOS) and a Scenario account 
 
 1. Download the package of the latest release, `scenario-photoshop-<version>.ccx`, from [photoshop.scenario.com/download/latest](https://photoshop.scenario.com/download/latest) or the [releases page](https://github.com/scenario-labs/photoshop-plugin/releases), which also lists its `SHA256SUMS` and a build attestation (`gh attestation verify "$HOME/Downloads/scenario-photoshop-<version>.ccx" -R scenario-labs/photoshop-plugin`).
 
-2. Install it with Creative Cloud's plugin installer, then restart Photoshop (the plugin loads at the next launch). Replace `<version>` with the one in the file name:
+2. Double-click the downloaded file. Creative Cloud opens **Install 'Scenario' plugin**, which warns that the plugin comes from a third-party developer: click **OK**, and enter your computer's password if it asks for it. If **Plugins > Scenario** is not in Photoshop yet, quit and reopen Photoshop (on macOS the plugin loads at the next launch).
+
+   If Creative Cloud does not install it, run its installer by hand, replacing `<version>` with the one in the file name. On macOS, paste this in the **Terminal** app (in Applications > Utilities) and press Return:
 
    ```sh
    "/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent" --install "$HOME/Downloads/scenario-photoshop-<version>.ccx"
    ```
 
-   *Verified live* with the release package on macOS on 2026-10-23, with Photoshop's Developer Mode on (whether the installer needs it was not tested): install, restart, sign-in and a first image took 1 min 53 s. A script did the clicks and typing, so this time has no reading in it, and 59 s of it was the generation. Double-clicking the `.ccx` should do the same through Creative Cloud; *not tested*.
+   On Windows, paste this in **Command Prompt** and press Enter:
+
+   ```bat
+   "C:\Program Files\Common Files\Adobe\Adobe Desktop Common\RemoteComponents\UPI\UnifiedPluginInstallerAgent\UnifiedPluginInstallerAgent.exe" /install "%USERPROFILE%\Downloads\scenario-photoshop-<version>.ccx"
+   ```
+
+   Then quit and reopen Photoshop if **Plugins > Scenario** is not there yet.
+
+   *Verified live* with the release package on macOS on 2026-10-23, with Photoshop's Developer Mode on (whether the installer needs it was not tested): install, restart, sign-in and a first image took 1 min 53 s. A script did the clicks and typing, so this time has no reading in it, and 59 s of it was the generation. Installing by double-clicking the `.ccx` was *verified live* on Photoshop 28.0 on macOS on 2026-11-17: Creative Cloud listed the plugin as enabled after **OK**, and **Plugins > Scenario** appeared once Photoshop restarted. On Windows 11 with Photoshop 28.0 the same day, both the double-click (the panel showed at once, with no restart) and the Command Prompt command installed it.
 3. In Photoshop, open **Plugins > Scenario**.
 
 To build the package yourself instead (Node.js 20 or later), run `npm ci`, then `npm run package`, which prints the file it writes, `build/scenario-photoshop-<version>.ccx`, and install that file.
